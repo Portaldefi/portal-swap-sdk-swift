@@ -4,20 +4,40 @@
 import PackageDescription
 
 let package = Package(
-    name: "PortalSwapSDK",
+    name: "portal-swap-sdk-swift",
+    platforms: [
+        .iOS(.v15),
+        .macOS(.v12),
+        .macCatalyst(.v15)
+    ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "PortalSwapSDK",
-            targets: ["PortalSwapSDK"]),
+            targets: ["PortalSwapSDK"]
+        ),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/google/promises.git", .upToNextMajor(from: "2.3.0")),
+        .package(url: "https://github.com/cuhte3/web3swift", .upToNextMajor(from: "3.2.5")),
+        .package(url: "https://github.com/vapor/websocket-kit", .upToNextMajor(from: "2.0.0"))
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "PortalSwapSDK"),
+            name: "PortalSwapSDK",
+            dependencies: [
+                .product(name: "Promises", package: "promises"),
+                .product(name: "web3swift", package: "web3swift"),
+                .product(name: "WebSocketKit", package: "websocket-kit")
+            ]
+        ),
         .testTarget(
             name: "PortalSwapSDKTests",
-            dependencies: ["PortalSwapSDK"]),
+            dependencies: [
+                "PortalSwapSDK",
+                .product(name: "Promises", package: "promises"),
+                .product(name: "web3swift", package: "web3swift"),
+                .product(name: "WebSocketKit", package: "websocket-kit")
+            ]
+        ),
     ]
 )
