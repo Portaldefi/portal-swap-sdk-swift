@@ -1,23 +1,6 @@
 import Foundation
 import Promises
 
-struct APIRequest {
-    let method: String
-    let path: String
-}
-
-struct OrderData: Codable {
-    let id: UUID
-    let uid: String
-    let side: String
-    let baseAsset: String
-    let baseNetwork: String
-    let baseQuantity: Int32
-    let quoteAsset: String
-    let quoteNetwork: String
-    let quoteQuantity: Int64
-}
-
 public class Dex: BaseClass {
     private var sdk: Sdk
     
@@ -35,8 +18,8 @@ public class Dex: BaseClass {
     
     // Closes the orderbooks
     func close() -> Promise<Dex> {
-        Promise { fulfill, reject in
-            fulfill(self)
+        Promise { resolve, reject in
+            resolve(self)
         }
     }
     
