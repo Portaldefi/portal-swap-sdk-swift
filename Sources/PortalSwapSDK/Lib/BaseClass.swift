@@ -23,10 +23,8 @@ open class BaseClass {
     
     private func logFunction(_ level: String, _ event: String, _ args: [Any]) {
         if let id = self.id {
-//            print("\(level) \(id).\(event)")
             emit(event: "log", args: [level, "\(id).\(event)"] + args)
         } else {
-//            print("\(level) \(event)")
             emit(event: "log", args: [level, event] + args)
         }
     }
@@ -49,7 +47,7 @@ open class BaseClass {
         return cancellable
     }
     
-    public func once(_ event: EventName, _ listener: @escaping ([Any]) -> Void) -> BaseClass {
+    public func once(_ event: EventName, _ listener: @escaping ([Any]) -> Void) {
         if instances[ObjectIdentifier(self)]?.subjects[event] == nil {
             instances[ObjectIdentifier(self)]?.subjects[event] = PassthroughSubject<[Any], Never>()
         }
@@ -69,8 +67,6 @@ open class BaseClass {
             cancellablesSet.insert(c)
             instances[ObjectIdentifier(self)]?.cancellables = cancellablesSet
         }
-
-        return self
     }
     
     func addListener(event: EventName, action: @escaping ([Any]) -> Void) -> AnyCancellable {
