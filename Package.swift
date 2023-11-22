@@ -18,16 +18,15 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/google/promises.git", .upToNextMajor(from: "2.3.0")),
-        .package(url: "https://github.com/cuhte3/web3swift", .upToNextMajor(from: "3.2.5")),
-        .package(url: "https://github.com/vapor/websocket-kit", .upToNextMajor(from: "2.0.0"))
+        .package(url: "https://github.com/cuhte3/Web3.swift.git", from: "0.8.5")
     ],
     targets: [
         .target(
             name: "PortalSwapSDK",
             dependencies: [
                 .product(name: "Promises", package: "promises"),
-                .product(name: "web3swift", package: "web3swift"),
-                .product(name: "WebSocketKit", package: "websocket-kit")
+                .product(name: "Web3", package: "Web3.swift"),
+                .product(name: "Web3ContractABI", package: "Web3.swift")
             ]
         ),
         .testTarget(
@@ -35,8 +34,8 @@ let package = Package(
             dependencies: [
                 "PortalSwapSDK",
                 .product(name: "Promises", package: "promises"),
-                .product(name: "web3swift", package: "web3swift"),
-                .product(name: "WebSocketKit", package: "websocket-kit")
+                .product(name: "Web3", package: "Web3.swift"),
+                .product(name: "Web3ContractABI", package: "Web3.swift")
             ]
         ),
     ]
