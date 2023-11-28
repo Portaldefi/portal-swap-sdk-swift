@@ -1,3 +1,5 @@
+import Promises
+
 public struct SwapSdkConfig {
     public struct Network {
         public let hostname: String
