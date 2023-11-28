@@ -1,8 +1,9 @@
+import Foundation
 import Promises
 
 public class Store: BaseClass {
     var isOpen: Bool {
-        false
+        true
     }
     
     init() {
@@ -20,11 +21,31 @@ public class Store: BaseClass {
     }
     
     func get(_ namespace: String, _ key: String) throws -> [String: Any] {
-        [:]
+        switch namespace {
+        case "secrets":
+            if let secret = UserDefaults.standard.data(forKey: key) {
+                return ["secret" : secret]
+            } else {
+                return [:]
+            }
+        default:
+            return [:]
+        }
     }
     
     func put(_ namespace: String, _ key: String, _ obj: [String: Any]) throws {
-        
+        switch namespace {
+        case "secrets":
+            if
+                let dataDict = obj as? [String:String],
+                let secretString = dataDict["secret"],
+                let secret = Utils.hexToData(secretString)
+            {
+                UserDefaults.standard.set(secret, forKey: key)
+            }
+        default:
+            break
+        }
     }
     
     func update(_ namespace: String, _ key: String) throws {
