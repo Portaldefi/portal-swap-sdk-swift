@@ -18,7 +18,37 @@ class Utils {
         }
         
         let secret = randomBytes
-        let secretData = Data(hex: secret.toHexString())
-        return secretData.sha256()
+        return Data(hex: secret.toHexString())
+    }
+    
+    static func sha256(data: Data) -> Data {
+        return data.sha256()
+    }
+    
+    static func isEIP55Compliant(address: String) -> Bool {
+        let trimmedAddress = address.lowercased().replacingOccurrences(of: "0x", with: "")
+        let hash = trimmedAddress.data(using: .utf8)!.sha3(.keccak256).toHexString()
+
+        for (char, hashChar) in zip(address, hash) {
+            if char.isLetter {
+                if (hashChar.isNumber && hashChar.wholeNumberValue! >= 8 && char.isLowercase) ||
+                   (hashChar.isNumber && hashChar.wholeNumberValue! < 8 && char.isUppercase) {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+    
+    static func convertToJSON<T: Codable>(_ object: T) -> [String: Any]? {
+        do {
+            let jsonData = try JSONEncoder().encode(object)
+            if let jsonDict = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any] {
+                return jsonDict
+            }
+        } catch {
+            print("Error converting object to JSON dictionary: \(error)")
+        }
+        return nil
     }
 }
