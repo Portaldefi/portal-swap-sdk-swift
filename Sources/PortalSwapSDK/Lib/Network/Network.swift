@@ -33,7 +33,7 @@ public class Network: BaseClass {
     }
         
     func connect() -> Promise<Void> {
-        Promise { [unowned self] fulfill, reject in
+        Promise { [unowned self] resolve, reject in
             guard let id = sdk.id else {
                 reject(SwapSDKError.msg("Network: missing sdk id"))
                 return
@@ -55,38 +55,35 @@ public class Network: BaseClass {
                 self.socket = ws
                 
                 ws.onText { ws, text in
-                    print("Received text: \(text)")
                     self._onMessage(text)
                 }
             }
             .whenComplete { [weak self] result in
                 switch result {
                 case .failure(let error):
-                    try? self?.socketEventLoopGroup.syncShutdownGracefully()
                     reject(SwapSDKError.msg("WebSocket connection failed with error: \(error)"))
                 case .success:
-                    // Connection succeeded
-                    print("WebSocket connection succeeded")
-                    fulfill(())
+                    print("SWAP SDK \(self?.sdk.id ?? "unknown user") webSocket connected")
+                    resolve(())
                 }
             }
         }
     }
     
     func disconnect() -> Promise<Void> {
-        Promise { [unowned self] fulfill, reject in
+        Promise { [unowned self] resolve, reject in
             guard let ws = socket else {
                 return reject(SwapSDKError.msg("Network: Socket is nil on disconnect"))
             }
             ws.close().whenComplete { _ in
                 try? self.socketEventLoopGroup.syncShutdownGracefully()
-                fulfill(())
+                resolve(())
             }
         }
     }
     
     func request(args: [String: String], data: [String: Any]) -> Promise<Data> {
-        Promise { [unowned self] fulfill, reject in
+        Promise { [unowned self] resolve, reject in
             guard let path = args["path"] else {
                 reject(SwapSDKError.msg("Invalid Path"))
                 return
@@ -130,8 +127,7 @@ public class Network: BaseClass {
                 if let error = error {
                     reject(error)
                 } else if let data = data {
-                    self.info("order created", data)
-                    fulfill(data)
+                    resolve(data)
                 } else {
                     reject(SwapSDKError.msg("No data received"))
                 }
@@ -141,14 +137,14 @@ public class Network: BaseClass {
     }
     
     func send(args: [String: Any]) -> Promise<Void> {
-        Promise { [unowned self] fulfill, reject in
+        Promise { [unowned self] resolve, reject in
             do {
                 let dataDict = try JSONSerialization.data(withJSONObject: args, options: .prettyPrinted)
                 guard let ws = socket else {
                     return reject(SwapSDKError.msg("Network: failed to send message over socket. Socket is nil"))
                 }
                 ws.send(dataDict.bytes)
-                fulfill(())
+                resolve(())
             } catch {
                 reject(SwapSDKError.msg("Network: JSON serialization error: \(error)"))
             }
