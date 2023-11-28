@@ -8,14 +8,14 @@ public class SDK: BaseClass {
     private var subscriptions = Set<AnyCancellable>()
 
     public var isConnected: Bool {
-        get { sdk.network.isConnected }
+        sdk.network.isConnected
     }
     
     private lazy var onSwap: ([Any]) -> Void = { [weak self] args in
-        if let firstLevel = args as? [[[String: Any]]],
-           let secondLevel = firstLevel.first,
-           let swap = secondLevel.first {
-            self?.emit(event: "swap.\(swap["status"]!)", args: [swap])
+        if let data = args as? [Swap], let swap = data.first {
+            self?.emit(event: "swap.\(swap.status)", args: [swap])
+        } else {
+            print("Got onSwap with unexpected arguments: \(args) [SDK]")
         }
     }
     
@@ -38,13 +38,15 @@ public class SDK: BaseClass {
         sdk.on("swap.completed", onSwap).store(in: &subscriptions)
         sdk.on("message", { [unowned self] args in emit(event: "message", args: args) }).store(in: &subscriptions)
         sdk.on("log", { [unowned self] args in emit(event: "log", args: args) }).store(in: &subscriptions)
+        
+        print("SWAP SDK init \(config.id)")
     }
     
-    public func start() -> Promise<Sdk> {
+    public func start() -> Promise<Void> {
         sdk.start()
     }
     
-    public func stop() -> Promise<Sdk> {
+    public func stop() -> Promise<Void> {
         sdk.stop()
     }
     
