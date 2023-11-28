@@ -2,18 +2,6 @@ import Foundation
 import Promises
 import SwiftBTC
 
-//struct PaymentReceipt {
-//    let id: String
-//    let expiresAt: Date
-//    let payment: String
-//}
-//
-//struct DecodedPaymentRequest {
-//    let id: String
-//    let description: String
-//    let tokens: Int
-//}
-
 public class Lightning: BaseClass, IBlockchain {
     private let sdk: Sdk
     private let client: ILightningClient
