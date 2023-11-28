@@ -1,19 +1,20 @@
 import Foundation
 import Promises
+import SwiftBTC
 
-struct PaymentReceipt {
-    let id: String
-    let expiresAt: Date
-    let payment: String
-}
+//struct PaymentReceipt {
+//    let id: String
+//    let expiresAt: Date
+//    let payment: String
+//}
+//
+//struct DecodedPaymentRequest {
+//    let id: String
+//    let description: String
+//    let tokens: Int
+//}
 
-struct DecodedPaymentRequest {
-    let id: String
-    let description: String
-    let tokens: Int
-}
-
-class Lightning: BaseClass {
+public class Lightning: BaseClass, IBlockchain {
     private let sdk: Sdk
     private let client: ILightningClient
     
@@ -23,90 +24,151 @@ class Lightning: BaseClass {
         super.init(id: "Lightning")
     }
     
-    func connect() -> Promise<Lightning> {
+    public func connect() -> Promise<Void> {
         emit(event: "connect")
         
         return Promise {
-            self
+            ()
         }
     }
     
-    func disconnect() -> Promise<Lightning> {
+    public func disconnect() -> Promise<Void> {
         Promise {
-            self
+            ()
         }
     }
     
-    func createInvoice(party: Party) throws -> Promise<(id: String, description: String, request: String)> {
-        let swap = party.swap!
-        let description = swap.id!
-        let id = swap.secretHash!
-        let tokens = party.quantity
-        
-        return Promise {
-            self.client.createInvoice(id: id, description: description, tokens: tokens)
-                .then { invoice in
-                    self.info("createInvoice", [invoice])
-                    self.emit(event: "invoice.created", args: [invoice])
-                    
-                    self.client.subscribeToInvoice(id: id).then { subscription in
-                        subscription.onInvoiceUpdated = { [weak self] invoice in
-                            guard let strongSelf = self else { return }
-                            if invoice.isHeld {
-                                strongSelf.info("invoice.paid", invoice)
-                                strongSelf.emit(event: "invoice.paid", args: [invoice])
-                            } else if invoice.isConfirmed {
-                                subscription.off("invoice_updated")
-                                strongSelf.info("invoice.settled", invoice)
-                                strongSelf.emit(event: "invoice.settled", args: [invoice])
-                            } else if invoice.isCanceled {
-                                subscription.off("invoice_updated")
-                                strongSelf.info("invoice.cancelled", invoice)
-                                strongSelf.emit(event: "invoice.cancelled", args: [invoice])
-                            }
-                        }
-                        
-                        self.info("invoice.created", invoice)
-                        
-                        return (id, description, invoice)
-                    }
-                }
-        }
-    }
-    
-    func payInvoice(party: Party) -> Promise<Void> {
-        let request = party.invoice!
-        let expectedSecretHash = party.swap!.secretHash
-        let expectedDescription = party.swap!.id
-        let expectedQuantity = party.quantity
-        
-        return Promise<Void> {
-            self.client.decodePaymentRequest(request: request).then { decodedRequest in
-                // Validation of the invoice
-                guard decodedRequest.string == expectedSecretHash else {
-                    throw NSError(domain: "Validation", code: 1, userInfo: [NSLocalizedDescriptionKey: "expected swap hash \(String(describing: expectedSecretHash)); got \(decodedRequest)"])
-                }
-                
-                guard decodedRequest.description == expectedDescription else {
-                    throw NSError(domain: "Validation", code: 1, userInfo: [NSLocalizedDescriptionKey: "expected swap identifier \(String(describing: expectedDescription)); got \(decodedRequest.description)"])
-                }
-                
-                guard decodedRequest.tokens == expectedQuantity else {
-                    throw NSError(domain: "Validation", code: 1, userInfo: [NSLocalizedDescriptionKey: "expected swap quantity \(expectedQuantity); got \(decodedRequest.tokens)"])
-                }
-                
-                // Pay the invoice
-                _ = self.client.payViaPaymentRequest(request: request)
+    public func createInvoice(party: Party) -> Promise<[String: String]> {
+        Promise { [unowned self] resolve, reject in
+            guard let id = party.swap?.id, let secretHash = party.swap?.secretHash else {
+                return reject(SwapSDKError.msg("Failed to create invoice: swap data is missing"))
+            }
             
-                self.info("payInvoice", decodedRequest)
+            let quantity = party.quantity
+            
+            client.createHodlInvoice(hash: secretHash, memo: id, quantity: quantity).then { invoice in
+                self.info("createInvoice", [invoice])
+                self.emit(event: "invoice.created", args: [invoice])
                 
-                return PaymentReceipt(id: expectedDescription!, expiresAt: Date(), payment: String())
+                self.client.subscribeToInvoice(id: id).then { subscription in
+                    print("Fetched subscription for invoice: \(invoice.id)")
+                    
+                    subscription.onInvoiceUpdated = { [weak self] status in
+                        guard let self = self else { return }
+                        
+                        print("subscription.onInvoiceUpdated: \(subscription)")
+                        
+                        switch status {
+                        case .paymentHeld:
+                            self.info("invoice.paid", invoice)
+                            self.emit(event: "invoice.paid", args: [invoice])
+                        case .paymentConfirmed:
+                            subscription.off("invoice_updated")
+                            self.info("invoice.settled", invoice)
+                            self.emit(event: "invoice.settled", args: [invoice])
+                        case .paymentCanceled:
+                            subscription.off("invoice_updated")
+                            self.info("invoice.cancelled", invoice)
+                            self.emit(event: "invoice.cancelled", args: [invoice])
+                        case .awaitsPayment:
+                            break
+                        }
+                    }
+                    
+                    self.info("invoice.created", invoice)
+                    
+                    resolve(["id": secretHash, "swap": id, "request": invoice.paymentRequest])
+                }
+                .catch { error in
+                    reject(error)
+                }
+            }.catch { error in
+                reject(error)
             }
         }
     }
     
-    func settleInvoice(party: Party, secret: String) -> Promise<Void> {
-        Promise {()}
+    public func payInvoice(party: Party) -> Promise<[String: Any]> {
+        Promise { [unowned self] resolve, reject in
+            guard let swap = party.swap else {
+                return reject(SwapSDKError.msg("Party has no swap"))
+            }
+            
+            guard let secretHash = swap.secretHash else {
+                return reject(SwapSDKError.msg("Swap has no secret hash"))
+            }
+            
+            guard let swapId = swap.id else {
+                return reject(SwapSDKError.msg("Swap has no id"))
+            }
+                        
+            self.decodePaymentRequest(party: party).then { paymentRequest in
+                if paymentRequest.id != secretHash {
+                    let actual = paymentRequest.id
+                    reject(SwapSDKError.msg("expected swap hash \(secretHash), got \(actual)"))
+                } else if paymentRequest.swap.id != swapId {
+                    let actual = paymentRequest.swap.id
+                    reject(SwapSDKError.msg("expected swap identifier \(swapId), got \(actual)"))
+                } else if paymentRequest.amount != party.quantity {
+                    let expected = party.quantity
+                    let actual = paymentRequest.swap.id
+                    reject(SwapSDKError.msg("expected swap quantuty \(expected), got \(actual)"))
+                }
+
+                self.client.payViaPaymentRequest(swapId: swapId, request: paymentRequest.request).then { result in
+                    self.info("payViaPaymentRequest", [result, party])
+                    let reciep = [
+                        "id": result.id,
+                        "swap": [
+                            "id": result.swap.id
+                        ],
+                        "request": result.request,
+                        "amount": result.amount
+                    ]
+                    resolve(reciep)
+                }.catch { error in
+                    self.error("PayViaPaymentRequest", [error, paymentRequest, party])
+                    self.emit(event: "error", args: [error, paymentRequest, party])
+                    reject(SwapSDKError.msg("Cannot pay lightning invoice: \(error)"))
+                }
+            }
+        }
     }
     
+    private func decodePaymentRequest(party: Party) -> Promise<PaymentResult> {
+        Promise { resolve, reject in
+            guard let invoice = party.invoice, let request = invoice["request"] else {
+                return reject(SwapSDKError.msg("Party has no invoice"))
+            }
+            
+            guard let bolt11Invoice = Bolt11.decode(string: request) else {
+                return reject(SwapSDKError.msg("Cannot decode request"))
+            }
+            
+            guard let paymentHash = bolt11Invoice.paymentHash else {
+                return reject(SwapSDKError.msg("Invoice has no payment hash"))
+            }
+            
+            guard let swapId = bolt11Invoice.description else {
+                return reject(SwapSDKError.msg("Invoice has no description"))
+            }
+            
+            guard let amount = bolt11Invoice.amount else {
+                return reject(SwapSDKError.msg("Invoice has no amount"))
+            }
+            
+            let decodedRequest = PaymentResult(
+                id: paymentHash.toHexString(),
+                swap: PaymentResult.Swap(id: swapId),
+                request: request,
+                amount: amount.int64
+            )
+            
+            resolve(decodedRequest)
+        }
+    }
+    
+    public func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]> {
+        client.settleHodlInvoice(secret: secret)
+    }
 }
