@@ -51,4 +51,21 @@ class Utils {
         }
         return nil
     }
+    
+    static func hexToData(_ string: String) -> Data? {
+        var hex = string
+        if hex.hasPrefix("0x") {
+            hex = String(hex.dropFirst(2))
+        }
+        var data = Data()
+        while(hex.count > 0) {
+            let subIndex = hex.index(hex.startIndex, offsetBy: 2)
+            let c = String(hex[..<subIndex])
+            hex = String(hex[subIndex...])
+            var ch: UInt64 = 0
+            Scanner(string: c).scanHexInt64(&ch)
+            data.append(try! UInt8(ch))
+        }
+        return data
+    }
 }
