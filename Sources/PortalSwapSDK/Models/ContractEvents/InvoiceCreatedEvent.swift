@@ -1,5 +1,3 @@
-import Foundation
-
 struct InvoiceCreatedEvent: Codable {
     let id: String
     let swap: String
@@ -49,7 +47,6 @@ struct InvoiceCreatedEvent: Codable {
     }
     
     func encode(to encoder: Encoder) throws {
-        // Dummy implementation: not actually encoding back to the original format
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode([eventSignature, id, swap], forKey: .topics)
         let dataValue = payee + asset + quantity

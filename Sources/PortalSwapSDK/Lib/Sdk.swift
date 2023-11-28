@@ -7,14 +7,15 @@ public class Sdk: BaseClass {
     public var dex: Dex!
     public var swaps: Swaps!
     public var store: Store!
-    
-    private var blockchains: Blockchains!
+    public var blockchains: Blockchains!
     
     private var subscriptions = Set<AnyCancellable>()
     
     private lazy var onSwap: ([Any]) -> Void = { [weak self] args in
         if let data = args as? [Swap], let swap = data.first {
             self?.emit(event: "swap.\(swap.status)", args: [swap])
+        } else {
+            print("Got onSwap with unexpected arguments: \(args) [Sdk]")
         }
     }
     
@@ -70,43 +71,39 @@ public class Sdk: BaseClass {
         self.dex.on("log", forwardLogEvent).store(in: &subscriptions)
         self.swaps.on("log", forwardLogEvent).store(in: &subscriptions)
     }
-    //WARNING: - start returns promise
-    func start() -> Promise<Sdk> {
+
+    func start() -> Promise<Void> {
         debug("starting", self)
 
-        return Promise { [unowned self] fulfill, reject in
+        return Promise { [unowned self] resolve, reject in
             all(
                 self.network.connect(),
                 self.store.open(),
                 self.blockchains.connect(),
                 self.dex.open()
-//                self.swaps.sync()
             ).then { network, store, blockchains, dex in
                 self.info("start", self)
                 self.emit(event: "start")
-                
-                fulfill(self)
+                resolve(())
             }.catch { error in
                 reject(error)
             }
         }
     }
-    //WARNING: - stop returns promise
-    func stop() -> Promise<Sdk> {
+
+    func stop() -> Promise<Void> {
         debug("stopping", self)
 
-        return Promise { [unowned self] fulfill, reject in
+        return Promise { [unowned self] resolve, reject in
             all(
                 self.network.disconnect(),
                 self.store.close(),
                 self.blockchains.disconnect(),
                 self.dex.close()
-//                self.swaps.sync()
             ).then { network, store, blockchains, dex in
                 self.info("stop", self)
                 self.emit(event: "stop")
-                
-                fulfill(self)
+                resolve(())
             }.catch { error in
                 reject(error)
             }
@@ -125,23 +122,23 @@ extension Sdk {
         switch level {
         case .debug:
             return { args in
-                print("DEBUG:", args)
+                print("SWAP SDK DEBUG:", args)
             }
         case .info:
             return { args in
-                print("INFO:", args)
+                print("SWAP SDK INFO:", args)
             }
         case .warn:
             return { args in
-                print("WARN:", args)
+                print("SWAP SDK WARN:", args)
             }
         case .error:
             return { args in
-                print("ERROR:", args)
+                print("SWAP SDK ERROR:", args)
             }
         case .unknown:
             return { args in
-                print("Unknown:", args)
+                print("SWAP SDK Unknown:", args)
             }
         }
     }

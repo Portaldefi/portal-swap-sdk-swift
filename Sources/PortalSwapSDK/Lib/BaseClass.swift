@@ -13,7 +13,7 @@ open class BaseClass {
         var cancellables: Set<AnyCancellable>
     }
     
-    var id: String? {
+    public var id: String? {
         instances[ObjectIdentifier(self)]?.id
     }
     
