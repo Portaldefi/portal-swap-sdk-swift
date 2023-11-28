@@ -1,10 +1,10 @@
 import Combine
 import Promises
 
-class Blockchains: BaseClass {
+public class Blockchains: BaseClass {
     private let sdk: Sdk!
-    private let ethereum: Ethereum!
-    private let lightning: Lightning!
+    public let ethereum: IBlockchain!
+    public let lightning: IBlockchain!
     
     private var subscriptions = Set<AnyCancellable>()
     
@@ -27,10 +27,10 @@ class Blockchains: BaseClass {
     }
     
     func connect() -> Promise<Void> {
-        Promise { [unowned self] fulfill, reject in
+        Promise { [unowned self] resolve, reject in
             all(ethereum.connect(), lightning.connect())
                 .then { ethereum, lightning in
-                    fulfill(())
+                    resolve(())
                 }.catch { error in
                     reject(error)
                 }
@@ -38,13 +38,24 @@ class Blockchains: BaseClass {
     }
     
     func disconnect() -> Promise<Void> {
-        Promise { [unowned self] fulfill, reject in
+        Promise { [unowned self] resolve, reject in
             all(ethereum.disconnect(), lightning.disconnect())
                 .then { ethereum, lightning in
-                    fulfill(())
+                    resolve(())
                 }.catch { error in
                     reject(error)
                 }
+        }
+    }
+    
+    func blockchain(id: String) -> IBlockchain? {
+        switch id {
+        case "ethereum":
+            return ethereum
+        case "lightning":
+            return lightning
+        default:
+            return nil
         }
     }
 }
@@ -54,23 +65,23 @@ extension Blockchains {
         switch level {
         case .debug:
             return { args in
-                print("DEBUG:", args)
+                print("SWAP SDK BLOCKCHAINS DEBUG:", args)
             }
         case .info:
             return { args in
-                print("INFO:", args)
+                print("SWAP SDK BLOCKCHAINS INFO:", args)
             }
         case .warn:
             return { args in
-                print("WARN:", args)
+                print("SWAP SDK BLOCKCHAINS WARN:", args)
             }
         case .error:
             return { args in
-                print("ERROR:", args)
+                print("SWAP SDK BLOCKCHAINS ERROR:", args)
             }
         case .unknown:
             return { args in
-                print("Unknown:", args)
+                print("SWAP SDK BLOCKCHAINS Unknown:", args)
             }
         }
     }
