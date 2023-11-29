@@ -23,6 +23,7 @@ public class HodlInvoice {
     }
     
     public func update(status: Status) {
+        self.status = status
         subscription.onInvoiceUpdated?(status)
     }
 }
