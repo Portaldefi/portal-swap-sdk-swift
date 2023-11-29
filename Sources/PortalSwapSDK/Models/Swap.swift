@@ -73,7 +73,7 @@ public class Swap: BaseClass, Codable {
                 return reject(SwapSDKError.msg("cannot get blockchain"))
             }
                     
-            blockchain.once("invoice.paid") { _ in
+            blockchain.once("invoice.paid") { [unowned self] _ in
                 if self.party.isSecretSeeker {
                     self.status = "holder.invoice.paid"
                     self.emit(event: self.status, args: [self])
@@ -94,7 +94,7 @@ public class Swap: BaseClass, Codable {
                     return reject(SwapSDKError.msg("cannot get blockchain"))
                 }
                 
-                blockchain.once("invoice.settled") { response in
+                blockchain.once("invoice.settled") { [unowned self] response in
                     guard
                         let dict = response.first as? [String: Any],
                         let ID = dict["id"] as? String,
@@ -109,6 +109,7 @@ public class Swap: BaseClass, Codable {
                         "secret": secret,
                         "swap": swapId
                     ])
+                    
                     _ = self.settleInvoice()
                 }
             }
