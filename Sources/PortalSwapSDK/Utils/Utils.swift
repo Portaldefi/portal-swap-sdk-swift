@@ -22,7 +22,7 @@ class Utils {
     }
     
     static func sha256(data: Data) -> Data {
-        return data.sha256()
+        data.sha256()
     }
     
     static func isEIP55Compliant(address: String) -> Bool {
