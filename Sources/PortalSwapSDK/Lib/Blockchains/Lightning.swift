@@ -35,6 +35,36 @@ public class Lightning: BaseClass, IBlockchain {
             let quantity = party.quantity
             
             client.createHodlInvoice(hash: secretHash, memo: id, quantity: quantity).then { invoice in
+                guard let decodedInvoice = Bolt11.decode(string: invoice.paymentRequest) else {
+                    reject(SwapSDKError.msg("Failed to decode invoice"))
+                    return
+                }
+                
+                guard let paymentHash = decodedInvoice.paymentHash?.toHexString() else {
+                    reject(SwapSDKError.msg("Decoded invoice doesn't have hash"))
+                    return
+                }
+                
+                guard paymentHash == secretHash else {
+                    reject(SwapSDKError.msg("Payment hashes doesn't match"))
+                    return
+                }
+                
+                guard decodedInvoice.description == id else {
+                    reject(SwapSDKError.msg("Description doesn't match"))
+                    return
+                }
+                
+                guard let decodedQuantity = decodedInvoice.amount else {
+                    reject(SwapSDKError.msg("Description doesn't match"))
+                    return
+                }
+                
+                guard decodedQuantity.int64 == quantity else {
+                    reject(SwapSDKError.msg("Quantity doesn't match"))
+                    return
+                }
+                                
                 self.info("createInvoice", [invoice])
                 self.emit(event: "invoice.created", args: [invoice])
                 
