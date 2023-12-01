@@ -29,7 +29,7 @@ open class BaseClass {
         }
     }
     
-    func emit(event: EventName, args: [Any]? = []) {
+    public func emit(event: EventName, args: [Any]? = []) {
         instances[ObjectIdentifier(self)]?.subjects[event]?.send(args ?? [])
     }
     
