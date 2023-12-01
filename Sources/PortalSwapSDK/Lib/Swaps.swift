@@ -153,17 +153,12 @@ public class Swaps: BaseClass {
                 _ = swap.settleInvoice()
                 try store.put("swaps", swapId, swap.toJSON())
             case "seeker.invoice.settled":
-                if swap.party.isSecretHolder { return }
-
                 swap.status = "completed"
                 
                 info("swap.\(swap.status)", [swap])
-                try store.put("swaps", swapId, swap.toJSON())
-                emit(event: swap.status)
+                self._onSwap(swap.toJSON())
             case "completed":
                 info("swap.\(swap.status)", [swap])
-                try store.put("swaps", swapId, swap.toJSON())
-                emit(event: swap.status)
             default:
                 let error = SwapSDKError.msg("unknown status \(swap.status)")
                 self.error("swap.error", error)
