@@ -1,8 +1,19 @@
 public class InvoiceSubscription {
-    public var onInvoiceUpdated: ((HodlInvoice.Status) -> Void)?
+    public enum Status {
+        case awaitsPayment, paymentHeld, paymentConfirmed, paymentCanceled
+    }
     
-    public init(onInvoiceUpdated: ( (HodlInvoice.Status) -> Void)? = nil) {
+    public var status: Status = .awaitsPayment
+    
+    public var onInvoiceUpdated: ((Status) -> Void)?
+    
+    public init(onInvoiceUpdated: ( (Status) -> Void)? = nil) {
         self.onInvoiceUpdated = onInvoiceUpdated
+    }
+    
+    public func update(status: Status) {
+        self.status = status
+        onInvoiceUpdated?(status)
     }
     
     public func off(_ str: String) {
