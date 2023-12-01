@@ -9,21 +9,17 @@ public class Lightning: BaseClass, IBlockchain {
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Lightning) {
         self.sdk = sdk
         self.client = props.client
-        super.init(id: "Lightning")
+        super.init(id: "lightning")
     }
     
     public func connect() -> Promise<Void> {
-        emit(event: "connect")
-        
-        return Promise {
-            ()
-        }
+        emit(event: "connect", args: [self])
+        return Promise { () }
     }
     
     public func disconnect() -> Promise<Void> {
-        Promise {
-            ()
-        }
+        emit(event: "disconnect", args: [self])
+        return Promise { () }
     }
     
     public func createInvoice(party: Party) -> Promise<[String: String]> {
@@ -34,8 +30,13 @@ public class Lightning: BaseClass, IBlockchain {
             
             let quantity = party.quantity
             
-            client.createHodlInvoice(hash: secretHash, memo: id, quantity: quantity).then { invoice in
-                guard let decodedInvoice = Bolt11.decode(string: invoice.paymentRequest) else {
+            client.createHodlInvoice(hash: secretHash, memo: id, quantity: quantity).then { [weak self] invoice in
+                guard let self = self else {
+                    reject(SwapSDKError.msg("Cannot obtain self"))
+                    return
+                }
+                
+                guard let decodedInvoice = Bolt11.decode(string: invoice) else {
                     reject(SwapSDKError.msg("Failed to decode invoice"))
                     return
                 }
@@ -69,13 +70,11 @@ public class Lightning: BaseClass, IBlockchain {
                 self.emit(event: "invoice.created", args: [invoice])
                 
                 self.client.subscribeToInvoice(id: id).then { subscription in
-                    print("Fetched subscription for invoice: \(invoice.id)")
+                    print("Fetched subscription for invoice: \(id)")
                     
                     subscription.onInvoiceUpdated = { [weak self] status in
                         guard let self = self else { return }
-                        
-                        print("subscription.onInvoiceUpdated: \(subscription)")
-                        
+                                                
                         switch status {
                         case .paymentHeld:
                             self.info("invoice.paid", invoice)
@@ -95,7 +94,7 @@ public class Lightning: BaseClass, IBlockchain {
                     
                     self.info("invoice.created", invoice)
                     
-                    resolve(["id": secretHash, "swap": id, "request": invoice.paymentRequest])
+                    resolve(["id": secretHash, "swap": id, "request": invoice])
                 }
                 .catch { error in
                     reject(error)
