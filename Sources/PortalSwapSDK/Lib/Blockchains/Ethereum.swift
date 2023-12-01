@@ -19,7 +19,7 @@ public class Ethereum: BaseClass, IBlockchain {
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Ethereum) {
         self.props = props
         self.userID = sdk.id!
-        super.init(id: "Ethereum")
+        super.init(id: "ethereum")
     }
         
     public func connect() -> Promise<Void> {
@@ -318,9 +318,7 @@ public class Ethereum: BaseClass, IBlockchain {
                                     
                                     switch response.status {
                                     case .success(let txReceipt):
-                                        
-                                        print("SWAP SDK ETH fetched reciep logs count: \(txReceipt!.logs.count)")
-                                        
+                                                                                
                                         let receipt = [
                                             "blockHash": txReceipt!.blockHash.hex(),
                                             "from": privKey.address.hex(eip55: false),
@@ -411,9 +409,7 @@ public class Ethereum: BaseClass, IBlockchain {
                                     }
                                     switch response.status {
                                     case .success(let txReceipt):
-                                        
-                                        print("SWAP SDK ETH fetched reciep logs count: \(txReceipt!.logs.count)")
-                                        
+                                                                                
                                         let receipt = [
                                             "blockHash": txReceipt!.blockHash.hex(),
                                             "from": privKey.address.hex(eip55: false),
@@ -498,8 +494,6 @@ public class Ethereum: BaseClass, IBlockchain {
                                     switch response.status {
                                     case .success(let txReceipt):
                                         
-                                        print("SWAP SDK ETH fetched reciep logs count: \(txReceipt!.logs.count)")
-
                                         let receipt = [
                                             "blockHash": txReceipt!.blockHash.hex(),
                                             "from": privKey.address.hex(eip55: false),
