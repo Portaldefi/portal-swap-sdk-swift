@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import Promises
 
-public class Sdk: BaseClass {
+class Sdk: BaseClass {
     public var network: Network!
     public var dex: Dex!
     public var swaps: Swaps!
@@ -25,7 +25,7 @@ public class Sdk: BaseClass {
         }
     }
     
-    public var isConnected: Bool {
+    var isConnected: Bool {
         network.isConnected
     }
     

@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import Promises
 
-public class Swaps: BaseClass {
+class Swaps: BaseClass {
     private let sdk: Sdk
     private let store: Store
     private let onSwapAccessQueue = DispatchQueue(label: "swap.sdk.onSwapAccessQueue")
@@ -45,7 +45,7 @@ public class Swaps: BaseClass {
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: obj, options: [])
             var swap = try JSONDecoder().decode(Swap.self, from: jsonData)
-            swap.sdk = sdk
+            swap.update(sdk: sdk)
                         
             guard let swapId = swap.id else {
                 self.error("swap.error", "Swap has no id")

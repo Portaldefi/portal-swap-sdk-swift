@@ -2,7 +2,7 @@ import Foundation
 import Promises
 
 public class Swap: BaseClass, Codable {
-    public var sdk: Sdk!
+    private var sdk: Sdk!
 
     public var secretHolder: Party
     public var secretSeeker: Party
@@ -29,6 +29,10 @@ public class Swap: BaseClass, Codable {
     
     public var counterparty: Party {
         sdk.id == secretHolder.id ? secretSeeker : secretHolder
+    }
+    
+    func update(sdk: Sdk) {
+        self.sdk = sdk
     }
     
     public required init(from decoder: Decoder) throws {

@@ -2,7 +2,7 @@ import Foundation
 import Promises
 import SwiftBTC
 
-public class Lightning: BaseClass, IBlockchain {
+class Lightning: BaseClass, IBlockchain {
     private let sdk: Sdk
     private let client: ILightningClient
     
@@ -12,17 +12,17 @@ public class Lightning: BaseClass, IBlockchain {
         super.init(id: "lightning")
     }
     
-    public func connect() -> Promise<Void> {
+    func connect() -> Promise<Void> {
         emit(event: "connect", args: [self])
         return Promise { () }
     }
     
-    public func disconnect() -> Promise<Void> {
+    func disconnect() -> Promise<Void> {
         emit(event: "disconnect", args: [self])
         return Promise { () }
     }
     
-    public func createInvoice(party: Party) -> Promise<[String: String]> {
+    func createInvoice(party: Party) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
             guard let id = party.swap?.id, let secretHash = party.swap?.secretHash else {
                 return reject(SwapSDKError.msg("Failed to create invoice: swap data is missing"))
@@ -105,7 +105,7 @@ public class Lightning: BaseClass, IBlockchain {
         }
     }
     
-    public func payInvoice(party: Party) -> Promise<[String: Any]> {
+    func payInvoice(party: Party) -> Promise<[String: Any]> {
         Promise { [unowned self] resolve, reject in
             guard let swap = party.swap else {
                 return reject(SwapSDKError.msg("Party has no swap"))
@@ -185,7 +185,7 @@ public class Lightning: BaseClass, IBlockchain {
         }
     }
     
-    public func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]> {
+    func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]> {
         client.settleHodlInvoice(secret: secret)
     }
 }

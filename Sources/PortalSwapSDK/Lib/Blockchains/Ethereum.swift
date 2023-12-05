@@ -4,7 +4,7 @@ import Web3
 import Web3ContractABI
 import BigInt
 
-public class Ethereum: BaseClass, IBlockchain {
+class Ethereum: BaseClass, IBlockchain {
     private let props: SwapSdkConfig.Blockchains.Ethereum
     
     private let userID: String
@@ -22,7 +22,7 @@ public class Ethereum: BaseClass, IBlockchain {
         super.init(id: "ethereum")
     }
         
-    public func connect() -> Promise<Void> {
+    func connect() -> Promise<Void> {
         Promise { [weak self] resolve, reject in
             guard let self = self else {
                 return reject(SwapSDKError.msg("Ethereum cannot handle self"))
@@ -247,7 +247,7 @@ public class Ethereum: BaseClass, IBlockchain {
         }
     }
     
-    public func disconnect() -> Promise<Void> {
+    func disconnect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             for subscriptionsId in subscriptionsIDS {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
@@ -255,7 +255,7 @@ public class Ethereum: BaseClass, IBlockchain {
         }
     }
     
-    public func createInvoice(party: Party) -> Promise<[String: String]> {
+    func createInvoice(party: Party) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
             guard let swapObj = party.swap, let swapId = swapObj.id, let secretHash = swapObj.secretHash else {
                 return reject(SwapSDKError.msg("There is no swap or secret hash"))
@@ -350,7 +350,7 @@ public class Ethereum: BaseClass, IBlockchain {
         }
     }
     
-    public func payInvoice(party: Party) -> Promise<[String: Any]> {
+    func payInvoice(party: Party) -> Promise<[String: Any]> {
         Promise { [unowned self] resolve, reject in
             guard let swapObj = party.swap, let swapId = swapObj.id, let secretHash = swapObj.secretHash else {
                 return reject(SwapSDKError.msg("There is no swap or secret hash"))
@@ -441,7 +441,7 @@ public class Ethereum: BaseClass, IBlockchain {
         }
     }
     
-    public func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]> {
+    func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
             guard let swapObj = party.swap, let swapId = swapObj.id else {
                 return reject(SwapSDKError.msg("There is no swap or secret hash"))

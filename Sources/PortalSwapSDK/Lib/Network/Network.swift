@@ -3,7 +3,7 @@ import WebSocketKit
 import NIO
 import Promises
 
-public class Network: BaseClass {
+class Network: BaseClass {
     struct NetworkConfig {
         let hostName: String
         let port: Int
@@ -15,7 +15,7 @@ public class Network: BaseClass {
     private var socket: WebSocket?
     private let socketEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
     
-    public var isConnected: Bool {
+    var isConnected: Bool {
         guard let ws = socket else { return false }
         return !ws.isClosed
     }

@@ -1,7 +1,7 @@
 import Combine
 import Promises
 
-public class Blockchains: BaseClass {
+class Blockchains: BaseClass {
     private let sdk: Sdk!
     public let ethereum: IBlockchain!
     public let lightning: IBlockchain!
