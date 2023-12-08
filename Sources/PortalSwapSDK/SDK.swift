@@ -27,6 +27,7 @@ public class SDK: BaseClass {
         sdk.on("order.created", { [unowned self] args in emit(event: "order.created", args: args) }).store(in: &subscriptions)
         sdk.on("order.opened", { [unowned self] args in emit(event: "order.opened", args: args) }).store(in: &subscriptions)
         sdk.on("order.closed", { [unowned self] args in emit(event: "order.closed", args: args) }).store(in: &subscriptions)
+        sdk.on("swap.received", onSwap).store(in: &subscriptions)
         sdk.on("swap.holder.invoice.created", onSwap).store(in: &subscriptions)
         sdk.on("swap.holder.invoice.sent", onSwap).store(in: &subscriptions)
         sdk.on("swap.seeker.invoice.created", onSwap).store(in: &subscriptions)
