@@ -1,36 +1,4 @@
 public class Party: Codable {
-    struct SwapId: Codable {
-        let id: String
-    }
-
-    struct Asset: Codable {
-        let name: String
-        let symbol: String
-        let contractAddress: String?
-    }
-
-    struct AssetNetwork: Codable {
-        let name: String
-        let type: String
-        
-        private enum CodingKeys: String, CodingKey {
-            case name
-            case type = "@type"
-        }
-    }
-
-    struct InvoiceCodable: Codable {
-        let created_at: String
-        let id: String
-        let mtokens: String
-        let request: String
-        let tokens: Int64
-        
-        private enum CodingKeys: String, CodingKey {
-            case created_at, id, mtokens, request, tokens
-        }
-    }
-    
     let id: String
     let asset: String
     let blockchain: String
@@ -46,7 +14,6 @@ public class Party: Codable {
     }
     
     public var isSecretSeeker: Bool = false
-    
     public var isSecretHolder: Bool = false
     
     required public init(from decoder: Decoder) throws {
