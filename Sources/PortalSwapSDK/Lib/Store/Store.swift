@@ -1,7 +1,7 @@
 import Foundation
 import Promises
 
-public class Store: BaseClass {
+class Store: BaseClass {
     var isOpen: Bool {
         true
     }
