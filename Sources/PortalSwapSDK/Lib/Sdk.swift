@@ -19,6 +19,10 @@ class Sdk: BaseClass {
         }
     }
     
+    private lazy var onError: ([Any]) -> Void = { [weak self] args in
+        self?.emit(event: "error", args: args)
+    }
+    
     private lazy var forwardLogEvent: ([Any]) -> Void = { [weak self] args in
         if let level = args.first as? String, let loggingFunction = self?.getLoggingFunction(for: LogLevel.level(level)) {
             loggingFunction(Array(args.dropFirst()))
@@ -63,6 +67,7 @@ class Sdk: BaseClass {
         self.swaps.on("swap.holder.invoice.settled", onSwap).store(in: &subscriptions)
         self.swaps.on("swap.seeker.invoice.settled", onSwap).store(in: &subscriptions)
         self.swaps.on("swap.completed", onSwap).store(in: &subscriptions)
+        self.swaps.on("error", onError).store(in: &subscriptions)
         
         // Bubble up the log events
         self.network.on("log", forwardLogEvent).store(in: &subscriptions)
@@ -70,6 +75,8 @@ class Sdk: BaseClass {
         self.blockchains.on("log", forwardLogEvent).store(in: &subscriptions)
         self.dex.on("log", forwardLogEvent).store(in: &subscriptions)
         self.swaps.on("log", forwardLogEvent).store(in: &subscriptions)
+        
+        self.blockchains.on("error", onError).store(in: &subscriptions)
     }
 
     func start() -> Promise<Void> {

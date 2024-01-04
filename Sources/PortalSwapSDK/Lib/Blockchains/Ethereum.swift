@@ -116,6 +116,7 @@ class Ethereum: BaseClass, IBlockchain {
                                 self.emit(event: "invoice.created", args: [invoice])
                             case .failure(let error):
                                 self.error("error", [error, self])
+                                self.emit(event: "error", args: [error])
                             }
                         }
                     case "InvoicePaid":
@@ -230,6 +231,7 @@ class Ethereum: BaseClass, IBlockchain {
                                 self.emit(event: "invoice.settled", args: [invoice])
                             case .failure(let error):
                                 self.error("error", [error, self])
+                                self.emit(event: "error", args: [error])
                             }
                         }
                     default:

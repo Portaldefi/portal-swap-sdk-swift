@@ -19,6 +19,10 @@ public class SDK: BaseClass {
         }
     }
     
+    private lazy var onError: ([Any]) -> Void = { [weak self] args in
+        self?.emit(event: "error", args: args)
+    }
+    
     public init(config: SwapSdkConfig) {
         sdk = .init(config: config)
         
@@ -39,6 +43,8 @@ public class SDK: BaseClass {
         sdk.on("swap.completed", onSwap).store(in: &subscriptions)
         sdk.on("message", { [unowned self] args in emit(event: "message", args: args) }).store(in: &subscriptions)
         sdk.on("log", { [unowned self] args in emit(event: "log", args: args) }).store(in: &subscriptions)
+        
+        sdk.on("error", onError).store(in: &subscriptions)
         
         print("SWAP SDK init \(config.id)")
     }
