@@ -2,10 +2,16 @@ import Promises
 
 public struct SwapSdkConfig {
     public struct Network {
+        public enum NetworkProtocol {
+            case unencrypted
+            case encrypted
+        }
+        public let networkProtocol: NetworkProtocol
         public let hostname: String
         public let port: Int
         
-        public init(hostname: String, port: Int) {
+        public init(networkProtocol: NetworkProtocol, hostname: String, port: Int) {
+            self.networkProtocol = networkProtocol
             self.hostname = hostname
             self.port = port
         }

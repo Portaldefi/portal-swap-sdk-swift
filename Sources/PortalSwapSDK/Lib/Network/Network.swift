@@ -5,6 +5,7 @@ import Promises
 
 class Network: BaseClass {
     struct NetworkConfig {
+        let networkProtocol: SwapSdkConfig.Network.NetworkProtocol
         let hostName: String
         let port: Int
         let pathname: String
@@ -22,6 +23,7 @@ class Network: BaseClass {
     
     init(sdk: Sdk, props: SwapSdkConfig.Network) {
         self.config = NetworkConfig(
+            networkProtocol: props.networkProtocol,
             hostName: props.hostname,
             port: props.port,
             pathname: "api/v1/updates"
@@ -39,12 +41,13 @@ class Network: BaseClass {
                 return
             }
             
+            let networkProtocol = config.networkProtocol
             let host = config.hostName
             let port = config.port
             let pathname = config.pathname
                                     
             WebSocket.connect(
-                to: "ws://\(host):\(port)/\(pathname)/\(id)",
+                to: "\(networkProtocol == .unencrypted ? "ws://\(host):\(port)/\(pathname)/\(id)" : "wss://\(host)/\(pathname)/\(id)")",
                 on: socketEventLoopGroup
             ) { [weak self] ws in
                 
@@ -89,7 +92,7 @@ class Network: BaseClass {
                 return
             }
             
-            guard let url = URL(string: "http://\(config.hostName):\(config.port)\(path)") else {
+            guard let url = URL(string: "\(config.networkProtocol == .unencrypted ? "http://\(config.hostName):\(config.port)\(path)" : "https://\(config.hostName)\(path)")") else {
                 reject(SwapSDKError.msg("Invalid URL"))
                 return
             }
