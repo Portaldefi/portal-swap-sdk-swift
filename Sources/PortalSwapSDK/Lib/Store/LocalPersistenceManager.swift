@@ -15,7 +15,7 @@ class LocalPersistenceManager: IPersistenceManager {
                 debugPrint("Error loading LOCAL STORE: \(desc): \(err)")
                 return
             }
-            debugPrint("Loaded TEMPORARY STORE successfully")
+            debugPrint("Loaded LOCAL STORE successfully")
         })
     }
 }
