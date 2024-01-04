@@ -109,7 +109,7 @@ public class Swap: BaseClass, Codable {
                         return
                     }
                                         
-                    try? store.put("secrets", String(ID.dropFirst(2)), [
+                    try? store.put(.secrets, String(ID.dropFirst(2)), [
                         "secret": secret,
                         "swap": swapId
                     ])
@@ -201,7 +201,7 @@ public class Swap: BaseClass, Codable {
             }
             
             do {
-                guard let secret = try store.get("secrets", secretHash)["secret"] as? Data else {
+                guard let secret = try store.get(.secrets, secretHash)["secret"] as? Data else {
                     return reject(SwapSDKError.msg("Failed to fetch secret from store"))
                 }
             
