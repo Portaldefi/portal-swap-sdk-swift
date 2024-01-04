@@ -8,6 +8,10 @@ class Swaps: BaseClass {
     private let onSwapAccessQueue = DispatchQueue(label: "swap.sdk.onSwapAccessQueue")
     private var subscriptions = Set<AnyCancellable>()
     
+    private lazy var onError: ([Any]) -> Void = { [weak self] args in
+        self?.emit(event: "error", args: args)
+    }
+    
     init(sdk: Sdk, props: [String: Any]) {
         self.sdk = sdk
         self.store = sdk.store
@@ -29,6 +33,7 @@ class Swaps: BaseClass {
         sdk.network.on("swap.received", onSwapAction).store(in: &subscriptions)
         sdk.network.on("swap.holder.invoice.sent", onSwapAction).store(in: &subscriptions)
         sdk.network.on("swap.seeker.invoice.sent", onSwapAction).store(in: &subscriptions)
+        sdk.network.on("error", onError).store(in: &subscriptions)
     }
     
     func sync() -> Promise<Swaps> {
@@ -44,7 +49,7 @@ class Swaps: BaseClass {
         
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: obj, options: [])
-            var swap = try JSONDecoder().decode(Swap.self, from: jsonData)
+            let swap = try JSONDecoder().decode(Swap.self, from: jsonData)
             swap.update(sdk: sdk)
                         
             guard let swapId = swap.id else {
@@ -55,12 +60,9 @@ class Swaps: BaseClass {
             print("\(swap.party.id) Received swap with status: \(swap.status)")
             
             if swap.isReceived {
-                try store.put("swaps", swapId, obj)
+                try store.put(.swaps, swapId, obj)
             } else {
-//                let swapObj = try store.get("swaps", swapId)
-//                let swapData = try JSONSerialization.data(withJSONObject: swapObj, options: [])
-//                swap = try JSONDecoder().decode(Swap.self, from: swapData)
-//                try swap.update(obj)
+                try store.update(.swaps, swapId, obj)
                 emit(event: "swap.\(swap.status)", args: [swap])
             }
             
@@ -79,7 +81,7 @@ class Swaps: BaseClass {
                                 
                 print("SWAP SDK created secret: \(secretHashString)")
                 
-                try store.put("secrets", secretHashString, [
+                try store.put(.secrets, secretHashString, [
                     "secret" : secret.toHexString(),
                     "swap": swap.id!
                 ])
@@ -93,7 +95,7 @@ class Swaps: BaseClass {
                 info("swap.\(swap.status)", [swap])
 
                 swap.createInvoice().then { [unowned self] _ in
-                    try self.store.put("swaps", swapId, swap.toJSON())
+                    try self.store.put(.swaps, swapId, swap.toJSON())
                 }.then { [unowned self] _ in
                     self._onSwap(swap.toJSON())
                 }
@@ -103,14 +105,14 @@ class Swaps: BaseClass {
                 info("swap.\(swap.status)", [swap])
                 
                 _ = try swap.sendInvoice()
-                try self.store.put("swaps", swapId, swap.toJSON())
+                try self.store.put(.swaps, swapId, swap.toJSON())
             case "holder.invoice.sent":
                 if swap.party.isSecretHolder { return }
                 
                 info("swap.\(swap.status)", [swap])
                 
                 swap.createInvoice().then { _ in
-                    try self.store.put("swaps", swapId, swap.toJSON())
+                    try self.store.put(.swaps, swapId, swap.toJSON())
                 }
                 .then { [unowned self] _ in
                     self._onSwap(swap.toJSON())
@@ -121,21 +123,21 @@ class Swaps: BaseClass {
                 info("swap.\(swap.status)", [swap])
                 
                 _ = try swap.sendInvoice()
-                try self.store.put("swaps", swapId, swap.toJSON())
+                try self.store.put(.swaps, swapId, swap.toJSON())
             case "seeker.invoice.sent":
                 if swap.party.isSecretSeeker { return }
                 
                 info("swap.\(swap.status)", [swap])
                 
                 _ = swap.payInvoice()
-                try self.store.put("swaps", swapId, swap.toJSON())
+                try self.store.put(.swaps, swapId, swap.toJSON())
             case "holder.invoice.paid":
                 if swap.party.isSecretHolder { return }
                 
                 info("swap.\(swap.status)", [swap])
 
                 _ = swap.payInvoice()
-                try store.put("swaps", swapId, swap.toJSON())
+                try store.put(.swaps, swapId, swap.toJSON())
             case "seeker.invoice.paid":
                 if swap.party.isSecretSeeker { return }
                 
@@ -144,14 +146,21 @@ class Swaps: BaseClass {
                 swap.counterparty.swap = swap
                 
                 _ = swap.settleInvoice()
-                try self.store.put("swaps", swapId, swap.toJSON())
+                try self.store.put(.swaps, swapId, swap.toJSON())
             case "holder.invoice.settled":
-                if swap.party.isSecretHolder { return }
+                if swap.party.isSecretSeeker {
+                    info("swap.\(swap.status)", [swap])
+                    
+                    _ = swap.settleInvoice()
+                    try store.put(.swaps, swapId, swap.toJSON())
+                }
                 
-                info("swap.\(swap.status)", [swap])
-                
-                _ = swap.settleInvoice()
-                try store.put("swaps", swapId, swap.toJSON())
+                if swap.party.isSecretHolder {
+                    swap.status = "completed"
+                    
+                    info("swap.\(swap.status)", [swap])
+                    self._onSwap(swap.toJSON())
+                }
             case "seeker.invoice.settled":
                 swap.status = "completed"
                 
@@ -159,6 +168,7 @@ class Swaps: BaseClass {
                 self._onSwap(swap.toJSON())
             case "completed":
                 info("swap.\(swap.status)", [swap])
+                emit(event: "swap.\(swap.status)", args: [swap])
             default:
                 let error = SwapSDKError.msg("unknown status \(swap.status)")
                 self.error("swap.error", error)
