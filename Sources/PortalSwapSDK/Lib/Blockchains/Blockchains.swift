@@ -12,6 +12,12 @@ class Blockchains: BaseClass {
         self?.emit(event: "error", args: args)
     }
     
+    private lazy var forwardLogEvent: ([Any]) -> Void = { [weak self] args in
+        if let level = args.first as? String, let loggingFunction = self?.getLoggingFunction(for: LogLevel.level(level)) {
+            loggingFunction(Array(args.dropFirst()))
+        }
+    }
+    
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains) {
         self.sdk = sdk
         
@@ -19,12 +25,6 @@ class Blockchains: BaseClass {
         self.lightning = Lightning(sdk: sdk, props: props.lightning)
         
         super.init(id: "Blockchains")
-        
-        let forwardLogEvent: ([Any]) -> Void = { [weak self] args in
-            if let level = args.first as? String, let loggingFunction = self?.getLoggingFunction(for: LogLevel.level(level)) {
-                loggingFunction(Array(args.dropFirst()))
-            }
-        }
         
         self.ethereum.on("log", forwardLogEvent).store(in: &subscriptions)
         self.lightning.on("log", forwardLogEvent).store(in: &subscriptions)
