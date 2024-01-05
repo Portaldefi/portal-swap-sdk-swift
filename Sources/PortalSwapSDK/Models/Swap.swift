@@ -56,7 +56,7 @@ public class Swap: BaseClass, Codable {
     }
     
     public func update(_ swap: [String: Any]) throws {
-        print("SWAP SDK On swap update!")
+        info("SWAP SDK On swap update!")
     }
     
     public func createInvoice() -> Promise<Void> {
@@ -167,7 +167,7 @@ public class Swap: BaseClass, Codable {
                         
             party.swap = self
             
-            print("\(party.id) Paying invoice on \(blockchainID)")
+            debug("\(party.id) Paying invoice on \(blockchainID)")
             
             blockchain.payInvoice(party: party).then { _ in
                 resolve(())
@@ -179,7 +179,6 @@ public class Swap: BaseClass, Codable {
     
     public func settleInvoice() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
-            print("settling invoice for \(party.id)")
             guard let blockchains = sdk.blockchains else {
                 return reject(SwapSDKError.msg("Cannot fetch blockchains"))
             }
@@ -205,6 +204,8 @@ public class Swap: BaseClass, Codable {
                     return reject(SwapSDKError.msg("Failed to fetch secret from store"))
                 }
             
+                debug("settling invoice for \(party.id)")
+                
                 blockchain.settleInvoice(party: counterparty, secret: secret).then { reciep in
                     self.party.receip = reciep
                     self.status = "\(self.partyType).invoice.settled"

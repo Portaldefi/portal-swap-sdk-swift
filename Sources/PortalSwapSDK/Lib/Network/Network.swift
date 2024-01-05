@@ -61,7 +61,7 @@ class Network: BaseClass {
                 case .failure(let error):
                     reject(SwapSDKError.msg("WebSocket connection failed with error: \(error)"))
                 case .success:
-                    print("SWAP SDK \(self?.sdk.id ?? "unknown user") webSocket connected")
+                    self?.debug("SWAP SDK \(self?.sdk.id ?? "unknown user") webSocket connected")
                     resolve(())
                 }
             }

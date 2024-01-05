@@ -15,7 +15,7 @@ class Sdk: BaseClass {
         if let data = args as? [Swap], let swap = data.first {
             self?.emit(event: "swap.\(swap.status)", args: [swap])
         } else {
-            print("Got onSwap with unexpected arguments: \(args) [Sdk]")
+            self?.debug("Got onSwap with unexpected arguments: \(args) [Sdk]")
         }
     }
     
@@ -26,6 +26,8 @@ class Sdk: BaseClass {
     private lazy var forwardLogEvent: ([Any]) -> Void = { [weak self] args in
         if let level = args.first as? String, let loggingFunction = self?.getLoggingFunction(for: LogLevel.level(level)) {
             loggingFunction(Array(args.dropFirst()))
+        } else {
+            self?.emit(event: "log", args: args)
         }
     }
     
@@ -40,9 +42,9 @@ class Sdk: BaseClass {
         // Interface to the underlying network
         self.network = .init(sdk: self, props: config.network)
         
-        self.network.on("order.created", forwardEvent(self, event: "order.created")).store(in: &subscriptions)
-        self.network.on("order.opened", forwardEvent(self, event: "order.opened")).store(in: &subscriptions)
-        self.network.on("order.closed", forwardEvent(self, event: "order.closed")).store(in: &subscriptions)
+        self.network.on("order.created", forwardEvent("order.created")).store(in: &subscriptions)
+        self.network.on("order.opened", forwardEvent("order.opened")).store(in: &subscriptions)
+        self.network.on("order.closed", forwardEvent("order.closed")).store(in: &subscriptions)
         
         // Interface to the underlying data store
         self.store = .init()
@@ -119,7 +121,7 @@ class Sdk: BaseClass {
 }
 
 extension Sdk {
-    private func forwardEvent(_ self: BaseClass, event: String) -> ([Any]) -> Void {
+    private func forwardEvent(_ event: String) -> ([Any]) -> Void {
         return { args in
             self.emit(event: event, args: args)
         }

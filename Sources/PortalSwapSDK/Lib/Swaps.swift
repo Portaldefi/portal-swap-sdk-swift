@@ -20,7 +20,7 @@ class Swaps: BaseClass {
                 self._onSwap(json)
             }
         } else {
-            print("Cannot handle onSwap action")
+            debug("Cannot handle onSwap action")
         }
     }
     
@@ -59,7 +59,7 @@ class Swaps: BaseClass {
                 return
             }
             
-            print("\(swap.party.id) Received swap with status: \(swap.status)")
+            debug("\(swap.party.id) Received swap with status: \(swap.status)")
             
             if swap.isReceived {
                 try store.put(.swaps, swapId, obj)
@@ -81,7 +81,7 @@ class Swaps: BaseClass {
                 let secretHash = Utils.sha256(data: secret)
                 let secretHashString = secretHash.toHexString()
                                 
-                print("SWAP SDK created secret: \(secretHashString)")
+                debug("SWAP SDK created secret: \(secretHashString)")
                 
                 try store.put(.secrets, secretHashString, [
                     "secret" : secret.toHexString(),
@@ -195,6 +195,24 @@ class Swaps: BaseClass {
     }
     
     private func subscribeForSwapStateChanges(swap: Swap) {
+        swap.on("log", { args in
+            if let level = args.first as? String {
+                switch LogLevel.level(level) {
+                case .debug:
+                    print("SWAP SDK DEBUG:", args)
+                case .info:
+                    print("SWAP SDK INFO:", args)
+                case .warn:
+                    print("SWAP SDK WARN:", args)
+                case .error:
+                    print("SWAP SDK ERROR:", args)
+                case .unknown:
+                    break
+                }
+            }
+        })
+        .store(in: &subscriptions)
+        
         swap.on("created", { [unowned self] _ in
             self.emit(event: "swap.\(swap.status)", args: [swap])
         })

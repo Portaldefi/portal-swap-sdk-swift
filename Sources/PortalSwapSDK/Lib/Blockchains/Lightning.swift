@@ -70,7 +70,7 @@ class Lightning: BaseClass, IBlockchain {
                 self.emit(event: "invoice.created", args: [invoice])
                 
                 self.client.subscribeToInvoice(id: id).then { subscription in
-                    print("Fetched subscription for invoice: \(id)")
+                    self.debug("Fetched subscription for invoice: \(id)")
                     
                     subscription.onInvoiceUpdated = { [weak self] status in
                         guard let self = self else { return }

@@ -244,6 +244,8 @@ class Store: BaseClass {
                 dbSwap.secretHolder?.asset = swap.secretHolder.asset
                 dbSwap.secretHolder?.quantity = swap.secretHolder.quantity
                 
+                debug("Updating db swap with status: \(dbSwap.status ?? "Unknown")")
+                
                 try persistenceManager.viewContext.save()
             } else {
                 throw SwapSDKError.msg("Swap with id: \(key) is not exists in DB")

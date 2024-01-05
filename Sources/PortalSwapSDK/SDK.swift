@@ -15,7 +15,7 @@ public class SDK: BaseClass {
         if let data = args as? [Swap], let swap = data.first {
             self?.emit(event: "swap.\(swap.status)", args: [swap])
         } else {
-            print("Got onSwap with unexpected arguments: \(args) [SDK]")
+            self?.debug("Got onSwap with unexpected arguments: \(args) [SDK]")
         }
     }
     
@@ -46,7 +46,7 @@ public class SDK: BaseClass {
         
         sdk.on("error", onError).store(in: &subscriptions)
         
-        print("SWAP SDK init \(config.id)")
+        debug("SWAP SDK init \(config.id)")
     }
     
     public func start() -> Promise<Void> {

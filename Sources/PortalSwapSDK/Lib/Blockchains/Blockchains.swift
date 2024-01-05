@@ -13,9 +13,7 @@ class Blockchains: BaseClass {
     }
     
     private lazy var forwardLogEvent: ([Any]) -> Void = { [weak self] args in
-        if let level = args.first as? String, let loggingFunction = self?.getLoggingFunction(for: LogLevel.level(level)) {
-            loggingFunction(Array(args.dropFirst()))
-        }
+        self?.emit(event: "log", args: args)
     }
     
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains) {
@@ -62,33 +60,6 @@ class Blockchains: BaseClass {
             return lightning
         default:
             return nil
-        }
-    }
-}
-
-extension Blockchains {
-    private func getLoggingFunction(for level: LogLevel) -> ([Any]) -> Void {
-        switch level {
-        case .debug:
-            return { args in
-                print("SWAP SDK BLOCKCHAINS DEBUG:", args)
-            }
-        case .info:
-            return { args in
-                print("SWAP SDK BLOCKCHAINS INFO:", args)
-            }
-        case .warn:
-            return { args in
-                print("SWAP SDK BLOCKCHAINS WARN:", args)
-            }
-        case .error:
-            return { args in
-                print("SWAP SDK BLOCKCHAINS ERROR:", args)
-            }
-        case .unknown:
-            return { args in
-                print("SWAP SDK BLOCKCHAINS Unknown:", args)
-            }
         }
     }
 }

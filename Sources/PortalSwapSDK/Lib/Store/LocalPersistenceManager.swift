@@ -12,10 +12,10 @@ class LocalPersistenceManager: IPersistenceManager {
         container = .init(name: configuration.modelName, managedObjectModel: model)
         container.loadPersistentStores(completionHandler: { (desc, err) in
             if let err = err {
-                debugPrint("Error loading LOCAL STORE: \(desc): \(err)")
+                print("Error loading LOCAL STORE: \(desc): \(err)")
                 return
             }
-            debugPrint("Loaded LOCAL STORE successfully")
+            print("Loaded LOCAL STORE successfully")
         })
     }
 }

@@ -74,7 +74,7 @@ class Ethereum: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                print("SWAP SDK \(userID) InvoiceCreated subscription failed with error: \(error)")
+                                debug("SWAP SDK \(userID) InvoiceCreated subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoiceCreatedEvent>) in
@@ -82,7 +82,7 @@ class Ethereum: BaseClass, IBlockchain {
                             
                             switch response.status {
                             case .success(let invoiceCreatedEvent):
-                                print("SWAP SDK \(userID) received contract event: InvoiceCreatedEvent")
+                                debug("SWAP SDK \(userID) received contract event: InvoiceCreatedEvent")
                                 
                                 guard invoiceCreatedEvent.address == contract.address!.hex(eip55: isEipp55) else {
                                     let errorMsg = "got event from \(invoiceCreatedEvent.address), expected: \(contract.address!.hex(eip55: isEipp55))"
@@ -129,7 +129,7 @@ class Ethereum: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                print("SWAP SDK \(userID) InvoicePaid subscription failed with error: \(error)")
+                                debug("SWAP SDK \(userID) InvoicePaid subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoicePaidEvent>) in
@@ -137,7 +137,7 @@ class Ethereum: BaseClass, IBlockchain {
                             
                             switch response.status {
                             case .success(let invoicePayedEvent):
-                                print("SWAP SDK \(userID) received contract event: InvoicePaidEvent")
+                                debug("SWAP SDK \(userID) received contract event: InvoicePaidEvent")
                                 
                                 guard invoicePayedEvent.address == contract.address!.hex(eip55: isEipp55) else {
                                     let errorMsg = "got event from \(invoicePayedEvent.address), expected: \(contract.address!.hex(eip55: isEipp55))"
@@ -183,7 +183,7 @@ class Ethereum: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                print("SWAP SDK \(userID) InvoiceSettled subscription failed with error: \(error)")
+                                debug("SWAP SDK \(userID) InvoiceSettled subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoiceSettledEvent>) in
@@ -191,7 +191,7 @@ class Ethereum: BaseClass, IBlockchain {
                             
                             switch response.status {
                             case .success(let invoiceSettledEvent):
-                                print("SWAP SDK \(userID) Received contract event: InvoiceSettledEvent")
+                                debug("SWAP SDK \(userID) Received contract event: InvoiceSettledEvent")
                                 
                                 guard invoiceSettledEvent.address == contract.address!.hex(eip55: isEipp55) else {
                                     let errorMsg = "got event from \(invoiceSettledEvent.address), expected: \(contract.address!.hex(eip55: isEipp55))"
@@ -225,7 +225,7 @@ class Ethereum: BaseClass, IBlockchain {
                                     "quantity": invoiceSettledEvent.quantity
                                 ]
                                 
-                                print("Received secret from holder: \(String(describing: Utils.hexToData(invoiceSettledEvent.secret)))")
+                                debug("Received secret from holder: \(String(describing: Utils.hexToData(invoiceSettledEvent.secret)))")
                                                                 
                                 self.info("invoice.settled", invoice)
                                 self.emit(event: "invoice.settled", args: [invoice])
@@ -263,7 +263,7 @@ class Ethereum: BaseClass, IBlockchain {
                 return reject(SwapSDKError.msg("There is no swap or secret hash"))
             }
             
-            print("SWAP SDK Creating invoice for \(party.isSecretHolder ? "secret holder" : "secret seeker") with id: \(party.id)")
+            debug("SWAP SDK Creating invoice for \(party.isSecretHolder ? "secret holder" : "secret seeker") with id: \(party.id)")
             
             guard let id = Utils.hexToData(secretHash) else {
                 return reject(SwapSDKError.msg("Cannot unwrap secret hash"))
@@ -299,7 +299,7 @@ class Ethereum: BaseClass, IBlockchain {
                         accessList: [:],
                         transactionType: .eip1559
                     ) else {
-                        print("SWAP SDK CREATING INVOICE TX ERROR")
+                        self.debug("SWAP SDK CREATING INVOICE TX ERROR")
                         return reject(SwapSDKError.msg("Ethereum failed to create transaction"))
                     }
                     
@@ -309,7 +309,7 @@ class Ethereum: BaseClass, IBlockchain {
                         try self.web3.eth.sendRawTransaction(transaction: signedTx) { response in
                             switch response.status {
                             case .success(let data):
-                                print("SWAP SDK ETH TH HASH: \(data.hex())")
+                                self.debug("SWAP SDK ETH TH HASH: \(data.hex())")
                                 
                                 Thread.sleep(forTimeInterval: 0.5)
                                 
@@ -331,21 +331,21 @@ class Ethereum: BaseClass, IBlockchain {
                                         self.info("createInvoice", receipt, party, self as Any)
                                         resolve(receipt)
                                     case .failure(let error):
-                                        print("SWAP SDK ETH Fetching receip error: \(error)")
+                                        debug("SWAP SDK ETH Fetching receip error: \(error)")
                                         return reject(error)
                                     }
                                 }
                             case .failure(let error):
-                                print("SWAP SDK SENDING TX ERROR: \(error)")
+                                self.debug("SWAP SDK SENDING TX ERROR: \(error)")
                                 reject(error)
                             }
                         }
                     } catch {
-                        print("SWAP SDK SENDING TX ERROR: \(error)")
+                        self.debug("SWAP SDK SENDING TX ERROR: \(error)")
                         reject(error)
                     }
                 case .failure(let error):
-                    print("SWAP SDK Getting nonce ERROR: \(error)")
+                    self.debug("SWAP SDK Getting nonce ERROR: \(error)")
                     break
                 }
             })
@@ -392,7 +392,7 @@ class Ethereum: BaseClass, IBlockchain {
                         accessList: [:],
                         transactionType: .eip1559
                     ) else {
-                        print("SWAP SDK PAYING INVOICE TX ERROR")
+                        self.debug("SWAP SDK PAYING INVOICE TX ERROR")
                         return reject(SwapSDKError.msg("Ethereum failed to create transaction"))
                     }
                                         
@@ -422,21 +422,21 @@ class Ethereum: BaseClass, IBlockchain {
                                         self.info("payInvoice", receipt, party, self as Any)
                                         resolve(receipt)
                                     case .failure(let error):
-                                        print("SWAP SDK ETH Fetching receip error: \(error)")
+                                        debug("SWAP SDK ETH Fetching receip error: \(error)")
                                         return reject(error)
                                     }
                                 }
                             case .failure(let error):
-                                print("SWAP SDK SENDING TX ERROR: \(error)")
+                                self.debug("SWAP SDK SENDING TX ERROR: \(error)")
                                 reject(error)
                             }
                         }
                     } catch {
-                        print("SWAP SDK SENDING TX ERROR: \(error)")
+                        self.debug("SWAP SDK SENDING TX ERROR: \(error)")
                         reject(error)
                     }
                 case .failure(let error):
-                    print("SWAP SDK Getting nonce ERROR: \(error)")
+                    self.debug("SWAP SDK Getting nonce ERROR: \(error)")
                     break
                 }
             })
@@ -474,7 +474,7 @@ class Ethereum: BaseClass, IBlockchain {
                         accessList: [:],
                         transactionType: .eip1559
                     ) else {
-                        print("SWAP SDK CREATING TX ERROR")
+                        self.debug("SWAP SDK CREATING TX ERROR")
                         return reject(SwapSDKError.msg("Ethereum failed to create transaction"))
                     }
                                         
@@ -485,7 +485,7 @@ class Ethereum: BaseClass, IBlockchain {
                             switch response.status {
                             case .success(let data):
                                 
-                                print("SWAP SDK Eth tx hash: \(data.hex())")
+                                self.debug("SWAP SDK Eth tx hash: \(data.hex())")
                                 
                                 Thread.sleep(forTimeInterval: 0.5)
                                 
@@ -506,21 +506,21 @@ class Ethereum: BaseClass, IBlockchain {
                                         self.info("settleInvoice", receipt, party, self as Any)
                                         resolve(receipt)
                                     case .failure(let error):
-                                        print("SWAP SDK ETH Fetching receip error: \(error)")
+                                        debug("SWAP SDK ETH Fetching receip error: \(error)")
                                         return reject(error)
                                     }
                                 }
                             case .failure(let error):
-                                print("SWAP SDK SENDING TX ERROR: \(error)")
+                                self.debug("SWAP SDK SENDING TX ERROR: \(error)")
                                 reject(error)
                             }
                         }
                     } catch {
-                        print("SWAP SDK SENDING TX ERROR: \(error)")
+                        self.debug("SWAP SDK SENDING TX ERROR: \(error)")
                         reject(error)
                     }
                 case .failure(let error):
-                    print("SWAP SDK Getting nonce ERROR: \(error)")
+                    self.debug("SWAP SDK Getting nonce ERROR: \(error)")
                     break
                 }
             })
