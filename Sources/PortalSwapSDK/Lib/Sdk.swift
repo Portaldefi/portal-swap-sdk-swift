@@ -85,10 +85,10 @@ class Sdk: BaseClass {
         return Promise { [unowned self] resolve, reject in
             all(
                 self.network.connect(),
-                self.store.open(),
                 self.blockchains.connect(),
+                self.store.open(),
                 self.dex.open()
-            ).then { network, store, blockchains, dex in
+            ).then { network, blockchains, store, dex in
                 self.info("start", self)
                 self.emit(event: "start")
                 resolve(())
@@ -104,10 +104,10 @@ class Sdk: BaseClass {
         return Promise { [unowned self] resolve, reject in
             all(
                 self.network.disconnect(),
-                self.store.close(),
                 self.blockchains.disconnect(),
+                self.store.close(),
                 self.dex.close()
-            ).then { network, store, blockchains, dex in
+            ).then { network, blockchains, store, dex in
                 self.info("stop", self)
                 self.emit(event: "stop")
                 resolve(())

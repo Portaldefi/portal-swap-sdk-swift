@@ -10,17 +10,13 @@ class Dex: BaseClass {
     }
     
     // Opens the orderbooks
-    func open() -> Promise<Dex> {
-        Promise { fulfill, reject in
-            fulfill(self)
-        }
+    func open() -> Promise<Void> {
+        Promise {()}
     }
     
     // Closes the orderbooks
-    func close() -> Promise<Dex> {
-        Promise { resolve, reject in
-            resolve(self)
-        }
+    func close() -> Promise<Void> {
+        Promise {()}
     }
     
     // Adds a limit order to the orderbook
