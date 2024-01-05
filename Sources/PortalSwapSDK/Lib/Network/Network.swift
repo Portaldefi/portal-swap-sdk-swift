@@ -40,14 +40,9 @@ class Network: BaseClass {
                 reject(SwapSDKError.msg("Network: missing sdk id"))
                 return
             }
-            
-            let networkProtocol = config.networkProtocol
-            let host = config.hostName
-            let port = config.port
-            let pathname = config.pathname
                                     
             WebSocket.connect(
-                to: "\(networkProtocol == .unencrypted ? "ws://\(host):\(port)/\(pathname)/\(id)" : "wss://\(host)/\(pathname)/\(id)")",
+                to: webSocketURL(id: id),
                 on: socketEventLoopGroup
             ) { [weak self] ws in
                 
@@ -92,7 +87,7 @@ class Network: BaseClass {
                 return
             }
             
-            guard let url = URL(string: "\(config.networkProtocol == .unencrypted ? "http://\(config.hostName):\(config.port)\(path)" : "https://\(config.hostName)\(path)")") else {
+            guard let url = URL(string: serverURL(path: path)) else {
                 reject(SwapSDKError.msg("Invalid URL"))
                 return
             }
@@ -185,5 +180,26 @@ class Network: BaseClass {
         }
         
         emit(event: event, args: [arg])
+    }
+}
+
+extension Network {
+    private func serverURL(path: String) -> String {
+        switch config.networkProtocol {
+        case .unencrypted:
+            return "http://\(config.hostName):\(config.port)\(path)"
+        case .encrypted:
+            return "https://\(config.hostName)\(path)"
+        }
+    }
+    
+    private func webSocketURL(id: String) -> String {
+        switch config.networkProtocol {
+        case .unencrypted:
+            //Playnet
+            return "ws://\(config.hostName):\(config.port)/\(config.pathname)/\(id)"
+        case .encrypted:
+            return "wss://\(config.hostName)/\(config.pathname)/\(id)"
+        }
     }
 }
