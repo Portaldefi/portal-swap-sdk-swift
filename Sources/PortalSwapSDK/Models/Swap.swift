@@ -218,11 +218,18 @@ public class Swap: BaseClass, Codable {
         }
     }
     
+    private enum CodingKeys: String, CodingKey {
+        case id, secretHash, secretHolder, secretSeeker, status
+    }
+}
+
+extension Swap {
     public func toJSON() -> [String: Any] {
         Utils.convertToJSON(self) ?? [:]
     }
     
-    private enum CodingKeys: String, CodingKey {
-        case id, secretHash, secretHolder, secretSeeker, status
+    static func from(json: [String: Any]) throws -> Swap {
+        let jsonData = try JSONSerialization.data(withJSONObject: json, options: [])
+        return try JSONDecoder().decode(Swap.self, from: jsonData)
     }
 }
