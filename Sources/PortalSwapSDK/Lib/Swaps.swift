@@ -72,7 +72,7 @@ class Swaps: BaseClass {
 
             switch swap.status {
             case "received":
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 emit(event: "swap.\(swap.status)", args: [swap])
                 
                 if swap.party.isSecretSeeker { return }
@@ -94,7 +94,7 @@ class Swaps: BaseClass {
             case "created":
                 if swap.party.isSecretSeeker { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
 
                 swap.createInvoice().then { [unowned self] _ in
                     self._onSwap(swap.toJSON())
@@ -105,7 +105,7 @@ class Swaps: BaseClass {
             case "holder.invoice.created":
                 if swap.party.isSecretSeeker { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 
                 try swap.sendInvoice().catch { error in
                     self.error("swap.error", error)
@@ -114,7 +114,7 @@ class Swaps: BaseClass {
             case "holder.invoice.sent":
                 if swap.party.isSecretHolder { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 
                 swap.createInvoice().then { [unowned self] _ in
                     self._onSwap(swap.toJSON())
@@ -125,7 +125,7 @@ class Swaps: BaseClass {
             case "seeker.invoice.created":
                 if swap.party.isSecretHolder { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 
                 try swap.sendInvoice().catch { error in
                     self.error("swap.error", error)
@@ -134,7 +134,7 @@ class Swaps: BaseClass {
             case "seeker.invoice.sent":
                 if swap.party.isSecretSeeker { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 
                 swap.payInvoice().catch { error in
                     self.error("swap.error", error)
@@ -143,7 +143,7 @@ class Swaps: BaseClass {
             case "holder.invoice.paid":
                 if swap.party.isSecretHolder { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
 
                 swap.payInvoice().catch { error in
                     self.error("swap.error", error)
@@ -152,7 +152,7 @@ class Swaps: BaseClass {
             case "seeker.invoice.paid":
                 if swap.party.isSecretSeeker { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 
                 swap.counterparty.swap = swap
                 
@@ -162,7 +162,7 @@ class Swaps: BaseClass {
                 }
             case "holder.invoice.settled":
                 if swap.party.isSecretSeeker {
-                    info("swap.\(swap.status)", [swap])
+                    info("swap.\(swap.status)", [swap.toJSON()])
                     
                     swap.settleInvoice().catch { error in
                         self.error("swap.error", error)
@@ -173,16 +173,16 @@ class Swaps: BaseClass {
                 if swap.party.isSecretHolder {
                     swap.status = "completed"
                     
-                    info("swap.\(swap.status)", [swap])
+                    info("swap.\(swap.status)", [swap.toJSON()])
                     self._onSwap(swap.toJSON())
                 }
             case "seeker.invoice.settled":
                 swap.status = "completed"
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 self._onSwap(swap.toJSON())
             case "completed":
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", [swap.toJSON()])
                 emit(event: "swap.\(swap.status)", args: [swap])
             default:
                 let error = SwapSDKError.msg("unknown status \(swap.status)")
@@ -212,7 +212,7 @@ class Swaps: BaseClass {
             }
         })
         .store(in: &subscriptions)
-        
+                
         swap.on("created", { [unowned self] _ in
             self.emit(event: "swap.\(swap.status)", args: [swap])
         })
