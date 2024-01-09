@@ -254,6 +254,8 @@ class Ethereum: BaseClass, IBlockchain {
             for subscriptionsId in subscriptionsIDS {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
             }
+            subscriptionsIDS.removeAll()
+            resolve(())
         }
     }
     
