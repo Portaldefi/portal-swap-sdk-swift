@@ -80,11 +80,11 @@ class Lightning: BaseClass, IBlockchain {
                             self.info("invoice.paid", invoice)
                             self.emit(event: "invoice.paid", args: [invoice])
                         case .paymentConfirmed:
-                            subscription.off("invoice_updated")
+                            subscription.off("invoice.updated")
                             self.info("invoice.settled", invoice)
                             self.emit(event: "invoice.settled", args: [invoice])
                         case .paymentCanceled:
-                            subscription.off("invoice_updated")
+                            subscription.off("invoice.updated")
                             self.info("invoice.cancelled", invoice)
                             self.emit(event: "invoice.cancelled", args: [invoice])
                         case .awaitsPayment:
