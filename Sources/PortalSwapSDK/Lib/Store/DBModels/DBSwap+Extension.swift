@@ -23,105 +23,105 @@ extension DBSwap {
         secretHolder.invoice = DBInvoice(context: context)
         
         self.secretHolder = secretHolder
+        self.timestamp = Int64(Date().timeIntervalSince1970)
     }
     
     func update(swap: Swap) throws {
-        self.swapID = swap.id
-        self.secretHash = swap.secretHash
-        self.status = swap.status
-        
-        guard let secretSeeker = secretSeeker else {
-            throw SwapSDKError.msg("Swap db entity has no seeker")
+        guard let context = managedObjectContext else {
+            throw SwapSDKError.msg("Cannot obtain manage object context")
         }
         
-        secretSeeker.partyID = swap.secretSeeker.id
-        secretSeeker.oid = swap.secretSeeker.oid
-        secretSeeker.blockchain = swap.secretSeeker.blockchain
-        secretSeeker.asset = swap.secretSeeker.asset
-        secretSeeker.quantity = swap.secretSeeker.quantity
-        
-        guard let secretHolder = secretHolder else {
-            throw SwapSDKError.msg("Swap db entity has no holder")
-        }
-        
-        secretHolder.partyID = swap.secretHolder.id
-        secretHolder.oid = swap.secretHolder.oid
-        secretHolder.blockchain = swap.secretHolder.blockchain
-        secretHolder.asset = swap.secretHolder.asset
-        secretHolder.quantity = swap.secretHolder.quantity
-        
-        var jsonInvoices = [[String: String]]()
-        var dbInvoices = [DBInvoice]()
-        
-        if let seekerInvoice = swap.secretSeeker.invoice {
-            jsonInvoices.append(seekerInvoice)
+        try context.performAndWait {
+            self.swapID = swap.id
+            self.secretHash = swap.secretHash
+            self.status = swap.status
+            self.timestamp = Int64(Date().timeIntervalSince1970)
             
-            guard let invoice = secretSeeker.invoice else {
-                throw SwapSDKError.msg("SecretSeeker has no db invocie")
+            guard let secretSeeker = secretSeeker else {
+                throw SwapSDKError.msg("Swap db entity has no seeker")
             }
             
-            dbInvoices.append(invoice)
-        }
-        
-        if let holderInvoice = swap.secretHolder.invoice {
-            jsonInvoices.append(holderInvoice)
+            secretSeeker.partyID = swap.secretSeeker.id
+            secretSeeker.oid = swap.secretSeeker.oid
+            secretSeeker.blockchain = swap.secretSeeker.blockchain
+            secretSeeker.asset = swap.secretSeeker.asset
+            secretSeeker.quantity = swap.secretSeeker.quantity
             
-            guard let invoice = secretHolder.invoice else {
-                throw SwapSDKError.msg("SecretHolder has no db invocie")
+            guard let secretHolder = secretHolder else {
+                throw SwapSDKError.msg("Swap db entity has no holder")
             }
             
-            dbInvoices.append(invoice)
-        }
-        
-        guard !jsonInvoices.isEmpty && !dbInvoices.isEmpty && jsonInvoices.count == dbInvoices.count else { return }
-        
-        for (json, dbInvoice) in zip(jsonInvoices, dbInvoices) {
-            if json.contains(where: { $0.key == "request"}) {
-                //Lightning Invoice
-                if let lightningInvoice = dbInvoice.lightningInvoice {
-                    lightningInvoice.invoiceID = json["id"]
-                    lightningInvoice.request = json["request"]
-                    lightningInvoice.swap = json["swap"]
-                } else {
-                    guard let context = managedObjectContext else {
-                        throw SwapSDKError.msg("Cannot obtain manage object context")
-                    }
-                    
-                    let entityName = String(describing: DBLightningInvoice.self)
-                    let entity = NSEntityDescription.entity(forEntityName: entityName, in: context)!
-                    let lightningInvoice = DBLightningInvoice(entity: entity, insertInto: context)
-                    
-                    lightningInvoice.invoiceID = json["id"]
-                    lightningInvoice.request = json["request"]
-                    lightningInvoice.swap = json["swap"]
-                    
-                    dbInvoice.lightningInvoice = lightningInvoice
+            secretHolder.partyID = swap.secretHolder.id
+            secretHolder.oid = swap.secretHolder.oid
+            secretHolder.blockchain = swap.secretHolder.blockchain
+            secretHolder.asset = swap.secretHolder.asset
+            secretHolder.quantity = swap.secretHolder.quantity
+            
+            var jsonInvoices = [[String: String]]()
+            var dbInvoices = [DBInvoice]()
+            
+            if let seekerInvoice = swap.secretSeeker.invoice {
+                jsonInvoices.append(seekerInvoice)
+                
+                guard let invoice = secretSeeker.invoice else {
+                    throw SwapSDKError.msg("SecretSeeker has no db invocie")
                 }
-            } else if json.contains(where: { $0.key == "transactionHash"}) {
-                // EMV Invoice
-                if let evmInvoice = dbInvoice.evmInvoice {
-                    evmInvoice.blockHash = json["blockHash"]
-                    evmInvoice.from = json["from"]
-                    evmInvoice.to = json["to"]
-                    evmInvoice.transactionHash = json["transactionHash"]
-                } else {
-                    guard let context = managedObjectContext else {
-                        throw SwapSDKError.msg("Cannot obtain manage object context")
-                    }
-                    
-                    let entityName = String(describing: DBEvmInvoice.self)
-                    let entity = NSEntityDescription.entity(forEntityName: entityName, in: context)!
-                    let evmInvoice = DBEvmInvoice(entity: entity, insertInto: context)
-                    
-                    evmInvoice.blockHash = json["blockHash"]
-                    evmInvoice.from = json["from"]
-                    evmInvoice.to = json["to"]
-                    evmInvoice.transactionHash = json["transactionHash"]
-                    
-                    dbInvoice.evmInvoice = evmInvoice
+                
+                dbInvoices.append(invoice)
+            }
+            
+            if let holderInvoice = swap.secretHolder.invoice {
+                jsonInvoices.append(holderInvoice)
+                
+                guard let invoice = secretHolder.invoice else {
+                    throw SwapSDKError.msg("SecretHolder has no db invocie")
                 }
-            } else {
-                throw SwapSDKError.msg("Unknown invoice type")
+                
+                dbInvoices.append(invoice)
+            }
+            
+            guard !jsonInvoices.isEmpty && !dbInvoices.isEmpty && jsonInvoices.count == dbInvoices.count else { return }
+            
+            for (json, dbInvoice) in zip(jsonInvoices, dbInvoices) {
+                if json.contains(where: { $0.key == "request"}) {
+                    //Lightning Invoice
+                    if let lightningInvoice = dbInvoice.lightningInvoice {
+                        lightningInvoice.invoiceID = json["id"]
+                        lightningInvoice.request = json["request"]
+                        lightningInvoice.swap = json["swap"]
+                    } else {
+                        let entityName = String(describing: DBLightningInvoice.self)
+                        let entity = NSEntityDescription.entity(forEntityName: entityName, in: context)!
+                        let lightningInvoice = DBLightningInvoice(entity: entity, insertInto: context)
+                        
+                        lightningInvoice.invoiceID = json["id"]
+                        lightningInvoice.request = json["request"]
+                        lightningInvoice.swap = json["swap"]
+                        
+                        dbInvoice.lightningInvoice = lightningInvoice
+                    }
+                } else if json.contains(where: { $0.key == "transactionHash"}) {
+                    // EMV Invoice
+                    if let evmInvoice = dbInvoice.evmInvoice {
+                        evmInvoice.blockHash = json["blockHash"]
+                        evmInvoice.from = json["from"]
+                        evmInvoice.to = json["to"]
+                        evmInvoice.transactionHash = json["transactionHash"]
+                    } else {
+                        let entityName = String(describing: DBEvmInvoice.self)
+                        let entity = NSEntityDescription.entity(forEntityName: entityName, in: context)!
+                        let evmInvoice = DBEvmInvoice(entity: entity, insertInto: context)
+                        
+                        evmInvoice.blockHash = json["blockHash"]
+                        evmInvoice.from = json["from"]
+                        evmInvoice.to = json["to"]
+                        evmInvoice.transactionHash = json["transactionHash"]
+                        
+                        dbInvoice.evmInvoice = evmInvoice
+                    }
+                } else {
+                    throw SwapSDKError.msg("Unknown invoice type")
+                }
             }
         }
     }
@@ -148,13 +148,32 @@ extension DBSwap {
         ]
     }
     
+    func model() throws -> Swap {
+        let jsonData = try JSONSerialization.data(withJSONObject: toJSON(), options: [])
+        return try JSONDecoder().decode(Swap.self, from: jsonData)
+    }
+    
     static func entity(key: String, context: NSManagedObjectContext) throws -> DBSwap {
-        let dbSwaps = try context.fetch(DBSwap.fetchRequest())
-        
-        if let dbSwap = dbSwaps.first(where: { $0.swapID == key }) {
-            return dbSwap
-        } else {
-            throw SwapSDKError.msg("Swap with id: \(key) is not exists in DB")
+        try context.performAndWait {
+            let dbSwaps = try context.fetch(DBSwap.fetchRequest())
+            
+            if let dbSwap = dbSwaps.first(where: { $0.swapID == key }) {
+                return dbSwap
+            } else {
+                throw SwapSDKError.msg("Swap with id: \(key) is not exists in DB")
+            }
+        }
+    }
+    
+    public static func entities(context: NSManagedObjectContext) throws -> [DBSwap] {
+        try context.performAndWait {
+            try context.fetch(DBSwap.fetchRequest())
+        }
+    }
+    
+    public static func swapModels(context: NSManagedObjectContext) throws -> [Swap] {
+        try context.performAndWait {
+            try context.fetch(DBSwap.fetchRequest()).compactMap{ try? $0.model() }
         }
     }
 }
