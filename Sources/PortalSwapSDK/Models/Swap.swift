@@ -2,7 +2,7 @@ import Foundation
 import Promises
 
 public class Swap: BaseClass, Codable {
-    private var sdk: Sdk!
+    private var sdk: Sdk?
 
     public var secretHolder: Party
     public var secretSeeker: Party
@@ -20,7 +20,7 @@ public class Swap: BaseClass, Codable {
     }
     
     public var party: Party {
-        sdk.id == secretHolder.id ? secretHolder : secretSeeker
+        sdk?.id == secretHolder.id ? secretHolder : secretSeeker
     }
     
     public var partyType: String {
@@ -28,7 +28,7 @@ public class Swap: BaseClass, Codable {
     }
     
     public var counterparty: Party {
-        sdk.id == secretHolder.id ? secretSeeker : secretHolder
+        sdk?.id == secretHolder.id ? secretSeeker : secretHolder
     }
     
     func update(sdk: Sdk) {
@@ -54,18 +54,14 @@ public class Swap: BaseClass, Codable {
         try container.encode(secretSeeker, forKey: .secretSeeker)
         try container.encode(secretHolder, forKey: .secretHolder)
     }
-    
-    public func update(_ swap: [String: Any]) throws {
-        info("SWAP SDK On swap update!")
-    }
-    
+        
     public func createInvoice() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
-            guard let blockchains = sdk.blockchains else {
+            guard let blockchains = sdk?.blockchains else {
                 return reject(SwapSDKError.msg("cannot get blockchains"))
             }
             
-            guard let store = sdk.store else {
+            guard let store = sdk?.store else {
                 return reject(SwapSDKError.msg("cannot get store"))
             }
             
@@ -138,7 +134,7 @@ public class Swap: BaseClass, Codable {
     }
     
     public func sendInvoice() throws -> Promise<Data> {
-        guard let network = sdk.network else {
+        guard let network = sdk?.network else {
             throw SwapSDKError.msg("Cannot fetch network")
         }
         status = "\(partyType).invoice.sent"
@@ -153,7 +149,7 @@ public class Swap: BaseClass, Codable {
     
     public func payInvoice() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
-            guard let blockchains = sdk.blockchains else {
+            guard let blockchains = sdk?.blockchains else {
                 return reject(SwapSDKError.msg("Cannot fetch blockchains"))
             }
             
@@ -179,7 +175,7 @@ public class Swap: BaseClass, Codable {
     
     public func settleInvoice() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
-            guard let blockchains = sdk.blockchains else {
+            guard let blockchains = sdk?.blockchains else {
                 return reject(SwapSDKError.msg("Cannot fetch blockchains"))
             }
             
@@ -191,7 +187,7 @@ public class Swap: BaseClass, Codable {
                 return reject(SwapSDKError.msg("cannot get blockchain"))
             }
             
-            guard let store = sdk.store else {
+            guard let store = sdk?.store else {
                 return reject(SwapSDKError.msg("cannot get store"))
             }
             
