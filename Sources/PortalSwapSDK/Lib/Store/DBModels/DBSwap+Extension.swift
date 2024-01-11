@@ -36,6 +36,7 @@ extension DBSwap {
             self.secretHash = swap.secretHash
             self.status = swap.status
             self.timestamp = Int64(Date().timeIntervalSince1970)
+            self.partyType = swap.partyType
             
             guard let secretSeeker = secretSeeker else {
                 throw SwapSDKError.msg("Swap db entity has no seeker")
