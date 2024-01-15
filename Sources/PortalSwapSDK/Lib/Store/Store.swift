@@ -3,13 +3,15 @@ import CoreData
 import Promises
 
 class Store: BaseClass {
+    private var sdk: Sdk
     private var persistenceManager: LocalPersistenceManager?
     
     var isOpen: Bool {
         persistenceManager != nil
     }
     
-    init() {
+    init(sdk: Sdk) {
+        self.sdk = sdk
         super.init()
     }
     
@@ -67,7 +69,8 @@ class Store: BaseClass {
             
             debug("STORE Put secret with ID: \(newEntity.swapID ?? "Unknown")")
         case .swaps:
-            let swap = try Swap.from(json: obj)
+            let swap = try Swap.from(json: obj).update(sdk: sdk)
+            
             let newEntity = DBSwap(context: viewContext)
             try newEntity.update(swap: swap)
             
@@ -86,7 +89,7 @@ class Store: BaseClass {
         
         switch namespace {
         case .swaps:
-            let swap = try Swap.from(json: obj)
+            let swap = try Swap.from(json: obj).update(sdk: sdk)
             let dbSwap = try DBSwap.entity(key: key, context: viewContext)
             try dbSwap.update(swap: swap)
             

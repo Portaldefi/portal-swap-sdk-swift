@@ -47,7 +47,7 @@ class Sdk: BaseClass {
         self.network.on("order.closed", forwardEvent("order.closed")).store(in: &subscriptions)
         
         // Interface to the underlying data store
-        self.store = .init()
+        self.store = .init(sdk: self)
         
         // Interface to all the blockchain networks
         self.blockchains = .init(sdk: self, props: config.blockchains)
