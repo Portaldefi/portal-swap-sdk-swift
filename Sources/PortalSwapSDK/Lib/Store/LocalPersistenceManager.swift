@@ -1,12 +1,12 @@
 import Foundation
 import CoreData
 
-class LocalPersistenceManager: IPersistenceManager {
+public class LocalPersistenceManager: IPersistenceManager {
     
-    var viewContext: NSManagedObjectContext { container.viewContext }
+    public var viewContext: NSManagedObjectContext { container.viewContext }
     var container: PersistentContainer
     
-    required init(configuration: PersistenceConfiguration) throws {
+    public required init(configuration: PersistenceConfiguration) throws {
         let model = try LocalPersistenceManager.model(for: configuration.modelName)
         
         container = .init(name: configuration.modelName, managedObjectModel: model)
