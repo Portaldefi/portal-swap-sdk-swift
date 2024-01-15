@@ -171,10 +171,4 @@ extension DBSwap {
             try context.fetch(DBSwap.fetchRequest())
         }
     }
-    
-    public static func swapModels(context: NSManagedObjectContext) throws -> [Swap] {
-        try context.performAndWait {
-            try context.fetch(DBSwap.fetchRequest()).compactMap{ try? $0.model() }
-        }
-    }
 }
