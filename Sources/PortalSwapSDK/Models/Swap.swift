@@ -31,8 +31,9 @@ public class Swap: BaseClass, Codable {
         sdk?.id == secretHolder.id ? secretSeeker : secretHolder
     }
     
-    func update(sdk: Sdk) {
+    func update(sdk: Sdk) -> Swap {
         self.sdk = sdk
+        return self
     }
     
     public required init(from decoder: Decoder) throws {
@@ -40,12 +41,10 @@ public class Swap: BaseClass, Codable {
         secretHash = try? container.decode(String.self, forKey: .secretHash)
         status = try container.decode(String.self, forKey: .status)
         secretHolder = try container.decode(Party.self, forKey: .secretHolder)
-        secretHolder.isSecretHolder = true
         secretSeeker = try container.decode(Party.self, forKey: .secretSeeker)
-        secretSeeker.isSecretSeeker = true
         super.init(id: try container.decode(String.self, forKey: .id))
     }
-    
+        
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -57,6 +56,8 @@ public class Swap: BaseClass, Codable {
         
     public func createInvoice() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
+            party.update(swap: self)
+
             guard let blockchains = sdk?.blockchains else {
                 return reject(SwapSDKError.msg("cannot get blockchains"))
             }
@@ -149,6 +150,8 @@ public class Swap: BaseClass, Codable {
     
     public func payInvoice() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
+            party.update(swap: self)
+
             guard let blockchains = sdk?.blockchains else {
                 return reject(SwapSDKError.msg("Cannot fetch blockchains"))
             }
@@ -160,9 +163,7 @@ public class Swap: BaseClass, Codable {
             guard let blockchain = blockchains.blockchain(id: String(blockchainID)) else {
                 return reject(SwapSDKError.msg("cannot get blockchain"))
             }
-                        
-            party.swap = self
-            
+                                    
             debug("\(party.id) Paying invoice on \(blockchainID)")
             
             blockchain.payInvoice(party: party).then { _ in
