@@ -23,11 +23,7 @@ class Ethereum: BaseClass, IBlockchain {
     }
         
     func connect() -> Promise<Void> {
-        Promise { [weak self] resolve, reject in
-            guard let self = self else {
-                return reject(SwapSDKError.msg("Ethereum cannot handle self"))
-            }
-            
+        Promise { [unowned self] resolve, reject in
             do {
                 websocketProvider = try Web3WebSocketProvider(wsUrl: props.url)
                 web3 = Web3(provider: websocketProvider)
@@ -66,8 +62,9 @@ class Ethereum: BaseClass, IBlockchain {
                     switch event.name {
                     case "InvoiceCreated":
                         websocketProvider.subscribe(request: request) { [weak self] response in
-                            guard let self = self else { return }
-                            
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("InvoiceCreated self is nil"))
+                            }
                             switch response.status {
                             case .success(let subscriptionID):
                                 self.subscriptionAccessQueue.async {
@@ -78,7 +75,9 @@ class Ethereum: BaseClass, IBlockchain {
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoiceCreatedEvent>) in
-                            guard let self = self else { return }
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("InvoiceCreatedEvent self is nil"))
+                            }
                             
                             switch response.status {
                             case .success(let invoiceCreatedEvent):
@@ -121,7 +120,9 @@ class Ethereum: BaseClass, IBlockchain {
                         }
                     case "InvoicePaid":
                         websocketProvider.subscribe(request: request) { [weak self] response in
-                            guard let self = self else { return }
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("InvoicePaid self is nil"))
+                            }
                             
                             switch response.status {
                             case .success(let subscriptionID):
@@ -133,7 +134,9 @@ class Ethereum: BaseClass, IBlockchain {
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoicePaidEvent>) in
-                            guard let self = self else { return }
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("InvoicePaidEvent self is nil"))
+                            }
                             
                             switch response.status {
                             case .success(let invoicePayedEvent):
@@ -175,7 +178,9 @@ class Ethereum: BaseClass, IBlockchain {
                         }
                     case "InvoiceSettled":
                         websocketProvider.subscribe(request: request) { [weak self] response in
-                            guard let self = self else { return }
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("InvoiceSettled self is nil"))
+                            }
                             
                             switch response.status {
                             case .success(let subscriptionID):
@@ -187,7 +192,9 @@ class Ethereum: BaseClass, IBlockchain {
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoiceSettledEvent>) in
-                            guard let self = self else { return }
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("InvoiceSettledEvent self is nil"))
+                            }
                             
                             switch response.status {
                             case .success(let invoiceSettledEvent):
@@ -287,7 +294,11 @@ class Ethereum: BaseClass, IBlockchain {
             
             let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
             
-            web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { response in
+            web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { [weak self] response in
+                guard let self = self else {
+                    return reject(SwapSDKError.msg("web3.eth.getTransactionCount self is nil"))
+                }
+                
                 switch response.status {
                 case .success(let nonce):
                     guard let tx = self.contract["createInvoice"]?(params).createTransaction(
@@ -308,7 +319,11 @@ class Ethereum: BaseClass, IBlockchain {
                     do {
                         let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
                         
-                        try self.web3.eth.sendRawTransaction(transaction: signedTx) { response in
+                        try self.web3.eth.sendRawTransaction(transaction: signedTx) { [weak self] response in
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("web3.eth.sendRawTransaction self is nil"))
+                            }
+                            
                             switch response.status {
                             case .success(let data):
                                 self.debug("SWAP SDK ETH TH HASH: \(data.hex())")
@@ -317,7 +332,7 @@ class Ethereum: BaseClass, IBlockchain {
                                 
                                 self.web3.eth.getTransactionReceipt(transactionHash: data) { [weak self] response in
                                     guard let self = self else {
-                                        return reject(SwapSDKError.msg("getTransactionReceipt self is nil"))
+                                        return reject(SwapSDKError.msg("web3.eth.getTransactionReceipt self is nil"))
                                     }
                                     
                                     switch response.status {
@@ -329,7 +344,7 @@ class Ethereum: BaseClass, IBlockchain {
                                             "to": self.contract.address!.hex(eip55: false),
                                             "transactionHash": txReceipt!.transactionHash.hex()
                                         ]
-                                                                                
+                                        
                                         self.info("createInvoice", receipt, party, self as Any)
                                         resolve(receipt)
                                     case .failure(let error):
@@ -380,7 +395,11 @@ class Ethereum: BaseClass, IBlockchain {
             
             let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
                         
-            web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { response in
+            web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { [weak self] response in
+                guard let self = self else {
+                    return reject(SwapSDKError.msg("web3.eth.getTransactionCount self is nil"))
+                }
+
                 switch response.status {
                 case .success(let nonce):
                     guard let tx = self.contract["payInvoice"]?(params).createTransaction(
@@ -401,7 +420,11 @@ class Ethereum: BaseClass, IBlockchain {
                     do {
                         let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
                         
-                        try self.web3.eth.sendRawTransaction(transaction: signedTx) { response in
+                        try self.web3.eth.sendRawTransaction(transaction: signedTx) { [weak self] response in
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("web3.eth.sendRawTransaction self is nil"))
+                            }
+
                             switch response.status {
                             case .success(let data):
                                                                 
@@ -409,8 +432,9 @@ class Ethereum: BaseClass, IBlockchain {
                                 
                                 self.web3.eth.getTransactionReceipt(transactionHash: data) { [weak self] response in
                                     guard let self = self else {
-                                        return reject(SwapSDKError.msg("getTransactionReceipt self is nil"))
+                                        return reject(SwapSDKError.msg("web3.eth.getTransactionReceipt self is nil"))
                                     }
+                                    
                                     switch response.status {
                                     case .success(let txReceipt):
                                                                                 
@@ -462,7 +486,11 @@ class Ethereum: BaseClass, IBlockchain {
             
             let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
             
-            web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { response in
+            web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { [weak self] response in
+                guard let self = self else {
+                    return reject(SwapSDKError.msg("web3.eth.getTransactionCount self is nil"))
+                }
+                
                 switch response.status {
                 case .success(let nonce):
                     guard let tx = self.contract["settleInvoice"]?(params).createTransaction(
@@ -483,7 +511,11 @@ class Ethereum: BaseClass, IBlockchain {
                     do {
                         let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
                         
-                        try self.web3.eth.sendRawTransaction(transaction: signedTx) { response in
+                        try self.web3.eth.sendRawTransaction(transaction: signedTx) { [weak self] response in
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("web3.eth.sendRawTransaction self is nil"))
+                            }
+                            
                             switch response.status {
                             case .success(let data):
                                 
@@ -493,7 +525,7 @@ class Ethereum: BaseClass, IBlockchain {
                                 
                                 self.web3.eth.getTransactionReceipt(transactionHash: data) { [weak self] response in
                                     guard let self = self else {
-                                        return reject(SwapSDKError.msg("getTransactionReceipt self is nil"))
+                                        return reject(SwapSDKError.msg("web3.eth.getTransactionReceipt self is nil"))
                                     }
                                     switch response.status {
                                     case .success(let txReceipt):
