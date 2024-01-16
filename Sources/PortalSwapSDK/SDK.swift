@@ -3,48 +3,34 @@ import Foundation
 import Promises
 
 public class SDK: BaseClass {
-    private let sdk: Sdk!
-    
-    private var subscriptions = Set<AnyCancellable>()
+    private let sdk: Sdk
 
     public var isConnected: Bool {
         sdk.network.isConnected
     }
     
-    private lazy var onSwap: ([Any]) -> Void = { [weak self] args in
-        if let data = args as? [Swap], let swap = data.first {
-            self?.emit(event: "swap.\(swap.status)", args: [swap])
-        } else {
-            self?.debug("Got onSwap with unexpected arguments: \(args) [SDK]")
-        }
-    }
-    
-    private lazy var onError: ([Any]) -> Void = { [weak self] args in
-        self?.emit(event: "error", args: args)
-    }
-    
     public init(config: SwapSdkConfig) {
         sdk = .init(config: config)
         
-        super.init()
+        super.init(id: config.id)
         
-        sdk.on("order.created", { [unowned self] args in emit(event: "order.created", args: args) }).store(in: &subscriptions)
-        sdk.on("order.opened", { [unowned self] args in emit(event: "order.opened", args: args) }).store(in: &subscriptions)
-        sdk.on("order.closed", { [unowned self] args in emit(event: "order.closed", args: args) }).store(in: &subscriptions)
-        sdk.on("swap.received", onSwap).store(in: &subscriptions)
-        sdk.on("swap.holder.invoice.created", onSwap).store(in: &subscriptions)
-        sdk.on("swap.holder.invoice.sent", onSwap).store(in: &subscriptions)
-        sdk.on("swap.seeker.invoice.created", onSwap).store(in: &subscriptions)
-        sdk.on("swap.seeker.invoice.sent", onSwap).store(in: &subscriptions)
-        sdk.on("swap.holder.invoice.paid", onSwap).store(in: &subscriptions)
-        sdk.on("swap.seeker.invoice.paid", onSwap).store(in: &subscriptions)
-        sdk.on("swap.holder.invoice.settled", onSwap).store(in: &subscriptions)
-        sdk.on("swap.seeker.invoice.settled", onSwap).store(in: &subscriptions)
-        sdk.on("swap.completed", onSwap).store(in: &subscriptions)
-        sdk.on("message", { [unowned self] args in emit(event: "message", args: args) }).store(in: &subscriptions)
-        sdk.on("log", { [unowned self] args in emit(event: "log", args: args) }).store(in: &subscriptions)
+        subscribe(sdk.on("order.created", forwardEvent("order.created")))
+        subscribe(sdk.on("order.opened", forwardEvent("order.opened")))
+        subscribe(sdk.on("order.closed", forwardEvent("order.closed")))
         
-        sdk.on("error", onError).store(in: &subscriptions)
+        subscribe(sdk.on("swap.received", forwardSwap()))
+        subscribe(sdk.on("swap.holder.invoice.created", forwardSwap()))
+        subscribe(sdk.on("swap.holder.invoice.sent", forwardSwap()))
+        subscribe(sdk.on("swap.seeker.invoice.created", forwardSwap()))
+        subscribe(sdk.on("swap.seeker.invoice.sent", forwardSwap()))
+        subscribe(sdk.on("swap.holder.invoice.paid", forwardSwap()))
+        subscribe(sdk.on("swap.seeker.invoice.paid", forwardSwap()))
+        subscribe(sdk.on("swap.holder.invoice.settled", forwardSwap()))
+        subscribe(sdk.on("swap.seeker.invoice.settled", forwardSwap()))
+        subscribe(sdk.on("swap.completed", forwardSwap()))
+        
+        subscribe(sdk.on("log", forwardLog()))
+        subscribe(sdk.on("error", forwardError()))
         
         debug("SWAP SDK init \(config.id)")
     }
