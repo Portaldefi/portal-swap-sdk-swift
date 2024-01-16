@@ -4,6 +4,11 @@ import Combine
 open class BaseClass {
     public typealias EventName = String
     
+    private var subscriptions = Set<AnyCancellable>()
+    public func subscribe(_ subscription: AnyCancellable) {
+        subscription.store(in: &subscriptions)
+    }
+    
     private var instances: [ObjectIdentifier: InstanceData] = [:]
     private let logLevels = ["debug", "info", "warn", "error"]
     
@@ -34,20 +39,20 @@ open class BaseClass {
     }
     
     @discardableResult
-    public func on(_ event: EventName, _ listener: @escaping ([Any]) -> Void) -> AnyCancellable {
+    public func on(_ event: EventName, _ action: @escaping ([Any]) -> Void) -> AnyCancellable {
         if instances[ObjectIdentifier(self)]?.subjects[event] == nil {
             instances[ObjectIdentifier(self)]?.subjects[event] = PassthroughSubject<[Any], Never>()
         }
 
         var cancellablesSet = instances[ObjectIdentifier(self)]?.cancellables ?? Set<AnyCancellable>()
-        let cancellable = instances[ObjectIdentifier(self)]!.subjects[event]!.sink(receiveValue: listener)
+        let cancellable = instances[ObjectIdentifier(self)]!.subjects[event]!.sink(receiveValue: action)
         cancellablesSet.insert(cancellable)
         instances[ObjectIdentifier(self)]?.cancellables = cancellablesSet
 
         return cancellable
     }
     
-    public func once(_ event: EventName, _ listener: @escaping ([Any]) -> Void) {
+    public func once(_ event: EventName, _ action: @escaping ([Any]) -> Void) {
         if instances[ObjectIdentifier(self)]?.subjects[event] == nil {
             instances[ObjectIdentifier(self)]?.subjects[event] = PassthroughSubject<[Any], Never>()
         }
@@ -56,7 +61,7 @@ open class BaseClass {
         
         var onceCancellable: AnyCancellable? = nil
         onceCancellable = instances[ObjectIdentifier(self)]!.subjects[event]!.sink(receiveValue: { args in
-            listener(args)
+            action(args)
             onceCancellable?.cancel()
             if let c = onceCancellable {
                 cancellablesSet.remove(c)
@@ -114,5 +119,64 @@ extension BaseClass {
 
     func error(_ event: String, _ args: Any...) {
         logFunction("error", event, args)
+    }
+    
+    func forwardSwap() -> ([Any]) -> Void {
+        { [unowned self] args in
+            if let data = args as? [Swap], let swap = data.first {
+                emit(event: "swap.\(swap.status)", args: [swap])
+            } else {
+                debug("Got onSwap with unexpected arguments: \(args) [Sdk]")
+            }
+        }
+    }
+    
+    func forwardEvent(_ event: String) -> ([Any]) -> Void {
+        { [unowned self] args in
+            emit(event: event, args: args)
+        }
+    }
+    
+    func forwardLog() -> ([Any]) -> Void {
+        { [unowned self] args in
+            if let level = args.first as? String
+            {
+                let loggingFunction = getLoggingFunction(for: LogLevel.level(level))
+                loggingFunction(Array(args.dropFirst()))
+            } else {
+                emit(event: "log", args: args)
+            }
+        }
+    }
+    
+    func forwardError() -> ([Any]) -> Void {
+        { [unowned self] args in
+            emit(event: "error", args: args)
+        }
+    }
+    
+    func getLoggingFunction(for level: LogLevel) -> ([Any]) -> Void {
+        switch level {
+        case .debug:
+            return { args in
+                print("SWAP SDK DEBUG:", args)
+            }
+        case .info:
+            return { args in
+                print("SWAP SDK INFO:", args)
+            }
+        case .warn:
+            return { args in
+                print("SWAP SDK WARN:", args)
+            }
+        case .error:
+            return { args in
+                print("SWAP SDK ERROR:", args)
+            }
+        case .unknown:
+            return { args in
+                print("SWAP SDK Unknown:", args)
+            }
+        }
     }
 }
