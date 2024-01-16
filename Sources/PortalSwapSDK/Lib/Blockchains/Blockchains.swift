@@ -6,28 +6,18 @@ class Blockchains: BaseClass {
     public let ethereum: IBlockchain!
     public let lightning: IBlockchain!
     
-    private var subscriptions = Set<AnyCancellable>()
-    
-    private lazy var onError: ([Any]) -> Void = { [weak self] args in
-        self?.emit(event: "error", args: args)
-    }
-    
-    private lazy var forwardLogEvent: ([Any]) -> Void = { [weak self] args in
-        self?.emit(event: "log", args: args)
-    }
-    
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains) {
         self.sdk = sdk
         
-        self.ethereum = Ethereum(sdk: sdk, props: props.ethereum)
-        self.lightning = Lightning(sdk: sdk, props: props.lightning)
+        ethereum = Ethereum(sdk: sdk, props: props.ethereum)
+        lightning = Lightning(sdk: sdk, props: props.lightning)
         
         super.init(id: "Blockchains")
         
-        self.ethereum.on("log", forwardLogEvent).store(in: &subscriptions)
-        self.lightning.on("log", forwardLogEvent).store(in: &subscriptions)
-        self.ethereum.on("error", onError).store(in: &subscriptions)
-        self.lightning.on("error", onError).store(in: &subscriptions)
+        subscribe(ethereum.on("log", forwardLog()))
+        subscribe(lightning.on("log", forwardLog()))
+        subscribe(ethereum.on("error", forwardError()))
+        subscribe(lightning.on("error", forwardError()))
     }
     
     func connect() -> Promise<Void> {
