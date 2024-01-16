@@ -12,7 +12,7 @@ class Store: BaseClass {
     
     init(sdk: Sdk) {
         self.sdk = sdk
-        super.init()
+        super.init(id: sdk.id)
     }
     
     func open() -> Promise<Void> {

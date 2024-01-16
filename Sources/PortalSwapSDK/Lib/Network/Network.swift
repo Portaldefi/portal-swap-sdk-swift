@@ -22,7 +22,7 @@ class Network: BaseClass {
     }
     
     init(sdk: Sdk, props: SwapSdkConfig.Network) {
-        self.config = NetworkConfig(
+        config = NetworkConfig(
             networkProtocol: props.networkProtocol,
             hostName: props.hostname,
             port: props.port,
@@ -37,8 +37,7 @@ class Network: BaseClass {
     func connect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             guard let id = sdk.id else {
-                reject(SwapSDKError.msg("Network: missing sdk id"))
-                return
+                return reject(SwapSDKError.msg("Network: missing sdk id"))
             }
                                     
             WebSocket.connect(
@@ -83,21 +82,18 @@ class Network: BaseClass {
     func request(args: [String: String], data: [String: Any]) -> Promise<Data> {
         Promise { [unowned self] resolve, reject in
             guard let path = args["path"] else {
-                reject(SwapSDKError.msg("Invalid Path"))
-                return
+                return reject(SwapSDKError.msg("Invalid Path"))
             }
             
             guard let url = URL(string: serverURL(path: path)) else {
-                reject(SwapSDKError.msg("Invalid URL"))
-                return
+                return reject(SwapSDKError.msg("Invalid URL"))
             }
             
             var request = URLRequest(url: url)
             request.httpMethod = args["method"] ?? "GET"
             
             guard let id = sdk.id else {
-                reject(SwapSDKError.msg("Network: missing sdk id"))
-                return
+                return reject(SwapSDKError.msg("Network: missing sdk id"))
             }
             
             // Convert data to JSON
@@ -118,7 +114,6 @@ class Network: BaseClass {
                 request.httpBody = jsonData
             } catch {
                 reject(SwapSDKError.msg("JSON serialization error"))
-                return
             }
             
             URLSession.shared.dataTask(with: request) { data, response, error in

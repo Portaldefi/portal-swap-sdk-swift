@@ -119,7 +119,7 @@ public class Swap: BaseClass, Codable {
             
             blockchain.createInvoice(party: counterparty).then { [weak self] invoice in
                 guard let self = self else {
-                    return reject(SwapSDKError.msg("Cannot handle self"))
+                    return reject(SwapSDKError.msg("blockchain.createInvoice(party: ) self is nil"))
                 }
                 
                 self.counterparty.invoice = invoice

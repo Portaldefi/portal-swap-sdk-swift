@@ -4,9 +4,9 @@ import Promises
 class Dex: BaseClass {
     private var sdk: Sdk
     
-    init(sdk: Sdk, props: [String: Any]) {
+    init(sdk: Sdk) {
         self.sdk = sdk
-        super.init()
+        super.init(id: sdk.id)
     }
     
     // Opens the orderbooks
@@ -28,7 +28,7 @@ class Dex: BaseClass {
         
         let data = [
             "id": UUID().uuidString,
-            "uid": sdk.id!,
+            "uid": sdk.id,
             "side": request.side,
             "baseAsset": request.baseAsset,
             "baseNetwork": request.baseNetwork,
