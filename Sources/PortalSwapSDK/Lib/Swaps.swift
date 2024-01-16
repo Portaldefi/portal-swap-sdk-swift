@@ -6,34 +6,17 @@ class Swaps: BaseClass {
     private let sdk: Sdk
     private let store: Store
     private let onSwapAccessQueue = DispatchQueue(label: "swap.sdk.onSwapAccessQueue")
-    private var subscriptions = Set<AnyCancellable>()
     
-    private lazy var onError: ([Any]) -> Void = { [unowned self] args in
-        emit(event: "error", args: args)
-    }
-    
-    private lazy var onSwapAction: ([Any]) -> Void = { [unowned self] args in
-        if let firstLevel = args as? [[[String: Any]]],
-           let secondLevel = firstLevel.first,
-           let json = secondLevel.first {
-            onSwapAccessQueue.async {
-                self._onSwap(json)
-            }
-        } else {
-            debug("Cannot handle onSwap action")
-        }
-    }
-    
-    init(sdk: Sdk, props: [String: Any]) {
+    init(sdk: Sdk) {
         self.sdk = sdk
-        self.store = sdk.store
+        store = sdk.store
 
         super.init()
         
-        sdk.network.on("swap.received", onSwapAction).store(in: &subscriptions)
-        sdk.network.on("swap.holder.invoice.sent", onSwapAction).store(in: &subscriptions)
-        sdk.network.on("swap.seeker.invoice.sent", onSwapAction).store(in: &subscriptions)
-        sdk.network.on("error", onError).store(in: &subscriptions)
+        subscribe(sdk.network.on("swap.received", onSwapUpdate()))
+        subscribe(sdk.network.on("swap.holder.invoice.sent", onSwapUpdate()))
+        subscribe(sdk.network.on("swap.seeker.invoice.sent", onSwapUpdate()))
+        subscribe(sdk.network.on("error", forwardError()))
     }
     
     func sync() -> Promise<Swaps> {
@@ -44,11 +27,9 @@ class Swaps: BaseClass {
         }
     }
     // Function call on swap status update.
-    // SH: receive -> create -> holder.invoice.created -> holder.invoice.sent -> seeker.invoice.sent -> seeker.invoice.paid -> holder.invoice.settled -> completed
-    // SS: receive -> holder.invoice.sent -> seeker.invoice.created -> seeker.invoice.sent -> holder.invoice.paid -> seeker.invoice.settled -> completed
+    // SH: received -> created -> holder.invoice.created -> holder.invoice.sent -> seeker.invoice.sent -> seeker.invoice.paid -> holder.invoice.settled -> completed
+    // SS: received -> holder.invoice.sent -> seeker.invoice.created -> seeker.invoice.sent -> holder.invoice.paid -> seeker.invoice.settled -> completed
     func _onSwap(_ obj: [String: Any]) {
-        subscriptions.removeAll()
-        
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: obj, options: [])
             let swap = try JSONDecoder().decode(Swap.self, from: jsonData).update(sdk: sdk)
@@ -96,7 +77,7 @@ class Swaps: BaseClass {
                 info("swap.\(swap.status)", [swap.toJSON()])
 
                 swap.createInvoice().then { [unowned self] _ in
-                    self._onSwap(swap.toJSON())
+                    _onSwap(swap.toJSON())
                 }.catch { error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
@@ -192,90 +173,117 @@ class Swaps: BaseClass {
             self.emit(event: "error", args: [error, obj])
         }
     }
+}
+
+extension Swaps {
+    private func onSwapUpdate() -> ([Any]) -> Void {
+        { [unowned self] args in
+            if let firstLevel = args as? [[[String: Any]]],
+               let secondLevel = firstLevel.first,
+               let json = secondLevel.first {
+                onSwapAccessQueue.async {
+                    self._onSwap(json)
+                }
+            } else {
+                debug("Cannot handle onSwap action")
+            }
+        }
+    }
     
     private func subscribeForSwapStateChanges(swap: Swap) {
-        swap.on("log", { args in
-            if let level = args.first as? String {
-                switch LogLevel.level(level) {
-                case .debug:
-                    print("SWAP SDK DEBUG:", args)
-                case .info:
-                    print("SWAP SDK INFO:", args)
-                case .warn:
-                    print("SWAP SDK WARN:", args)
-                case .error:
-                    print("SWAP SDK ERROR:", args)
-                case .unknown:
-                    break
+        subscribe(
+            swap.on("log", { args in
+                if let level = args.first as? String {
+                    switch LogLevel.level(level) {
+                    case .debug:
+                        print("SWAP SDK DEBUG:", args)
+                    case .info:
+                        print("SWAP SDK INFO:", args)
+                    case .warn:
+                        print("SWAP SDK WARN:", args)
+                    case .error:
+                        print("SWAP SDK ERROR:", args)
+                    case .unknown:
+                        break
+                    }
                 }
-            }
-        })
-        .store(in: &subscriptions)
+            })
+        )
                 
-        swap.on("created", { [unowned self] _ in
-            self.emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("created", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("holder.invoice.created", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.created", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("holder.invoice.sent", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.sent", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("seeker.invoice.created", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.created", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("seeker.invoice.sent", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.sent", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("holder.invoice.paid", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.paid", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("seeker.invoice.paid", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.paid", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("holder.invoice.settled", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.settled", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("seeker.invoice.settled", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.settled", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("completed", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("completed", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
     }
 }
