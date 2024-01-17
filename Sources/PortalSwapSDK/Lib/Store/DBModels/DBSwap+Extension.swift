@@ -32,7 +32,7 @@ extension DBSwap {
         }
         
         try context.performAndWait {
-            self.swapID = swap.id
+            self.swapID = swap.swapId
             self.secretHash = swap.secretHash
             self.status = swap.status
             self.timestamp = Int64(Date().timeIntervalSince1970)
