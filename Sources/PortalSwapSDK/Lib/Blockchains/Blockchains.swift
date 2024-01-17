@@ -1,11 +1,10 @@
 import Combine
 import Promises
 
-class Blockchains: BaseClass {
+final class Blockchains: BaseClass {
     private let sdk: Sdk
-    
-    public let ethereum: IBlockchain
-    public let lightning: IBlockchain
+    private let ethereum: IBlockchain
+    private let lightning: IBlockchain
     
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains) {
         self.sdk = sdk
