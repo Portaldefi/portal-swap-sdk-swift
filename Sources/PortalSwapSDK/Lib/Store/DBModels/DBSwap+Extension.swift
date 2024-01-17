@@ -36,7 +36,7 @@ extension DBSwap {
             self.secretHash = swap.secretHash
             self.status = swap.status
             self.timestamp = Int64(Date().timeIntervalSince1970)
-            self.partyType = swap.partyType
+            self.partyType = swap.partyType.rawValue
             
             guard let secretSeeker = secretSeeker else {
                 throw SwapSDKError.msg("Swap db entity has no seeker")
@@ -129,31 +129,26 @@ extension DBSwap {
     
     func toJSON() -> [String: Any] {
         return [
-            "id": self.swapID as Any,
-            "status": self.status as Any,
-            "secretHash": self.secretHash as Any,
+            "id": swapID as Any,
+            "status": status as Any,
+            "secretHash": secretHash as Any,
             "secretSeeker" : [
-                "asset" : self.secretSeeker?.asset as Any,
-                "id": self.secretSeeker?.partyID as Any,
-                "quantity" : self.secretSeeker?.quantity as Any,
-                "oid" : self.secretSeeker?.oid as Any,
-                "blockchain" : self.secretSeeker?.blockchain as Any
+                "asset" : secretSeeker?.asset as Any,
+                "id": secretSeeker?.partyID as Any,
+                "quantity" : secretSeeker?.quantity as Any,
+                "oid" : secretSeeker?.oid as Any,
+                "blockchain" : secretSeeker?.blockchain as Any
             ],
             "secretHolder" : [
-                "asset" : self.secretHolder?.asset as Any,
-                "id": self.secretHolder?.partyID as Any,
-                "quantity" : self.secretHolder?.quantity as Any,
-                "oid" : self.secretHolder?.oid as Any,
-                "blockchain" : self.secretHolder?.blockchain as Any
+                "asset" : secretHolder?.asset as Any,
+                "id": secretHolder?.partyID as Any,
+                "quantity" : secretHolder?.quantity as Any,
+                "oid" : secretHolder?.oid as Any,
+                "blockchain" : secretHolder?.blockchain as Any
             ]
         ]
     }
-    
-    func model() throws -> Swap {
-        let jsonData = try JSONSerialization.data(withJSONObject: toJSON(), options: [])
-        return try JSONDecoder().decode(Swap.self, from: jsonData)
-    }
-    
+        
     static func entity(key: String, context: NSManagedObjectContext) throws -> DBSwap {
         try context.performAndWait {
             let dbSwaps = try context.fetch(DBSwap.fetchRequest())
@@ -161,12 +156,12 @@ extension DBSwap {
             if let dbSwap = dbSwaps.first(where: { $0.swapID == key }) {
                 return dbSwap
             } else {
-                throw SwapSDKError.msg("Swap with id: \(key) is not exists in DB")
+                throw SwapSDKError.msg("Swap with id: \(key) is not exist in DB")
             }
         }
     }
     
-    public static func entities(context: NSManagedObjectContext) throws -> [DBSwap] {
+    static func entities(context: NSManagedObjectContext) throws -> [DBSwap] {
         try context.performAndWait {
             try context.fetch(DBSwap.fetchRequest())
         }
