@@ -345,7 +345,7 @@ class Ethereum: BaseClass, IBlockchain {
                                             "transactionHash": txReceipt!.transactionHash.hex()
                                         ]
                                         
-                                        self.info("createInvoice", receipt, party, self as Any)
+                                        self.info("createInvoice", "partyId: \(party.id)", receipt)
                                         resolve(receipt)
                                     case .failure(let error):
                                         debug("ETH Fetching receip error: \(error)")
@@ -445,7 +445,7 @@ class Ethereum: BaseClass, IBlockchain {
                                             "transactionHash": txReceipt!.transactionHash.hex()
                                         ]
                                                                                 
-                                        self.info("payInvoice", receipt, party, self as Any)
+                                        self.info("payInvoice", "partyId: \(party.id)", receipt)
                                         resolve(receipt)
                                     case .failure(let error):
                                         debug("ETH Fetching receip error: \(error)")
@@ -537,7 +537,7 @@ class Ethereum: BaseClass, IBlockchain {
                                             "transactionHash": txReceipt!.transactionHash.hex()
                                         ]
                                                                                 
-                                        self.info("settleInvoice", receipt, party, self as Any)
+                                        self.info("settleInvoice", "partyId: \(party.id)", receipt)
                                         resolve(receipt)
                                     case .failure(let error):
                                         debug("ETH Fetching receip error: \(error)")

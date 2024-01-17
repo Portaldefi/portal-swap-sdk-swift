@@ -60,7 +60,7 @@ class Lightning: BaseClass, IBlockchain {
                     return reject(SwapSDKError.msg("Quantity doesn't match"))
                 }
                                 
-                self.info("createInvoice", [invoice])
+                self.info("createInvoice", "partyId: \(party.id)", invoice)
                 self.emit(event: "invoice.created", args: [invoice])
                 
                 self.client.subscribeToInvoice(id: id).then { [weak self] subscription in
@@ -77,22 +77,22 @@ class Lightning: BaseClass, IBlockchain {
                                                 
                         switch status {
                         case .paymentHeld:
-                            self.info("invoice.paid", invoice)
+                            self.info("invoice.paid", "partyId: \(party.id)", invoice)
                             self.emit(event: "invoice.paid", args: [invoice])
                         case .paymentConfirmed:
                             subscription.off("invoice.updated")
-                            self.info("invoice.settled", invoice)
+                            self.info("invoice.settled", "partyId: \(party.id)", invoice)
                             self.emit(event: "invoice.settled", args: [invoice])
                         case .paymentCanceled:
                             subscription.off("invoice.updated")
-                            self.info("invoice.cancelled", invoice)
+                            self.info("invoice.cancelled", "partyId: \(party.id)", invoice)
                             self.emit(event: "invoice.cancelled", args: [invoice])
                         case .awaitsPayment:
                             break
                         }
                     }
                     
-                    self.info("invoice.created", invoice)
+                    self.info("invoice.created", "partyId: \(party.id)", invoice)
                     
                     resolve(["id": secretHash, "swap": id, "request": invoice])
                 }
@@ -138,7 +138,8 @@ class Lightning: BaseClass, IBlockchain {
                         return reject(SwapSDKError.msg("client.payViaPaymentRequest(swapId: ) self is nil"))
                     }
                     
-                    self.info("payViaPaymentRequest", [result, party])
+                    self.info("payViaPaymentRequest", "partyId: \(party.id)", result)
+                    
                     let reciep = [
                         "id": result.id,
                         "swap": [

@@ -34,7 +34,7 @@ class Swaps: BaseClass {
             let jsonData = try JSONSerialization.data(withJSONObject: obj, options: [])
             let swap = try JSONDecoder().decode(Swap.self, from: jsonData).update(sdk: sdk)
             
-            debug("\(swap.party.id) Received swap with status: \(swap.status)")
+            debug("Party \(swap.party.id), received swap with status: \(swap.status)")
             
             if swap.isReceived {
                 try store.put(.swaps, swap.swapId, obj)
@@ -47,7 +47,7 @@ class Swaps: BaseClass {
 
             switch swap.status {
             case "received":
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 emit(event: "swap.\(swap.status)", args: [swap])
                 
                 if swap.partyType == "seeker" { return }
@@ -69,7 +69,7 @@ class Swaps: BaseClass {
             case "created":
                 if swap.partyType == "seeker" { return }
                 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
 
                 swap.createInvoice().then { [unowned self] _ in
                     _onSwap(swap.toJSON())
@@ -80,7 +80,7 @@ class Swaps: BaseClass {
             case "holder.invoice.created":
                 if swap.partyType == "seeker" { return }
                 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 
                 try swap.sendInvoice().catch { error in
                     self.error("swap.error", error)
@@ -89,7 +89,7 @@ class Swaps: BaseClass {
             case "holder.invoice.sent":
                 if swap.partyType == "holder" { return }
                 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 
                 swap.createInvoice().then { [unowned self] _ in
                     self._onSwap(swap.toJSON())
@@ -100,7 +100,7 @@ class Swaps: BaseClass {
             case "seeker.invoice.created":
                 if swap.partyType == "holder" { return }
 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 
                 try swap.sendInvoice().catch { error in
                     self.error("swap.error", error)
@@ -109,7 +109,7 @@ class Swaps: BaseClass {
             case "seeker.invoice.sent":
                 if swap.partyType == "seeker" { return }
 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 
                 swap.payInvoice().catch { error in
                     self.error("swap.error", error)
@@ -118,7 +118,7 @@ class Swaps: BaseClass {
             case "holder.invoice.paid":
                 if swap.partyType == "holder" { return }
 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
 
                 swap.payInvoice().catch { error in
                     self.error("swap.error", error)
@@ -127,7 +127,7 @@ class Swaps: BaseClass {
             case "seeker.invoice.paid":
                 if swap.partyType == "seeker" { return }
 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 
                 swap.counterparty.update(swap: swap)
                 
@@ -137,7 +137,7 @@ class Swaps: BaseClass {
                 }
             case "holder.invoice.settled":
                 if swap.partyType == "seeker" {
-                    info("swap.\(swap.status)", [swap.toJSON()])
+                    info("swap.\(swap.status)", swap.toJSON())
                     
                     swap.settleInvoice().catch { error in
                         self.error("swap.error", error)
@@ -148,16 +148,16 @@ class Swaps: BaseClass {
                 if swap.partyType == "holder" {
                     swap.status = "completed"
                     
-                    info("swap.\(swap.status)", [swap.toJSON()])
+                    info("swap.\(swap.status)", swap.toJSON())
                     self._onSwap(swap.toJSON())
                 }
             case "seeker.invoice.settled":
                 swap.status = "completed"
                 
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 self._onSwap(swap.toJSON())
             case "completed":
-                info("swap.\(swap.status)", [swap.toJSON()])
+                info("swap.\(swap.status)", swap.toJSON())
                 emit(event: "swap.\(swap.status)", args: [swap])
             default:
                 let error = SwapSDKError.msg("unknown status \(swap.status)")
