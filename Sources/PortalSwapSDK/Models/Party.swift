@@ -1,4 +1,4 @@
-public class Party: Codable {
+final class Party: Codable {
     let id: String
     let oid: String
 
@@ -6,28 +6,21 @@ public class Party: Codable {
     public let blockchain: String
     public let quantity: Int64
     
-    public var swap: Swap?
+    public var partyType: PartyType {
+        guard let swap = swap else {
+            fatalError("Party id: \(id), error: swap is nil")
+        }
+        return swap.partyType
+    }
+    
+    var swap: Swap?
     public var invoice: [String: String]?
     public var receip: [String: String]?
     
     private enum CodingKeys: String, CodingKey {
         case id, asset, blockchain, invoice, oid, quantity
     }
-    
-    var isSecretSeeker: Bool {
-        guard let swap = swap else {
-            fatalError("Party id: \(id), error: swap is nil")
-        }
-        return swap.partyType == "seeker"
-    }
-    
-    var isSecretHolder: Bool {
-        guard let swap = swap else {
-            fatalError("Party id: \(id), error: swap is nil")
-        }
-        return swap.partyType == "holder"
-    }
-    
+
     func update(swap: Swap) {
         self.swap = swap
     }
