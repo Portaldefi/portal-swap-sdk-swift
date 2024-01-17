@@ -4,13 +4,6 @@ import NIO
 import Promises
 
 class Network: BaseClass {
-    struct NetworkConfig {
-        let networkProtocol: SwapSdkConfig.Network.NetworkProtocol
-        let hostName: String
-        let port: Int
-        let pathname: String
-    }
-    
     private let config: NetworkConfig
     private let sdk: Sdk
     private var socket: WebSocket?
@@ -31,17 +24,13 @@ class Network: BaseClass {
         
         self.sdk = sdk
         
-        super.init()
+        super.init(id: "Network")
     }
         
     func connect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
-            guard let id = sdk.id else {
-                return reject(SwapSDKError.msg("Network: missing sdk id"))
-            }
-                                    
             WebSocket.connect(
-                to: webSocketURL(id: id),
+                to: webSocketURL(userId: sdk.userId),
                 on: socketEventLoopGroup
             ) { [weak self] ws in
                 
@@ -60,7 +49,7 @@ class Network: BaseClass {
                 case .failure(let error):
                     reject(SwapSDKError.msg("WebSocket connection failed with error: \(error)"))
                 case .success:
-                    self?.debug("SWAP SDK \(self?.sdk.id ?? "unknown user") webSocket connected")
+                    self?.debug("\(self?.sdk.userId ?? "unknown user") webSocket connected")
                     resolve(())
                 }
             }
@@ -92,16 +81,12 @@ class Network: BaseClass {
             var request = URLRequest(url: url)
             request.httpMethod = args["method"] ?? "GET"
             
-            guard let id = sdk.id else {
-                return reject(SwapSDKError.msg("Network: missing sdk id"))
-            }
-            
             // Convert data to JSON
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: data, options: [])
                 
                 // Set headers
-                let creds = "\(id):\(id)"
+                let creds = "\(sdk.userId):\(sdk.userId)"
                 let base64Creds = Data(creds.utf8).base64EncodedString()
                 
                 request.addValue("application/json", forHTTPHeaderField: "Accept")
@@ -179,6 +164,13 @@ class Network: BaseClass {
 }
 
 extension Network {
+    struct NetworkConfig {
+        let networkProtocol: SwapSdkConfig.Network.NetworkProtocol
+        let hostName: String
+        let port: Int
+        let pathname: String
+    }
+    
     private func serverURL(path: String) -> String {
         switch config.networkProtocol {
         case .unencrypted:
@@ -188,13 +180,13 @@ extension Network {
         }
     }
     
-    private func webSocketURL(id: String) -> String {
+    private func webSocketURL(userId: String) -> String {
         switch config.networkProtocol {
         case .unencrypted:
             //Playnet
-            return "ws://\(config.hostName):\(config.port)/\(config.pathname)/\(id)"
+            return "ws://\(config.hostName):\(config.port)/\(config.pathname)/\(userId)"
         case .encrypted:
-            return "wss://\(config.hostName)/\(config.pathname)/\(id)"
+            return "wss://\(config.hostName)/\(config.pathname)/\(userId)"
         }
     }
 }

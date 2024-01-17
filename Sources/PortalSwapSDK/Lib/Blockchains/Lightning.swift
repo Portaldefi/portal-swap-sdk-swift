@@ -5,26 +5,27 @@ import SwiftBTC
 class Lightning: BaseClass, IBlockchain {
     private let sdk: Sdk
     private let client: ILightningClient
-    
+    //sdk seems unused
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Lightning) {
         self.sdk = sdk
         self.client = props.client
-        super.init(id: "lightning")
+        
+        super.init(id: "Lightning")
     }
     
     func connect() -> Promise<Void> {
-        emit(event: "connect", args: [self])
+        emit(event: "connect")
         return Promise { () }
     }
     
     func disconnect() -> Promise<Void> {
-        emit(event: "disconnect", args: [self])
+        emit(event: "disconnect")
         return Promise { () }
     }
     
     func createInvoice(party: Party) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
-            guard let id = party.swap?.id, let secretHash = party.swap?.secretHash else {
+            guard let id = party.swap?.swapId, let secretHash = party.swap?.secretHash else {
                 return reject(SwapSDKError.msg("Failed to create invoice: swap data is missing"))
             }
             
@@ -113,10 +114,6 @@ class Lightning: BaseClass, IBlockchain {
             guard let secretHash = swap.secretHash else {
                 return reject(SwapSDKError.msg("Swap has no secret hash"))
             }
-            
-            guard let swapId = swap.id else {
-                return reject(SwapSDKError.msg("Swap has no id"))
-            }
                         
             decodePaymentRequest(party: party).then { [weak self] paymentRequest in
                 guard let self = self else {
@@ -126,16 +123,16 @@ class Lightning: BaseClass, IBlockchain {
                 if paymentRequest.id != secretHash {
                     let actual = paymentRequest.id
                     reject(SwapSDKError.msg("expected swap hash \(secretHash), got \(actual)"))
-                } else if paymentRequest.swap.id != swapId {
+                } else if paymentRequest.swap.id != swap.swapId {
                     let actual = paymentRequest.swap.id
-                    reject(SwapSDKError.msg("expected swap identifier \(swapId), got \(actual)"))
+                    reject(SwapSDKError.msg("expected swap identifier \(swap.swapId), got \(actual)"))
                 } else if paymentRequest.amount != party.quantity {
                     let expected = party.quantity
                     let actual = paymentRequest.swap.id
                     reject(SwapSDKError.msg("expected swap quantuty \(expected), got \(actual)"))
                 }
 
-                self.client.payViaPaymentRequest(swapId: swapId, request: paymentRequest.request).then { [weak self] result in
+                self.client.payViaPaymentRequest(swapId: swap.swapId, request: paymentRequest.request).then { [weak self] result in
                     
                     guard let self = self else {
                         return reject(SwapSDKError.msg("client.payViaPaymentRequest(swapId: ) self is nil"))

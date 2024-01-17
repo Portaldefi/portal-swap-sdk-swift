@@ -12,7 +12,7 @@ public class SDK: BaseClass {
     public init(config: SwapSdkConfig) {
         sdk = .init(config: config)
         
-        super.init(id: config.id)
+        super.init(id: "SDK")
         
         subscribe(sdk.on("order.created", forwardEvent("order.created")))
         subscribe(sdk.on("order.opened", forwardEvent("order.opened")))
