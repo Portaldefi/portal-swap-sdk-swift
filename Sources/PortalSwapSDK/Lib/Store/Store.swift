@@ -3,7 +3,7 @@ import CoreData
 import Promises
 
 class Store: BaseClass {
-    private var sdk: Sdk
+    private let sdk: Sdk
     private var persistenceManager: LocalPersistenceManager?
     
     var isOpen: Bool {
@@ -12,7 +12,8 @@ class Store: BaseClass {
     
     init(sdk: Sdk) {
         self.sdk = sdk
-        super.init(id: sdk.id)
+        
+        super.init(id: "Store")
     }
     
     func open() -> Promise<Void> {
@@ -67,14 +68,14 @@ class Store: BaseClass {
             let newEntity = DBSecret(context: viewContext)
             try newEntity.update(json: obj, key: key)
             
-            debug("STORE Put secret with ID: \(newEntity.swapID ?? "Unknown")")
+            debug("Put secret with ID: \(newEntity.swapID ?? "Unknown")")
         case .swaps:
             let swap = try Swap.from(json: obj).update(sdk: sdk)
             
             let newEntity = DBSwap(context: viewContext)
             try newEntity.update(swap: swap)
             
-            debug("STORE Put swap with ID: \(newEntity.swapID ?? "Unknown")")
+            debug("Put swap with ID: \(newEntity.swapID ?? "Unknown")")
         }
         
         try viewContext.save()

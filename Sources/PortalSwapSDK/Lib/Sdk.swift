@@ -3,11 +3,13 @@ import Combine
 import Promises
 
 class Sdk: BaseClass {
+    let userId: String
+    
     private(set) var network: Network!
     private(set) var dex: Dex!
     private(set) var store: Store!
     private(set) var blockchains: Blockchains!
-    private var swaps: Swaps!
+    private(set) var swaps: Swaps!
             
     public var isConnected: Bool {
         network.isConnected
@@ -15,7 +17,9 @@ class Sdk: BaseClass {
     
     // Creates a new instance of Portal SDK
     init(config: SwapSdkConfig) {
-        super.init(id: config.id)
+        userId = config.id
+        
+        super.init(id: "Sdk")
         
         // Interface to the underlying network
         network = .init(sdk: self, props: config.network)
@@ -64,7 +68,7 @@ class Sdk: BaseClass {
     }
 
     func start() -> Promise<Void> {
-        debug("starting", self)
+        debug("starting")
 
         return Promise { [unowned self] resolve, reject in
             all(
@@ -73,8 +77,7 @@ class Sdk: BaseClass {
                 store.open(),
                 dex.open()
             ).then { [unowned self] network, blockchains, store, dex in
-                info("start", self)
-                emit(event: "start")
+                info("started")
                 resolve(())
             }.catch { error in
                 reject(error)
@@ -92,8 +95,7 @@ class Sdk: BaseClass {
                 store.close(),
                 dex.close()
             ).then { [unowned self] network, blockchains, store, dex in
-                info("stop", self)
-                emit(event: "stop")
+                info("stopped")
                 resolve(())
             }.catch { error in
                 reject(error)

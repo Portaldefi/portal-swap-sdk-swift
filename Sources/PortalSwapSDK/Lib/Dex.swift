@@ -6,7 +6,7 @@ class Dex: BaseClass {
     
     init(sdk: Sdk) {
         self.sdk = sdk
-        super.init(id: sdk.id)
+        super.init(id: "Dex")
     }
     
     // Opens the orderbooks
@@ -28,7 +28,7 @@ class Dex: BaseClass {
         
         let data = [
             "id": UUID().uuidString,
-            "uid": sdk.id,
+            "uid": sdk.userId,
             "side": request.side,
             "baseAsset": request.baseAsset,
             "baseNetwork": request.baseNetwork,
