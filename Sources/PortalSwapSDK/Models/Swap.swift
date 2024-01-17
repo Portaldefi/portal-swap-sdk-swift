@@ -1,13 +1,14 @@
 import Foundation
 import Promises
 
-public class Swap: BaseClass, Codable {
+final class Swap: BaseClass, Codable {
     private var sdk: Sdk?
 
     public let swapId: String
     public var secretHolder: Party
     public var secretSeeker: Party
     public var status: String
+    public var timestamp: Int?
     
     public var secretHash: String? {
         didSet {
@@ -24,8 +25,8 @@ public class Swap: BaseClass, Codable {
         sdk?.userId == secretHolder.id ? secretHolder : secretSeeker
     }
     
-    public var partyType: String {
-        party == secretHolder ? "holder" : "seeker"
+    public var partyType: PartyType {
+        party == secretHolder ? .secretHolder : .secretSeeker
     }
     
     public var counterparty: Party {
@@ -73,18 +74,17 @@ public class Swap: BaseClass, Codable {
             }
                     
             blockchain.once("invoice.paid") { [unowned self] _ in
-                if self.party.isSecretSeeker {
-                    self.status = "holder.invoice.paid"
-                    self.emit(event: self.status, args: [self])
-                } else if self.party.isSecretHolder {
+                switch self.partyType {
+                case .secretHolder:
                     self.status = "seeker.invoice.paid"
                     self.emit(event: self.status, args: [self])
-                } else {
-                    self.error("unexpected code branch!", self)
+                case .secretSeeker:
+                    self.status = "holder.invoice.paid"
+                    self.emit(event: self.status, args: [self])
                 }
             }
             
-            if party.isSecretSeeker {
+            if partyType == .secretSeeker {
                 guard let blockchainId = party.blockchain.split(separator: ".").first else {
                     return reject(SwapSDKError.msg("cannot get partyBlockchainID"))
                 }
@@ -126,7 +126,7 @@ public class Swap: BaseClass, Codable {
                 
                 self.counterparty.invoice = invoice
                 
-                status = "\(partyType).invoice.created"
+                status = "\(partyType.rawValue).invoice.created"
                 emit(event: status, args: [self])
                 
                 resolve(())
@@ -140,7 +140,7 @@ public class Swap: BaseClass, Codable {
         guard let network = sdk?.network else {
             throw SwapSDKError.msg("Cannot fetch network")
         }
-        status = "\(partyType).invoice.sent"
+        status = "\(partyType.rawValue).invoice.sent"
 
         let args = [
             "method": "PATCH",
@@ -207,7 +207,7 @@ public class Swap: BaseClass, Codable {
                 
                 blockchain.settleInvoice(party: counterparty, secret: secret).then { reciep in
                     self.party.receip = reciep
-                    self.status = "\(self.partyType).invoice.settled"
+                    self.status = "\(self.partyType.rawValue).invoice.settled"
                     self.emit(event: self.status, args: [self])
                     resolve(())
                 }
