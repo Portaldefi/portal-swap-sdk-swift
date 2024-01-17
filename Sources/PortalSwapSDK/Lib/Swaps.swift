@@ -11,7 +11,7 @@ class Swaps: BaseClass {
         self.sdk = sdk
         store = sdk.store
 
-        super.init()
+        super.init(id: "Swaps")
         
         subscribe(sdk.network.on("swap.received", onSwapUpdate()))
         subscribe(sdk.network.on("swap.holder.invoice.sent", onSwapUpdate()))
@@ -33,18 +33,13 @@ class Swaps: BaseClass {
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: obj, options: [])
             let swap = try JSONDecoder().decode(Swap.self, from: jsonData).update(sdk: sdk)
-                        
-            guard let swapId = swap.id else {
-                self.error("swap.error", "Swap has no id")
-                return
-            }
             
             debug("\(swap.party.id) Received swap with status: \(swap.status)")
             
             if swap.isReceived {
-                try store.put(.swaps, swapId, obj)
+                try store.put(.swaps, swap.swapId, obj)
             } else {
-                try store.update(.swaps, swapId, obj)
+                try store.update(.swaps, swap.swapId, obj)
                 emit(event: "swap.\(swap.status)", args: [swap])
             }
             
@@ -61,11 +56,11 @@ class Swaps: BaseClass {
                 let secretHash = Utils.sha256(data: secret)
                 let secretHashString = secretHash.toHexString()
                                 
-                debug("SWAP SDK created secret: \(secretHashString)")
+                debug("Created secret: \(secretHashString)")
                 
                 try store.put(.secrets, secretHashString, [
                     "secret" : secret.toHexString(),
-                    "swap": swap.id!
+                    "swap": swap.swapId
                 ])
                 
                 swap.secretHash = secretHashString
