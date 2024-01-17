@@ -2,7 +2,7 @@ import Foundation
 import CoreData
 import Promises
 
-class Store: BaseClass {
+final class Store: BaseClass {
     private let sdk: Sdk
     private var persistenceManager: LocalPersistenceManager?
     
@@ -19,7 +19,7 @@ class Store: BaseClass {
     func open() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             do {
-                persistenceManager = try LocalPersistenceManager(
+                persistenceManager = try LocalPersistenceManager.manager(
                     configuration: .init(
                         modelName: "DBModel",
                         cloudIdentifier: String(),
@@ -42,56 +42,50 @@ class Store: BaseClass {
     }
     
     func get(_ namespace: StoreNamespace, _ key: String) throws -> [String: Any] {
-        guard let persistenceManager = persistenceManager else {
+        guard let manager = persistenceManager else {
             throw SwapSDKError.msg("Cannot obtain persistenceManager")
         }
-
-        let viewContext = persistenceManager.viewContext
         
         switch namespace {
         case .secrets:
-            return try DBSecret.entity(key: key, context: viewContext).toJSON()
+            return try manager.secret(key: key).toJSON()
         case .swaps:
-            return try DBSwap.entity(key: key, context: viewContext).toJSON()
+            return try manager.swap(key: key).toJSON()
         }
     }
     
     func put(_ namespace: StoreNamespace, _ key: String, _ obj: [String: Any]) throws {
-        guard let persistenceManager = persistenceManager else {
+        guard let manager = persistenceManager else {
             throw SwapSDKError.msg("Cannot obtain persistenceManager")
         }
-        
-        let viewContext = persistenceManager.viewContext
 
         switch namespace {
         case .secrets:
-            let newEntity = DBSecret(context: viewContext)
+            let newEntity = manager.secretEntity()
             try newEntity.update(json: obj, key: key)
             
             debug("Put secret with ID: \(newEntity.swapID ?? "Unknown")")
         case .swaps:
             let swap = try Swap.from(json: obj).update(sdk: sdk)
             
-            let newEntity = DBSwap(context: viewContext)
+            let newEntity = manager.swapEntity()
             try newEntity.update(swap: swap)
             
             debug("Put swap with ID: \(newEntity.swapID ?? "Unknown")")
         }
         
-        try viewContext.save()
+        try manager.saveContext()
     }
     
     func update(_ namespace: StoreNamespace, _ key: String, _ obj: [String: Any]) throws {
-        guard let persistenceManager = persistenceManager else {
+        guard let manager = persistenceManager else {
             throw SwapSDKError.msg("Cannot obtain persistenceManager")
         }
-        
-        let viewContext = persistenceManager.viewContext
-        
+                
         switch namespace {
         case .swaps:
             let swap = try Swap.from(json: obj).update(sdk: sdk)
-            let dbSwap = try DBSwap.entity(key: key, context: viewContext)
+            let dbSwap = try manager.swap(key: key)
             try dbSwap.update(swap: swap)
             
             debug("Updating db swap with status: \(dbSwap.status ?? "Unknown")")
@@ -99,7 +93,7 @@ class Store: BaseClass {
             break
         }
         
-        try viewContext.save()
+        try manager.saveContext()
     }
     
     func del(id: String) throws {
