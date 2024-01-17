@@ -34,11 +34,11 @@
         <attribute name="swapID" attributeType="String"/>
     </entity>
     <entity name="DBSwap" representedClassName="DBSwap" syncable="YES" codeGenerationType="class">
-        <attribute name="partyType" optional="YES" attributeType="String"/>
+        <attribute name="partyType" attributeType="String"/>
         <attribute name="secretHash" optional="YES" attributeType="String"/>
         <attribute name="status" attributeType="String"/>
         <attribute name="swapID" attributeType="String"/>
-        <attribute name="timestamp" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <relationship name="secretHolder" maxCount="1" deletionRule="Cascade" destinationEntity="DBParty" inverseName="holder" inverseEntity="DBParty"/>
         <relationship name="secretSeeker" maxCount="1" deletionRule="Cascade" destinationEntity="DBParty" inverseName="seeker" inverseEntity="DBParty"/>
     </entity>
