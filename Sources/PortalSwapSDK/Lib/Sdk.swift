@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import Promises
 
-class Sdk: BaseClass {
+final class Sdk: BaseClass {
     let userId: String
     
     private(set) var network: Network!

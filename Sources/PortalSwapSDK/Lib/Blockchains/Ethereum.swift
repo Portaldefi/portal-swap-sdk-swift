@@ -4,7 +4,7 @@ import Web3
 import Web3ContractABI
 import BigInt
 
-class Ethereum: BaseClass, IBlockchain {
+final class Ethereum: BaseClass, IBlockchain {
     private let props: SwapSdkConfig.Blockchains.Ethereum
     
     private let userID: String
@@ -272,7 +272,7 @@ class Ethereum: BaseClass, IBlockchain {
                 return reject(SwapSDKError.msg("There is no swap or secret hash"))
             }
             
-            debug("Creating invoice for \(party.isSecretHolder ? "secret holder" : "secret seeker") with id: \(party.id)")
+            debug("Creating invoice for \(party.partyType) with id: \(party.id)")
             
             guard let id = Utils.hexToData(secretHash) else {
                 return reject(SwapSDKError.msg("Cannot unwrap secret hash"))

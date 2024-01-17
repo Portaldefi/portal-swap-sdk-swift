@@ -1,7 +1,7 @@
 import Foundation
 import Promises
 
-class Dex: BaseClass {
+final class Dex: BaseClass {
     private var sdk: Sdk
     
     init(sdk: Sdk) {

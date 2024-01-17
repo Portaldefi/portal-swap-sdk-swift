@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import Promises
 
-public class SDK: BaseClass {
+public final class SDK: BaseClass {
     private let sdk: Sdk
 
     public var isConnected: Bool {

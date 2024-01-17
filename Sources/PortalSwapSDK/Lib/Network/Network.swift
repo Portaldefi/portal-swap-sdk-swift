@@ -3,7 +3,7 @@ import WebSocketKit
 import NIO
 import Promises
 
-class Network: BaseClass {
+final class Network: BaseClass {
     private let config: NetworkConfig
     private let sdk: Sdk
     private var socket: WebSocket?

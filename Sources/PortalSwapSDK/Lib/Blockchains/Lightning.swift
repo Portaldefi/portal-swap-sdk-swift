@@ -2,7 +2,7 @@ import Foundation
 import Promises
 import SwiftBTC
 
-class Lightning: BaseClass, IBlockchain {
+final class Lightning: BaseClass, IBlockchain {
     private let sdk: Sdk
     private let client: ILightningClient
     //sdk seems unused
