@@ -4,6 +4,7 @@ import Promises
 public class Swap: BaseClass, Codable {
     private var sdk: Sdk?
 
+    public let swapId: String
     public var secretHolder: Party
     public var secretSeeker: Party
     public var status: String
@@ -20,7 +21,7 @@ public class Swap: BaseClass, Codable {
     }
     
     public var party: Party {
-        sdk?.id == secretHolder.id ? secretHolder : secretSeeker
+        sdk?.userId == secretHolder.id ? secretHolder : secretSeeker
     }
     
     public var partyType: String {
@@ -28,7 +29,7 @@ public class Swap: BaseClass, Codable {
     }
     
     public var counterparty: Party {
-        sdk?.id == secretHolder.id ? secretSeeker : secretHolder
+        sdk?.userId == secretHolder.id ? secretSeeker : secretHolder
     }
     
     func update(sdk: Sdk) -> Swap {
@@ -38,16 +39,17 @@ public class Swap: BaseClass, Codable {
     
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        swapId = try container.decode(String.self, forKey: .id)
         secretHash = try? container.decode(String.self, forKey: .secretHash)
         status = try container.decode(String.self, forKey: .status)
         secretHolder = try container.decode(Party.self, forKey: .secretHolder)
         secretSeeker = try container.decode(Party.self, forKey: .secretSeeker)
-        super.init(id: try container.decode(String.self, forKey: .id))
+        super.init(id: "Swap")
     }
         
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
+        try container.encode(swapId, forKey: .id)
         try container.encode(status, forKey: .status)
         try container.encode(secretHash, forKey: .secretHash)
         try container.encode(secretSeeker, forKey: .secretSeeker)
@@ -60,10 +62,6 @@ public class Swap: BaseClass, Codable {
 
             guard let blockchains = sdk?.blockchains else {
                 return reject(SwapSDKError.msg("cannot get blockchains"))
-            }
-            
-            guard let store = sdk?.store else {
-                return reject(SwapSDKError.msg("cannot get store"))
             }
             
             guard let counterPartyBlockchainID = counterparty.blockchain.split(separator: ".").first else {
@@ -93,6 +91,10 @@ public class Swap: BaseClass, Codable {
                 
                 guard let blockchain = blockchains.blockchain(id: String(blockchainId)) else {
                     return reject(SwapSDKError.msg("cannot get blockchain"))
+                }
+                
+                guard let store = sdk?.store else {
+                    return reject(SwapSDKError.msg("cannot get store"))
                 }
                 
                 blockchain.once("invoice.settled") { [unowned self] response in
