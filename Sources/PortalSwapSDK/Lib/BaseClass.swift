@@ -134,26 +134,28 @@ extension BaseClass {
     }
     
     private func getLoggingFunction(for level: LogLevel) -> ([Any]) -> Void {
-        switch level {
-        case .debug:
-            return { args in
-                print("SWAP SDK DEBUG:", args)
+        print(String())
+
+        return { args in
+            switch level {
+            case .debug:
+                print("SWAP SDK DEBUG: \(args.first ?? String())")
+            case .info:
+                print("SWAP SDK INFO: \(args.first ?? String())")
+            case .warn:
+                print("SWAP SDK WARN: \(args.first ?? String())")
+            case .error:
+                print("SWAP SDK ERROR: \(args.first ?? String())")
+            case .unknown:
+                print("SWAP SDK unknown message level: \(args.first ?? String())")
             }
-        case .info:
-            return { args in
-                print("SWAP SDK INFO:", args)
+            
+            for arg in args.dropFirst() {
+                print("\(arg)")
             }
-        case .warn:
-            return { args in
-                print("SWAP SDK WARN:", args)
-            }
-        case .error:
-            return { args in
-                print("SWAP SDK ERROR:", args)
-            }
-        case .unknown:
-            return { args in
-                print("SWAP SDK Unknown:", args)
+            
+            if !args.dropFirst().isEmpty {
+                print(String())
             }
         }
     }
