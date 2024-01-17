@@ -1,10 +1,3 @@
-//
-//  File.swift
-//
-//
-//  Created by farid on 08.01.2024.
-//
-
 import CoreData
 
 extension DBSwap {
