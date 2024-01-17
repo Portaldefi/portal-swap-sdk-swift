@@ -2,11 +2,11 @@ final class Party: Codable {
     let id: String
     let oid: String
 
-    public let asset: String
-    public let blockchain: String
-    public let quantity: Int64
+    let asset: String
+    let blockchain: String
+    let quantity: Int64
     
-    public var partyType: PartyType {
+    var partyType: PartyType {
         guard let swap = swap else {
             fatalError("Party id: \(id), error: swap is nil")
         }
@@ -14,8 +14,8 @@ final class Party: Codable {
     }
     
     var swap: Swap?
-    public var invoice: [String: String]?
-    public var receip: [String: String]?
+    var invoice: [String: String]?
+    var receip: [String: String]?
     
     private enum CodingKeys: String, CodingKey {
         case id, asset, blockchain, invoice, oid, quantity
@@ -25,7 +25,7 @@ final class Party: Codable {
         self.swap = swap
     }
         
-    required public init(from decoder: Decoder) throws {
+    required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         asset = try container.decode(String.self, forKey: .asset)

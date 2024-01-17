@@ -4,41 +4,36 @@ import Promises
 final class Swap: BaseClass, Codable {
     private var sdk: Sdk?
 
-    public let swapId: String
-    public var secretHolder: Party
-    public var secretSeeker: Party
-    public var status: String
-    public var timestamp: Int?
+    let swapId: String
+    let secretHolder: Party
+    let secretSeeker: Party
+    var status: String
+    var timestamp: Int?
     
-    public var secretHash: String? {
+    var secretHash: String? {
         didSet {
             status = "created"
             emit(event: "created", args: [self])
         }
     }
     
-    public var isReceived: Bool {
+    var isReceived: Bool {
         status == "received"
     }
     
-    public var party: Party {
+    var party: Party {
         sdk?.userId == secretHolder.id ? secretHolder : secretSeeker
     }
     
-    public var partyType: PartyType {
+    var partyType: PartyType {
         party == secretHolder ? .secretHolder : .secretSeeker
     }
     
-    public var counterparty: Party {
+    var counterparty: Party {
         sdk?.userId == secretHolder.id ? secretSeeker : secretHolder
     }
     
-    func update(sdk: Sdk) -> Swap {
-        self.sdk = sdk
-        return self
-    }
-    
-    public required init(from decoder: Decoder) throws {
+    required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         swapId = try container.decode(String.self, forKey: .id)
         secretHash = try? container.decode(String.self, forKey: .secretHash)
@@ -48,13 +43,18 @@ final class Swap: BaseClass, Codable {
         super.init(id: "Swap")
     }
         
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(swapId, forKey: .id)
         try container.encode(status, forKey: .status)
         try container.encode(secretHash, forKey: .secretHash)
         try container.encode(secretSeeker, forKey: .secretSeeker)
         try container.encode(secretHolder, forKey: .secretHolder)
+    }
+    
+    func update(sdk: Sdk) -> Swap {
+        self.sdk = sdk
+        return self
     }
         
     public func createInvoice() -> Promise<Void> {
@@ -223,7 +223,7 @@ final class Swap: BaseClass, Codable {
 }
 
 extension Swap {
-    public func toJSON() -> [String: Any] {
+    func toJSON() -> [String: Any] {
         Utils.convertToJSON(self) ?? [:]
     }
     

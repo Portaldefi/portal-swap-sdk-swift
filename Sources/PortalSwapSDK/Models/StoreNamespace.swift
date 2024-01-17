@@ -1,3 +1,3 @@
-public enum StoreNamespace {
+enum StoreNamespace {
     case swaps, secrets
 }
