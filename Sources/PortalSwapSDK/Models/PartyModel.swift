@@ -4,6 +4,7 @@ public struct PartyModel {
     public let asset: String
     public let blockchain: String
     public let quantity: Int64
+    public let invoice: InvoiceModel?
     
     init(record: DBParty) throws {
         guard let partyId = record.partyID else {
@@ -28,5 +29,30 @@ public struct PartyModel {
         asset = partyAsset
         blockchain = partyBlockchain
         quantity = record.quantity
+        
+        guard let invoiceRecord = record.invoice else {
+            invoice = nil
+            return
+        }
+        
+        var lnInvoiceModel: LnInvoiceModel? = nil
+        var evmInvoiceModel: EvmInvoiceModel? = nil
+        
+        if let lnInvoice = invoiceRecord.lightningInvoice {
+            lnInvoiceModel = LnInvoiceModel(
+                id: lnInvoice.invoiceID,
+                request: lnInvoice.request,
+                swap: lnInvoice.swap
+            )
+        } else if let evmInvoice = invoiceRecord.evmInvoice {
+            evmInvoiceModel = EvmInvoiceModel(
+                blockHash: evmInvoice.blockHash,
+                from: evmInvoice.from,
+                to: evmInvoice.to,
+                transactionHash: evmInvoice.transactionHash
+            )
+        }
+        
+        invoice = InvoiceModel(lnInvoice: lnInvoiceModel, evmIvoice: evmInvoiceModel)
     }
 }
