@@ -81,11 +81,9 @@ final class Network: BaseClass {
             var request = URLRequest(url: url)
             request.httpMethod = args["method"] ?? "GET"
             
-            // Convert data to JSON
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: data, options: [])
                 
-                // Set headers
                 let creds = "\(sdk.userId):\(sdk.userId)"
                 let base64Creds = Data(creds.utf8).base64EncodedString()
                 

@@ -41,7 +41,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 let contractAddress = try EthereumAddress(hex: contractAddressHex, eip55: isEipp55)
                 let contractData = try JSONSerialization.data(withJSONObject: abiArray, options: [])
                 
-                self.contract = try web3.eth.Contract(json: contractData, abiKey: nil, address: contractAddress)
+                contract = try web3.eth.Contract(json: contractData, abiKey: nil, address: contractAddress)
                 
                 for (index, event) in contract.events.enumerated() {
                     let signatureHex = "0x\(Utils.keccak256Hash(of: event.signature))"

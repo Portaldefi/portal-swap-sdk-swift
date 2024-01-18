@@ -39,7 +39,7 @@ public final class LocalPersistenceManager {
     }
     
     public func fetchSwaps() throws -> [SwapModel] {
-        try DBSwap.entities(context: viewContext).compactMap{ try SwapModel(record: $0) }
+        try DBSwap.entities(context: viewContext).compactMap{ try? SwapModel(record: $0) }
     }
 }
 
