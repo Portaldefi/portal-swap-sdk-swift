@@ -62,7 +62,7 @@ final class Network: BaseClass {
                 return reject(SwapSDKError.msg("Network: Socket is nil on disconnect"))
             }
             ws.close().whenComplete { _ in
-                try? self.socketEventLoopGroup.syncShutdownGracefully()
+                self.socket = nil
                 resolve(())
             }
         }
@@ -154,7 +154,7 @@ final class Network: BaseClass {
             }
         } catch {
             event = "error"
-            arg = error
+                arg = error
         }
         
         emit(event: event, args: [arg])
