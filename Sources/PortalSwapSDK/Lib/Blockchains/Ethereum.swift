@@ -114,6 +114,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                 self.info("invoice.created", invoice)
                                 self.emit(event: "invoice.created", args: [invoice])
                             case .failure(let error):
+                                guard !websocketProvider.webSocket.isClosed else { return }
                                 self.error("error", [error, self])
                                 self.emit(event: "error", args: [error])
                             }
@@ -173,6 +174,8 @@ final class Ethereum: BaseClass, IBlockchain {
                                 self.info("invoice.paid", invoice)
                                 self.emit(event: "invoice.paid", args: [invoice])
                             case .failure(let error):
+                                guard !websocketProvider.webSocket.isClosed else { return }
+                                self.emit(event: "error", args: [error])
                                 self.error("error", [error, self])
                             }
                         }
@@ -237,6 +240,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                 self.info("invoice.settled", invoice)
                                 self.emit(event: "invoice.settled", args: [invoice])
                             case .failure(let error):
+                                guard !websocketProvider.webSocket.isClosed else { return }
                                 self.error("error", [error, self])
                                 self.emit(event: "error", args: [error])
                             }
@@ -262,7 +266,16 @@ final class Ethereum: BaseClass, IBlockchain {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
             }
             subscriptionsIDS.removeAll()
-            resolve(())
+            
+            websocketProvider.webSocket.close().whenComplete { [weak self] _ in
+                guard let self = self else {
+                    return reject(SwapSDKError.msg("Cannot weakly handle self"))
+                }
+                guard self.websocketProvider.closed else {
+                    return reject(SwapSDKError.msg("Web socket it's closed"))
+                }
+                resolve(())
+            }
         }
     }
     
