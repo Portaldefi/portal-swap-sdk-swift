@@ -37,6 +37,7 @@ final class Store: BaseClass {
     }
 
     func close() -> Promise<Void> {
+        persistenceManager = nil
         emit(event: "close", args: [])
         return Promise {()}
     }
