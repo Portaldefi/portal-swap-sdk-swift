@@ -138,7 +138,7 @@ final class Lightning: BaseClass, IBlockchain {
                         return reject(SwapSDKError.msg("client.payViaPaymentRequest(swapId: ) self is nil"))
                     }
                     
-                    self.info("payViaPaymentRequest", "partyId: \(party.id)", result)
+                    self.info("payInvoice", "partyId: \(party.id)", result)
                     
                     let reciep = [
                         "id": result.id,

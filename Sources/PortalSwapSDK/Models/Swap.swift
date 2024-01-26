@@ -107,11 +107,10 @@ final class Swap: BaseClass, Codable {
                     else {
                         return
                     }
-                                        
-                    try? store.put(.secrets, String(ID.dropFirst(2)), [
-                        "secret": secret,
-                        "swap": swapId
-                    ])
+                    
+                    let secretDictionary = ["secret": secret, "swap": swapId]
+                    
+                    try? store.put(.secrets, String(ID.dropFirst(2)), secretDictionary)
                     
                     _ = self.settleInvoice()
                 }

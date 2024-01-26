@@ -58,10 +58,9 @@ final class Swaps: BaseClass {
                                 
                 debug("Created secret: \(secretHashString)")
                 
-                try store.put(.secrets, secretHashString, [
-                    "secret" : secret.toHexString(),
-                    "swap": swap.swapId
-                ])
+                let secretDictionary = ["secret" : secret.toHexString(), "swap": swap.swapId]
+                
+                try store.put(.secrets, secretHashString, secretDictionary)
                 
                 swap.secretHash = secretHashString
                 
