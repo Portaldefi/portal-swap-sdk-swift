@@ -210,6 +210,8 @@ final class Swap: BaseClass, Codable {
                     self.status = "\(self.partyType.rawValue).invoice.settled"
                     self.emit(event: self.status, args: [self])
                     resolve(())
+                }.catch { error in
+                    reject(error)
                 }
             } catch {
                 return reject(SwapSDKError.msg("Fetching secret error: \(error)"))

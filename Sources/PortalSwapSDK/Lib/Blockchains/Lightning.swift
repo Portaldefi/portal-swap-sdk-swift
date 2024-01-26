@@ -154,6 +154,8 @@ final class Lightning: BaseClass, IBlockchain {
                     self.emit(event: "error", args: [error, paymentRequest, party])
                     reject(SwapSDKError.msg("Cannot pay lightning invoice: \(error)"))
                 }
+            }.catch { error in
+                reject(error)
             }
         }
     }
