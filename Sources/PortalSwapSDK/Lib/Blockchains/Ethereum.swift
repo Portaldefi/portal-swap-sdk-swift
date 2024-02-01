@@ -5,9 +5,9 @@ import Web3ContractABI
 import BigInt
 
 final class Ethereum: BaseClass, IBlockchain {
+    private let sdk: Sdk
     private let props: SwapSdkConfig.Blockchains.Ethereum
     
-    private let userID: String
     private var web3: Web3!
     private var websocketProvider: Web3WebSocketProvider!
     private var contract: DynamicContract!
@@ -17,8 +17,8 @@ final class Ethereum: BaseClass, IBlockchain {
     
     // Sdk seems unused
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Ethereum) {
+        self.sdk = sdk
         self.props = props
-        self.userID = sdk.userId
         super.init(id: "Ethereum")
     }
         
@@ -71,7 +71,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                debug("\(userID) InvoiceCreated subscription failed with error: \(error)")
+                                debug("\(sdk.userId) InvoiceCreated subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoiceCreatedEvent>) in
@@ -79,9 +79,11 @@ final class Ethereum: BaseClass, IBlockchain {
                                 return reject(SwapSDKError.msg("InvoiceCreatedEvent self is nil"))
                             }
                             
+                            guard sdk.isConnected else { return }
+                            
                             switch response.status {
                             case .success(let invoiceCreatedEvent):
-                                debug("\(userID) received contract event: InvoiceCreatedEvent")
+                                debug("\(sdk.userId) received contract event: InvoiceCreatedEvent")
                                 
                                 guard invoiceCreatedEvent.address == contract.address!.hex(eip55: isEipp55) else {
                                     let errorMsg = "got event from \(invoiceCreatedEvent.address), expected: \(contract.address!.hex(eip55: isEipp55))"
@@ -114,7 +116,6 @@ final class Ethereum: BaseClass, IBlockchain {
                                 self.info("invoice.created", invoice)
                                 self.emit(event: "invoice.created", args: [invoice])
                             case .failure(let error):
-                                guard !websocketProvider.webSocket.isClosed else { return }
                                 self.error("error", [error, self])
                                 self.emit(event: "error", args: [error])
                             }
@@ -131,7 +132,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                debug("\(userID) InvoicePaid subscription failed with error: \(error)")
+                                debug("\(sdk.userId) InvoicePaid subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoicePaidEvent>) in
@@ -139,9 +140,11 @@ final class Ethereum: BaseClass, IBlockchain {
                                 return reject(SwapSDKError.msg("InvoicePaidEvent self is nil"))
                             }
                             
+                            guard sdk.isConnected else { return }
+
                             switch response.status {
                             case .success(let invoicePayedEvent):
-                                debug("\(userID) received contract event: InvoicePaidEvent")
+                                debug("\(sdk.userId) received contract event: InvoicePaidEvent")
                                 
                                 guard invoicePayedEvent.address == contract.address!.hex(eip55: isEipp55) else {
                                     let errorMsg = "got event from \(invoicePayedEvent.address), expected: \(contract.address!.hex(eip55: isEipp55))"
@@ -174,7 +177,6 @@ final class Ethereum: BaseClass, IBlockchain {
                                 self.info("invoice.paid", invoice)
                                 self.emit(event: "invoice.paid", args: [invoice])
                             case .failure(let error):
-                                guard !websocketProvider.webSocket.isClosed else { return }
                                 self.emit(event: "error", args: [error])
                                 self.error("error", [error, self])
                             }
@@ -191,7 +193,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                debug("\(userID) InvoiceSettled subscription failed with error: \(error)")
+                                debug("\(sdk.userId) InvoiceSettled subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
                         } onEvent: { [weak self] (response: Web3Response<InvoiceSettledEvent>) in
@@ -199,9 +201,11 @@ final class Ethereum: BaseClass, IBlockchain {
                                 return reject(SwapSDKError.msg("InvoiceSettledEvent self is nil"))
                             }
                             
+                            guard sdk.isConnected else { return }
+
                             switch response.status {
                             case .success(let invoiceSettledEvent):
-                                debug("\(userID) Received contract event: InvoiceSettledEvent")
+                                debug("\(sdk.userId) Received contract event: InvoiceSettledEvent")
                                 
                                 guard invoiceSettledEvent.address == contract.address!.hex(eip55: isEipp55) else {
                                     let errorMsg = "got event from \(invoiceSettledEvent.address), expected: \(contract.address!.hex(eip55: isEipp55))"
@@ -240,7 +244,6 @@ final class Ethereum: BaseClass, IBlockchain {
                                 self.info("invoice.settled", invoice)
                                 self.emit(event: "invoice.settled", args: [invoice])
                             case .failure(let error):
-                                guard !websocketProvider.webSocket.isClosed else { return }
                                 self.error("error", [error, self])
                                 self.emit(event: "error", args: [error])
                             }
@@ -272,7 +275,7 @@ final class Ethereum: BaseClass, IBlockchain {
                     return reject(SwapSDKError.msg("Cannot weakly handle self"))
                 }
                 guard self.websocketProvider.closed else {
-                    return reject(SwapSDKError.msg("Web socket it's closed"))
+                    return reject(SwapSDKError.msg("Web socket isnt's closed"))
                 }
                 resolve(())
             }
@@ -314,6 +317,8 @@ final class Ethereum: BaseClass, IBlockchain {
                 
                 switch response.status {
                 case .success(let nonce):
+                    debug("Eth create invoice nonce: \(nonce.quantity)")
+                    
                     guard let tx = self.contract["createInvoice"]?(params).createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
@@ -328,7 +333,7 @@ final class Ethereum: BaseClass, IBlockchain {
                         self.debug("CREATING INVOICE TX ERROR")
                         return reject(SwapSDKError.msg("Ethereum failed to create transaction"))
                     }
-                    
+                                        
                     do {
                         let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
                         
@@ -339,32 +344,17 @@ final class Ethereum: BaseClass, IBlockchain {
                             
                             switch response.status {
                             case .success(let data):
-                                self.debug("ETH TH HASH: \(data.hex())")
+                                self.debug("Create invoice TH HASH: \(data.hex())")
                                 
-                                Thread.sleep(forTimeInterval: 0.5)
+                                let receipt = [
+                                    "blockHash": "recipe.blockHash.hex()",
+                                    "from": privKey.address.hex(eip55: false),
+                                    "to": self.contract.address!.hex(eip55: false),
+                                    "transactionHash": data.hex()
+                                ]
                                 
-                                self.web3.eth.getTransactionReceipt(transactionHash: data) { [weak self] response in
-                                    guard let self = self else {
-                                        return reject(SwapSDKError.msg("web3.eth.getTransactionReceipt self is nil"))
-                                    }
-                                    
-                                    switch response.status {
-                                    case .success(let txReceipt):
-                                                                                
-                                        let receipt = [
-                                            "blockHash": txReceipt!.blockHash.hex(),
-                                            "from": privKey.address.hex(eip55: false),
-                                            "to": self.contract.address!.hex(eip55: false),
-                                            "transactionHash": txReceipt!.transactionHash.hex()
-                                        ]
-                                        
-                                        self.info("createInvoice", "partyId: \(party.id)", receipt)
-                                        resolve(receipt)
-                                    case .failure(let error):
-                                        debug("ETH Fetching receip error: \(error)")
-                                        return reject(error)
-                                    }
-                                }
+                                self.info("create invoice", "partyId: \(party.id)", receipt)
+                                resolve(receipt)
                             case .failure(let error):
                                 self.debug("SENDING TX ERROR: \(error)")
                                 reject(error)
@@ -415,6 +405,8 @@ final class Ethereum: BaseClass, IBlockchain {
 
                 switch response.status {
                 case .success(let nonce):
+                    debug("Eth pay invoice nonce: \(nonce.quantity)")
+
                     guard let tx = self.contract["payInvoice"]?(params).createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
@@ -440,31 +432,17 @@ final class Ethereum: BaseClass, IBlockchain {
 
                             switch response.status {
                             case .success(let data):
-                                                                
-                                Thread.sleep(forTimeInterval: 0.5)
+                                self.debug("Pay invoice TH HASH: \(data.hex())")
                                 
-                                self.web3.eth.getTransactionReceipt(transactionHash: data) { [weak self] response in
-                                    guard let self = self else {
-                                        return reject(SwapSDKError.msg("web3.eth.getTransactionReceipt self is nil"))
-                                    }
-                                    
-                                    switch response.status {
-                                    case .success(let txReceipt):
-                                                                                
-                                        let receipt = [
-                                            "blockHash": txReceipt!.blockHash.hex(),
-                                            "from": privKey.address.hex(eip55: false),
-                                            "to": self.contract.address!.hex(eip55: false),
-                                            "transactionHash": txReceipt!.transactionHash.hex()
-                                        ]
-                                                                                
-                                        self.info("payInvoice", "partyId: \(party.id)", receipt)
-                                        resolve(receipt)
-                                    case .failure(let error):
-                                        debug("ETH Fetching receip error: \(error)")
-                                        return reject(error)
-                                    }
-                                }
+                                let receipt = [
+                                    "blockHash": "recipe.blockHash.hex()",
+                                    "from": privKey.address.hex(eip55: false),
+                                    "to": self.contract.address!.hex(eip55: false),
+                                    "transactionHash": data.hex()
+                                ]
+                                
+                                self.info("pay invoice", "partyId: \(party.id)", receipt)
+                                resolve(receipt)
                             case .failure(let error):
                                 self.debug("SENDING TX ERROR: \(error)")
                                 reject(error)
@@ -506,6 +484,8 @@ final class Ethereum: BaseClass, IBlockchain {
                 
                 switch response.status {
                 case .success(let nonce):
+                    debug("Eth settle invoice nonce: \(nonce.quantity)")
+
                     guard let tx = self.contract["settleInvoice"]?(params).createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
@@ -531,32 +511,17 @@ final class Ethereum: BaseClass, IBlockchain {
                             
                             switch response.status {
                             case .success(let data):
+                                self.debug("Settle invoice TH HASH: \(data.hex())")
                                 
-                                self.debug("Eth tx hash: \(data.hex())")
+                                let receipt = [
+                                    "blockHash": "recipe.blockHash.hex()",
+                                    "from": privKey.address.hex(eip55: false),
+                                    "to": self.contract.address!.hex(eip55: false),
+                                    "transactionHash": data.hex()
+                                ]
                                 
-                                Thread.sleep(forTimeInterval: 0.5)
-                                
-                                self.web3.eth.getTransactionReceipt(transactionHash: data) { [weak self] response in
-                                    guard let self = self else {
-                                        return reject(SwapSDKError.msg("web3.eth.getTransactionReceipt self is nil"))
-                                    }
-                                    switch response.status {
-                                    case .success(let txReceipt):
-                                        
-                                        let receipt = [
-                                            "blockHash": txReceipt!.blockHash.hex(),
-                                            "from": privKey.address.hex(eip55: false),
-                                            "to": self.contract.address!.hex(eip55: false),
-                                            "transactionHash": txReceipt!.transactionHash.hex()
-                                        ]
-                                                                                
-                                        self.info("settleInvoice", "partyId: \(party.id)", receipt)
-                                        resolve(receipt)
-                                    case .failure(let error):
-                                        debug("ETH Fetching receip error: \(error)")
-                                        return reject(error)
-                                    }
-                                }
+                                self.info("settle invoice", "partyId: \(party.id)", receipt)
+                                resolve(receipt)
                             case .failure(let error):
                                 self.debug("SENDING TX ERROR: \(error)")
                                 reject(error)
