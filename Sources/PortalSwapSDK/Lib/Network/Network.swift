@@ -139,6 +139,8 @@ final class Network: BaseClass {
                    let status = jsonObject["status"] {
                     event = "\(type.lowercased()).\(status)"
                     arg = [jsonObject]
+                    
+                    debug("Forwarding socket event type: \(type), status: \(status), obj: \(jsonObject)")
                 } else if let eventValue = jsonObject["@event"] as? String,
                           let dataValue = jsonObject["@data"] {
                     event = eventValue
