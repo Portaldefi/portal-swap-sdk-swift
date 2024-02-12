@@ -1,26 +1,22 @@
 import Foundation
 import Promises
 
-class Dex: BaseClass {
+final class Dex: BaseClass {
     private var sdk: Sdk
     
-    init(sdk: Sdk, props: [String: Any]) {
+    init(sdk: Sdk) {
         self.sdk = sdk
-        super.init()
+        super.init(id: "Dex")
     }
     
     // Opens the orderbooks
-    func open() -> Promise<Dex> {
-        Promise { fulfill, reject in
-            fulfill(self)
-        }
+    func open() -> Promise<Void> {
+        Promise {()}
     }
     
     // Closes the orderbooks
-    func close() -> Promise<Dex> {
-        Promise { resolve, reject in
-            resolve(self)
-        }
+    func close() -> Promise<Void> {
+        Promise {()}
     }
     
     // Adds a limit order to the orderbook
@@ -32,7 +28,7 @@ class Dex: BaseClass {
         
         let data = [
             "id": UUID().uuidString,
-            "uid": sdk.id!,
+            "uid": sdk.userId,
             "side": request.side,
             "baseAsset": request.baseAsset,
             "baseNetwork": request.baseNetwork,

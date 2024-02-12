@@ -2,38 +2,21 @@ import Combine
 import Foundation
 import Promises
 
-class Swaps: BaseClass {
+final class Swaps: BaseClass {
     private let sdk: Sdk
     private let store: Store
     private let onSwapAccessQueue = DispatchQueue(label: "swap.sdk.onSwapAccessQueue")
-    private var subscriptions = Set<AnyCancellable>()
     
-    private lazy var onError: ([Any]) -> Void = { [weak self] args in
-        self?.emit(event: "error", args: args)
-    }
-    
-    init(sdk: Sdk, props: [String: Any]) {
+    init(sdk: Sdk) {
         self.sdk = sdk
-        self.store = sdk.store
+        store = sdk.store
 
-        super.init()
+        super.init(id: "Swaps")
         
-        let onSwapAction: ([Any]) -> Void = { [weak self] args in
-            if let firstLevel = args as? [[[String: Any]]],
-               let secondLevel = firstLevel.first,
-               let json = secondLevel.first {
-                self?.onSwapAccessQueue.async {
-                    self?._onSwap(json)
-                }
-            } else {
-                print("Cannot handle onSwap action")
-            }
-        }
-        
-        sdk.network.on("swap.received", onSwapAction).store(in: &subscriptions)
-        sdk.network.on("swap.holder.invoice.sent", onSwapAction).store(in: &subscriptions)
-        sdk.network.on("swap.seeker.invoice.sent", onSwapAction).store(in: &subscriptions)
-        sdk.network.on("error", onError).store(in: &subscriptions)
+        subscribe(sdk.network.on("swap.received", onSwapUpdate()))
+        subscribe(sdk.network.on("swap.holder.invoice.sent", onSwapUpdate()))
+        subscribe(sdk.network.on("swap.seeker.invoice.sent", onSwapUpdate()))
+        subscribe(sdk.network.on("error", forwardError()))
     }
     
     func sync() -> Promise<Swaps> {
@@ -43,26 +26,20 @@ class Swaps: BaseClass {
             self
         }
     }
-    
+    // Function call on swap status update.
+    // SH: received -> created -> holder.invoice.created -> holder.invoice.sent -> seeker.invoice.sent -> seeker.invoice.paid -> holder.invoice.settled -> completed
+    // SS: received -> holder.invoice.sent -> seeker.invoice.created -> seeker.invoice.sent -> holder.invoice.paid -> seeker.invoice.settled -> completed
     func _onSwap(_ obj: [String: Any]) {
-        subscriptions.removeAll()
-        
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: obj, options: [])
-            let swap = try JSONDecoder().decode(Swap.self, from: jsonData)
-            swap.update(sdk: sdk)
-                        
-            guard let swapId = swap.id else {
-                self.error("swap.error", "Swap has no id")
-                return
-            }
+            let swap = try JSONDecoder().decode(Swap.self, from: jsonData).update(sdk: sdk)
             
-            print("\(swap.party.id) Received swap with status: \(swap.status)")
+            debug("Party \(swap.party.id) received swap with status: \(swap.status)")
             
             if swap.isReceived {
-                try store.put(.swaps, swapId, obj)
+                try store.put(.swaps, swap.swapId, obj)
             } else {
-                try store.update(.swaps, swapId, obj)
+                try store.update(.swaps, swap.swapId, obj)
                 emit(event: "swap.\(swap.status)", args: [swap])
             }
             
@@ -70,181 +47,218 @@ class Swaps: BaseClass {
 
             switch swap.status {
             case "received":
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", swap.toJSON())
                 emit(event: "swap.\(swap.status)", args: [swap])
                 
-                if swap.party.isSecretSeeker { return }
+                if swap.partyType == .secretSeeker { return }
                 
                 let secret = Utils.createSecret()
                 let secretHash = Utils.sha256(data: secret)
                 let secretHashString = secretHash.toHexString()
                                 
-                print("SWAP SDK created secret: \(secretHashString)")
+                debug("Created secret: \(secretHashString)")
                 
-                try store.put(.secrets, secretHashString, [
-                    "secret" : secret.toHexString(),
-                    "swap": swap.id!
-                ])
+                let secretDictionary = ["secret" : secret.toHexString(), "swap": swap.swapId]
+                
+                try store.put(.secrets, secretHashString, secretDictionary)
                 
                 swap.secretHash = secretHashString
                 
                 _onSwap(swap.toJSON())
             case "created":
-                if swap.party.isSecretSeeker { return }
+                if swap.partyType == .secretSeeker { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", swap.toJSON())
 
                 swap.createInvoice().then { [unowned self] _ in
-                    try self.store.put(.swaps, swapId, swap.toJSON())
-                }.then { [unowned self] _ in
-                    self._onSwap(swap.toJSON())
+                    _onSwap(swap.toJSON())
+                }.catch { error in
+                    self.error("swap.error", error)
+                    self.emit(event: "error", args: [error, obj])
                 }
             case "holder.invoice.created":
-                if swap.party.isSecretSeeker { return }
+                if swap.partyType == .secretSeeker { return }
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", swap.toJSON())
                 
-                _ = try swap.sendInvoice()
-                try self.store.put(.swaps, swapId, swap.toJSON())
-            case "holder.invoice.sent":
-                if swap.party.isSecretHolder { return }
-                
-                info("swap.\(swap.status)", [swap])
-                
-                swap.createInvoice().then { _ in
-                    try self.store.put(.swaps, swapId, swap.toJSON())
+                try swap.sendInvoice().catch { error in
+                    self.error("swap.error", error)
+                    self.emit(event: "error", args: [error, obj])
                 }
-                .then { [unowned self] _ in
+            case "holder.invoice.sent":
+                if swap.partyType == .secretHolder { return }
+                
+                info("swap.\(swap.status)", swap.toJSON())
+                
+                swap.createInvoice().then { [unowned self] _ in
                     self._onSwap(swap.toJSON())
+                }.catch { error in
+                    self.error("swap.error", error)
+                    self.emit(event: "error", args: [error, obj])
                 }
             case "seeker.invoice.created":
-                if swap.party.isSecretHolder { return }
-                
-                info("swap.\(swap.status)", [swap])
-                
-                _ = try swap.sendInvoice()
-                try self.store.put(.swaps, swapId, swap.toJSON())
-            case "seeker.invoice.sent":
-                if swap.party.isSecretSeeker { return }
-                
-                info("swap.\(swap.status)", [swap])
-                
-                _ = swap.payInvoice()
-                try self.store.put(.swaps, swapId, swap.toJSON())
-            case "holder.invoice.paid":
-                if swap.party.isSecretHolder { return }
-                
-                info("swap.\(swap.status)", [swap])
+                if swap.partyType == .secretHolder { return }
 
-                _ = swap.payInvoice()
-                try store.put(.swaps, swapId, swap.toJSON())
+                info("swap.\(swap.status)", swap.toJSON())
+                
+                try swap.sendInvoice().catch { error in
+                    self.error("swap.error", error)
+                    self.emit(event: "error", args: [error, obj])
+                }
+            case "seeker.invoice.sent":
+                if swap.partyType == .secretSeeker { return }
+
+                info("swap.\(swap.status)", swap.toJSON())
+                
+                swap.payInvoice().catch { error in
+                    self.error("swap.error", error)
+                    self.emit(event: "error", args: [error, obj])
+                }
+            case "holder.invoice.paid":
+                if swap.partyType == .secretHolder { return }
+
+                info("swap.\(swap.status)", swap.toJSON())
+
+                swap.payInvoice().catch { error in
+                    self.error("swap.error", error)
+                    self.emit(event: "error", args: [error, obj])
+                }
             case "seeker.invoice.paid":
-                if swap.party.isSecretSeeker { return }
+                if swap.partyType == .secretSeeker { return }
+
+                info("swap.\(swap.status)", swap.toJSON())
                 
-                info("swap.\(swap.status)", [swap])
+                swap.counterparty.update(swap: swap)
                 
-                swap.counterparty.swap = swap
-                
-                _ = swap.settleInvoice()
-                try self.store.put(.swaps, swapId, swap.toJSON())
+                swap.settleInvoice().catch { error in
+                    self.error("swap.error", error)
+                    self.emit(event: "error", args: [error, obj])
+                }
             case "holder.invoice.settled":
-                if swap.party.isSecretSeeker {
-                    info("swap.\(swap.status)", [swap])
+                if swap.partyType == .secretSeeker {
+                    info("swap.\(swap.status)", swap.toJSON())
                     
-                    _ = swap.settleInvoice()
-                    try store.put(.swaps, swapId, swap.toJSON())
+                    swap.settleInvoice().catch { error in
+                        self.error("swap.error", error)
+                        self.emit(event: "error", args: [error, obj])
+                    }
                 }
                 
-                if swap.party.isSecretHolder {
+                if swap.partyType == .secretHolder {
                     swap.status = "completed"
                     
-                    info("swap.\(swap.status)", [swap])
+                    info("swap.\(swap.status)", swap.toJSON())
                     self._onSwap(swap.toJSON())
                 }
             case "seeker.invoice.settled":
                 swap.status = "completed"
                 
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", swap.toJSON())
                 self._onSwap(swap.toJSON())
             case "completed":
-                info("swap.\(swap.status)", [swap])
+                info("swap.\(swap.status)", swap.toJSON())
                 emit(event: "swap.\(swap.status)", args: [swap])
             default:
                 let error = SwapSDKError.msg("unknown status \(swap.status)")
                 self.error("swap.error", error)
             }
-            
         } catch {
             self.error("swap.error", error)
             self.emit(event: "error", args: [error, obj])
         }
     }
+}
+
+extension Swaps {
+    private func onSwapUpdate() -> ([Any]) -> Void {
+        { [unowned self] args in
+            if let firstLevel = args as? [[[String: Any]]],
+               let secondLevel = firstLevel.first,
+               let json = secondLevel.first {
+                onSwapAccessQueue.async {
+                    self._onSwap(json)
+                }
+            } else {
+                debug("Cannot handle onSwap action")
+            }
+        }
+    }
     
     private func subscribeForSwapStateChanges(swap: Swap) {
-        swap.on("created", { [unowned self] _ in
-            self.emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("created", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("holder.invoice.created", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.created", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("holder.invoice.sent", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.sent", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("seeker.invoice.created", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.created", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("seeker.invoice.sent", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.sent", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
         
-        swap.on("holder.invoice.paid", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.paid", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("seeker.invoice.paid", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.paid", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("holder.invoice.settled", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("holder.invoice.settled", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("seeker.invoice.settled", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-            
-            onSwapAccessQueue.async {
-                self._onSwap(swap.toJSON())
-            }
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("seeker.invoice.settled", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+                
+                onSwapAccessQueue.async {
+                    self._onSwap(swap.toJSON())
+                }
+            })
+        )
         
-        swap.on("completed", { [unowned self] _ in
-            emit(event: "swap.\(swap.status)", args: [swap])
-        })
-        .store(in: &subscriptions)
+        subscribe(
+            swap.on("completed", { [unowned self] _ in
+                emit(event: "swap.\(swap.status)", args: [swap])
+            })
+        )
     }
 }

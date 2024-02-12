@@ -2,29 +2,30 @@ import Foundation
 import Promises
 import SwiftBTC
 
-class Lightning: BaseClass, IBlockchain {
+final class Lightning: BaseClass, IBlockchain {
     private let sdk: Sdk
     private let client: ILightningClient
-    
+    //sdk seems unused
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Lightning) {
         self.sdk = sdk
         self.client = props.client
-        super.init(id: "lightning")
+        
+        super.init(id: "Lightning")
     }
     
     func connect() -> Promise<Void> {
-        emit(event: "connect", args: [self])
+        emit(event: "connect")
         return Promise { () }
     }
     
     func disconnect() -> Promise<Void> {
-        emit(event: "disconnect", args: [self])
+        emit(event: "disconnect")
         return Promise { () }
     }
     
     func createInvoice(party: Party) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
-            guard let id = party.swap?.id, let secretHash = party.swap?.secretHash else {
+            guard let id = party.swap?.swapId, let secretHash = party.swap?.secretHash else {
                 return reject(SwapSDKError.msg("Failed to create invoice: swap data is missing"))
             }
             
@@ -32,67 +33,66 @@ class Lightning: BaseClass, IBlockchain {
             
             client.createHodlInvoice(hash: secretHash, memo: id, quantity: quantity).then { [weak self] invoice in
                 guard let self = self else {
-                    reject(SwapSDKError.msg("Cannot obtain self"))
-                    return
+                    return reject(SwapSDKError.msg("client.createHodlInvoice self is nil"))
                 }
                 
                 guard let decodedInvoice = Bolt11.decode(string: invoice) else {
-                    reject(SwapSDKError.msg("Failed to decode invoice"))
-                    return
+                    return reject(SwapSDKError.msg("Failed to decode invoice"))
                 }
                 
                 guard let paymentHash = decodedInvoice.paymentHash?.toHexString() else {
-                    reject(SwapSDKError.msg("Decoded invoice doesn't have hash"))
-                    return
+                    return reject(SwapSDKError.msg("Decoded invoice doesn't have hash"))
                 }
                 
                 guard paymentHash == secretHash else {
-                    reject(SwapSDKError.msg("Payment hashes doesn't match"))
-                    return
+                    return reject(SwapSDKError.msg("Payment hashes doesn't match"))
                 }
                 
                 guard decodedInvoice.description == id else {
-                    reject(SwapSDKError.msg("Description doesn't match"))
-                    return
+                    return reject(SwapSDKError.msg("Description doesn't match"))
                 }
                 
                 guard let decodedQuantity = decodedInvoice.amount else {
-                    reject(SwapSDKError.msg("Description doesn't match"))
-                    return
+                    return reject(SwapSDKError.msg("Description doesn't match"))
                 }
                 
                 guard decodedQuantity.int64 == quantity else {
-                    reject(SwapSDKError.msg("Quantity doesn't match"))
-                    return
+                    return reject(SwapSDKError.msg("Quantity doesn't match"))
                 }
                                 
-                self.info("createInvoice", [invoice])
+                self.info("createInvoice", "partyId: \(party.id)", invoice)
                 self.emit(event: "invoice.created", args: [invoice])
                 
-                self.client.subscribeToInvoice(id: id).then { subscription in
-                    print("Fetched subscription for invoice: \(id)")
+                self.client.subscribeToInvoice(id: id).then { [weak self] subscription in
+                    guard let self = self else {
+                        return reject(SwapSDKError.msg("client.subscribeToInvoice self is nil"))
+                    }
+                    
+                    self.debug("Fetched subscription for invoice: \(id)")
                     
                     subscription.onInvoiceUpdated = { [weak self] status in
-                        guard let self = self else { return }
+                        guard let self = self else {
+                            return reject(SwapSDKError.msg("subscription.onInvoiceUpdated self is nil"))
+                        }
                                                 
                         switch status {
                         case .paymentHeld:
-                            self.info("invoice.paid", invoice)
+                            self.info("invoice.paid", "partyId: \(party.id)", invoice)
                             self.emit(event: "invoice.paid", args: [invoice])
                         case .paymentConfirmed:
-                            subscription.off("invoice_updated")
-                            self.info("invoice.settled", invoice)
+                            subscription.off("invoice.updated")
+                            self.info("invoice.settled", "partyId: \(party.id)", invoice)
                             self.emit(event: "invoice.settled", args: [invoice])
                         case .paymentCanceled:
-                            subscription.off("invoice_updated")
-                            self.info("invoice.cancelled", invoice)
+                            subscription.off("invoice.updated")
+                            self.info("invoice.cancelled", "partyId: \(party.id)", invoice)
                             self.emit(event: "invoice.cancelled", args: [invoice])
                         case .awaitsPayment:
                             break
                         }
                     }
                     
-                    self.info("invoice.created", invoice)
+                    self.info("invoice.created", "partyId: \(party.id)", invoice)
                     
                     resolve(["id": secretHash, "swap": id, "request": invoice])
                 }
@@ -114,26 +114,32 @@ class Lightning: BaseClass, IBlockchain {
             guard let secretHash = swap.secretHash else {
                 return reject(SwapSDKError.msg("Swap has no secret hash"))
             }
-            
-            guard let swapId = swap.id else {
-                return reject(SwapSDKError.msg("Swap has no id"))
-            }
                         
-            self.decodePaymentRequest(party: party).then { paymentRequest in
+            decodePaymentRequest(party: party).then { [weak self] paymentRequest in
+                guard let self = self else {
+                    return reject(SwapSDKError.msg("decodePaymentRequest(party: ) self is nil"))
+                }
+                
                 if paymentRequest.id != secretHash {
                     let actual = paymentRequest.id
                     reject(SwapSDKError.msg("expected swap hash \(secretHash), got \(actual)"))
-                } else if paymentRequest.swap.id != swapId {
+                } else if paymentRequest.swap.id != swap.swapId {
                     let actual = paymentRequest.swap.id
-                    reject(SwapSDKError.msg("expected swap identifier \(swapId), got \(actual)"))
+                    reject(SwapSDKError.msg("expected swap identifier \(swap.swapId), got \(actual)"))
                 } else if paymentRequest.amount != party.quantity {
                     let expected = party.quantity
                     let actual = paymentRequest.swap.id
                     reject(SwapSDKError.msg("expected swap quantuty \(expected), got \(actual)"))
                 }
 
-                self.client.payViaPaymentRequest(swapId: swapId, request: paymentRequest.request).then { result in
-                    self.info("payViaPaymentRequest", [result, party])
+                self.client.payViaPaymentRequest(swapId: swap.swapId, request: paymentRequest.request).then { [weak self] result in
+                    
+                    guard let self = self else {
+                        return reject(SwapSDKError.msg("client.payViaPaymentRequest(swapId: ) self is nil"))
+                    }
+                    
+                    self.info("payInvoice", "partyId: \(party.id)", result)
+                    
                     let reciep = [
                         "id": result.id,
                         "swap": [
@@ -148,6 +154,8 @@ class Lightning: BaseClass, IBlockchain {
                     self.emit(event: "error", args: [error, paymentRequest, party])
                     reject(SwapSDKError.msg("Cannot pay lightning invoice: \(error)"))
                 }
+            }.catch { error in
+                reject(error)
             }
         }
     }

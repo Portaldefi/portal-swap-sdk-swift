@@ -3,14 +3,7 @@ import WebSocketKit
 import NIO
 import Promises
 
-class Network: BaseClass {
-    struct NetworkConfig {
-        let networkProtocol: SwapSdkConfig.Network.NetworkProtocol
-        let hostName: String
-        let port: Int
-        let pathname: String
-    }
-    
+final class Network: BaseClass {
     private let config: NetworkConfig
     private let sdk: Sdk
     private var socket: WebSocket?
@@ -22,7 +15,7 @@ class Network: BaseClass {
     }
     
     init(sdk: Sdk, props: SwapSdkConfig.Network) {
-        self.config = NetworkConfig(
+        config = NetworkConfig(
             networkProtocol: props.networkProtocol,
             hostName: props.hostname,
             port: props.port,
@@ -31,23 +24,13 @@ class Network: BaseClass {
         
         self.sdk = sdk
         
-        super.init()
+        super.init(id: "Network")
     }
         
     func connect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
-            guard let id = sdk.id else {
-                reject(SwapSDKError.msg("Network: missing sdk id"))
-                return
-            }
-            
-            let networkProtocol = config.networkProtocol
-            let host = config.hostName
-            let port = config.port
-            let pathname = config.pathname
-                                    
             WebSocket.connect(
-                to: "\(networkProtocol == .unencrypted ? "ws://\(host):\(port)/\(pathname)/\(id)" : "wss://\(host)/\(pathname)/\(id)")",
+                to: webSocketURL(userId: sdk.userId),
                 on: socketEventLoopGroup
             ) { [weak self] ws in
                 
@@ -66,7 +49,7 @@ class Network: BaseClass {
                 case .failure(let error):
                     reject(SwapSDKError.msg("WebSocket connection failed with error: \(error)"))
                 case .success:
-                    print("SWAP SDK \(self?.sdk.id ?? "unknown user") webSocket connected")
+                    self?.debug("\(self?.sdk.userId ?? "unknown user") webSocket connected")
                     resolve(())
                 }
             }
@@ -79,7 +62,7 @@ class Network: BaseClass {
                 return reject(SwapSDKError.msg("Network: Socket is nil on disconnect"))
             }
             ws.close().whenComplete { _ in
-                try? self.socketEventLoopGroup.syncShutdownGracefully()
+                self.socket = nil
                 resolve(())
             }
         }
@@ -88,29 +71,20 @@ class Network: BaseClass {
     func request(args: [String: String], data: [String: Any]) -> Promise<Data> {
         Promise { [unowned self] resolve, reject in
             guard let path = args["path"] else {
-                reject(SwapSDKError.msg("Invalid Path"))
-                return
+                return reject(SwapSDKError.msg("Invalid Path"))
             }
             
-            guard let url = URL(string: "\(config.networkProtocol == .unencrypted ? "http://\(config.hostName):\(config.port)\(path)" : "https://\(config.hostName)\(path)")") else {
-                reject(SwapSDKError.msg("Invalid URL"))
-                return
+            guard let url = URL(string: serverURL(path: path)) else {
+                return reject(SwapSDKError.msg("Invalid URL"))
             }
             
             var request = URLRequest(url: url)
             request.httpMethod = args["method"] ?? "GET"
             
-            guard let id = sdk.id else {
-                reject(SwapSDKError.msg("Network: missing sdk id"))
-                return
-            }
-            
-            // Convert data to JSON
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: data, options: [])
                 
-                // Set headers
-                let creds = "\(id):\(id)"
+                let creds = "\(sdk.userId):\(sdk.userId)"
                 let base64Creds = Data(creds.utf8).base64EncodedString()
                 
                 request.addValue("application/json", forHTTPHeaderField: "Accept")
@@ -123,7 +97,6 @@ class Network: BaseClass {
                 request.httpBody = jsonData
             } catch {
                 reject(SwapSDKError.msg("JSON serialization error"))
-                return
             }
             
             URLSession.shared.dataTask(with: request) { data, response, error in
@@ -166,6 +139,8 @@ class Network: BaseClass {
                    let status = jsonObject["status"] {
                     event = "\(type.lowercased()).\(status)"
                     arg = [jsonObject]
+                    
+                    debug("Forwarding socket event type: \(type), status: \(status), obj: \(jsonObject)")
                 } else if let eventValue = jsonObject["@event"] as? String,
                           let dataValue = jsonObject["@data"] {
                     event = eventValue
@@ -181,9 +156,37 @@ class Network: BaseClass {
             }
         } catch {
             event = "error"
-            arg = error
+                arg = error
         }
         
         emit(event: event, args: [arg])
+    }
+}
+
+extension Network {
+    struct NetworkConfig {
+        let networkProtocol: SwapSdkConfig.Network.NetworkProtocol
+        let hostName: String
+        let port: Int
+        let pathname: String
+    }
+    
+    private func serverURL(path: String) -> String {
+        switch config.networkProtocol {
+        case .unencrypted:
+            return "http://\(config.hostName):\(config.port)\(path)"
+        case .encrypted:
+            return "https://\(config.hostName)\(path)"
+        }
+    }
+    
+    private func webSocketURL(userId: String) -> String {
+        switch config.networkProtocol {
+        case .unencrypted:
+            //Playnet
+            return "ws://\(config.hostName):\(config.port)/\(config.pathname)/\(userId)"
+        case .encrypted:
+            return "wss://\(config.hostName)/\(config.pathname)/\(userId)"
+        }
     }
 }

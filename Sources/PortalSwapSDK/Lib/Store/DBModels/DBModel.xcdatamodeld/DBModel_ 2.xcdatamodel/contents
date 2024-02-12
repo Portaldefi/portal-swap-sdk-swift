@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22222" systemVersion="23A344" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="DBEvmInvoice" representedClassName="DBEvmInvoice" syncable="YES" codeGenerationType="class">
+        <attribute name="blockHash" attributeType="String"/>
+        <attribute name="from" attributeType="String"/>
+        <attribute name="to" attributeType="String"/>
+        <attribute name="transactionHash" attributeType="String"/>
+        <relationship name="parentInvoice" maxCount="1" deletionRule="Nullify" destinationEntity="DBInvoice" inverseName="evmInvoice" inverseEntity="DBInvoice"/>
+    </entity>
+    <entity name="DBInvoice" representedClassName="DBInvoice" syncable="YES" codeGenerationType="class">
+        <relationship name="evmInvoice" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="DBEvmInvoice" inverseName="parentInvoice" inverseEntity="DBEvmInvoice"/>
+        <relationship name="invoice" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DBParty" inverseName="invoice" inverseEntity="DBParty"/>
+        <relationship name="lightningInvoice" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="DBLightningInvoice" inverseName="parentInvoice" inverseEntity="DBLightningInvoice"/>
+    </entity>
+    <entity name="DBLightningInvoice" representedClassName="DBLightningInvoice" syncable="YES" codeGenerationType="class">
+        <attribute name="invoiceID" attributeType="String"/>
+        <attribute name="request" attributeType="String"/>
+        <attribute name="swap" attributeType="String"/>
+        <relationship name="parentInvoice" maxCount="1" deletionRule="Nullify" destinationEntity="DBInvoice" inverseName="lightningInvoice" inverseEntity="DBInvoice"/>
+    </entity>
+    <entity name="DBParty" representedClassName="DBParty" syncable="YES" codeGenerationType="class">
+        <attribute name="asset" attributeType="String"/>
+        <attribute name="blockchain" attributeType="String"/>
+        <attribute name="oid" attributeType="String"/>
+        <attribute name="partyID" attributeType="String"/>
+        <attribute name="quantity" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="holder" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DBSwap" inverseName="secretHolder" inverseEntity="DBSwap"/>
+        <relationship name="invoice" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="DBInvoice" inverseName="invoice" inverseEntity="DBInvoice"/>
+        <relationship name="seeker" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DBSwap" inverseName="secretSeeker" inverseEntity="DBSwap"/>
+    </entity>
+    <entity name="DBSecret" representedClassName="DBSecret" syncable="YES" codeGenerationType="class">
+        <attribute name="data" attributeType="Binary"/>
+        <attribute name="secretHash" attributeType="String"/>
+        <attribute name="swapID" attributeType="String"/>
+    </entity>
+    <entity name="DBSwap" representedClassName="DBSwap" syncable="YES" codeGenerationType="class">
+        <attribute name="partyType" attributeType="String"/>
+        <attribute name="secretHash" optional="YES" attributeType="String"/>
+        <attribute name="status" attributeType="String"/>
+        <attribute name="swapID" attributeType="String"/>
+        <attribute name="timestamp" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="secretHolder" maxCount="1" deletionRule="Cascade" destinationEntity="DBParty" inverseName="holder" inverseEntity="DBParty"/>
+        <relationship name="secretSeeker" maxCount="1" deletionRule="Cascade" destinationEntity="DBParty" inverseName="seeker" inverseEntity="DBParty"/>
+    </entity>
+</model>

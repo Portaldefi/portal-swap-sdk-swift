@@ -2,95 +2,82 @@ import Foundation
 import Combine
 import Promises
 
-class Sdk: BaseClass {
-    public var network: Network!
-    public var dex: Dex!
-    public var swaps: Swaps!
-    public var store: Store!
-    public var blockchains: Blockchains!
+final class Sdk: BaseClass {
+    let userId: String
     
-    private var subscriptions = Set<AnyCancellable>()
-    
-    private lazy var onSwap: ([Any]) -> Void = { [weak self] args in
-        if let data = args as? [Swap], let swap = data.first {
-            self?.emit(event: "swap.\(swap.status)", args: [swap])
-        } else {
-            print("Got onSwap with unexpected arguments: \(args) [Sdk]")
-        }
-    }
-    
-    private lazy var onError: ([Any]) -> Void = { [weak self] args in
-        self?.emit(event: "error", args: args)
-    }
-    
-    private lazy var forwardLogEvent: ([Any]) -> Void = { [weak self] args in
-        if let level = args.first as? String, let loggingFunction = self?.getLoggingFunction(for: LogLevel.level(level)) {
-            loggingFunction(Array(args.dropFirst()))
-        }
-    }
-    
-    var isConnected: Bool {
+    private(set) var network: Network!
+    private(set) var dex: Dex!
+    private(set) var store: Store!
+    private(set) var blockchains: Blockchains!
+    private(set) var swaps: Swaps!
+            
+    public var isConnected: Bool {
         network.isConnected
     }
     
-    // Creates a new instance of the Portal SDK
+    // Creates a new instance of Portal SDK
     init(config: SwapSdkConfig) {
-        super.init(id: config.id)
+        userId = config.id
+        
+        super.init(id: "Sdk")
         
         // Interface to the underlying network
-        self.network = .init(sdk: self, props: config.network)
-        
-        self.network.on("order.created", forwardEvent(self, event: "order.created")).store(in: &subscriptions)
-        self.network.on("order.opened", forwardEvent(self, event: "order.opened")).store(in: &subscriptions)
-        self.network.on("order.closed", forwardEvent(self, event: "order.closed")).store(in: &subscriptions)
-        
-        // Interface to the underlying data store
-        self.store = .init()
+        network = .init(sdk: self, props: config.network)
         
         // Interface to all the blockchain networks
-        self.blockchains = .init(sdk: self, props: config.blockchains)
+        blockchains = .init(sdk: self, props: config.blockchains)
         
         // Interface to the decentralized exchange
-        self.dex = .init(sdk: self, props: config.dex)
+        dex = .init(sdk: self)
+        
+        // Interface to the underlying data store
+        store = .init(sdk: self)
         
         // Interface to atomic swaps
-        self.swaps = .init(sdk: self, props: config.swaps)
+        swaps = .init(sdk: self)
         
-        self.swaps.on("swap.received", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.created", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.holder.invoice.created", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.holder.invoice.sent", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.seeker.invoice.created", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.seeker.invoice.sent", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.holder.invoice.paid", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.seeker.invoice.paid", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.holder.invoice.settled", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.seeker.invoice.settled", onSwap).store(in: &subscriptions)
-        self.swaps.on("swap.completed", onSwap).store(in: &subscriptions)
-        self.swaps.on("error", onError).store(in: &subscriptions)
+        // Subscribe for order state changes
+        subscribe(network.on("order.created", forwardEvent("order.created")))
+        subscribe(network.on("order.created", forwardEvent("order.created")))
+        subscribe(network.on("order.opened", forwardEvent("order.opened")))
+        subscribe(network.on("order.closed", forwardEvent("order.closed")))
+        
+        // Subscribe for swap state changes
+        subscribe(swaps.on("swap.received", forwardSwap()))
+        subscribe(swaps.on("swap.created", forwardSwap()))
+        subscribe(swaps.on("swap.holder.invoice.created", forwardSwap()))
+        subscribe(swaps.on("swap.holder.invoice.sent", forwardSwap()))
+        subscribe(swaps.on("swap.seeker.invoice.created", forwardSwap()))
+        subscribe(swaps.on("swap.seeker.invoice.sent", forwardSwap()))
+        subscribe(swaps.on("swap.holder.invoice.paid", forwardSwap()))
+        subscribe(swaps.on("swap.seeker.invoice.paid", forwardSwap()))
+        subscribe(swaps.on("swap.holder.invoice.settled", forwardSwap()))
+        subscribe(swaps.on("swap.seeker.invoice.settled", forwardSwap()))
+        subscribe(swaps.on("swap.completed", forwardSwap()))
         
         // Bubble up the log events
-        self.network.on("log", forwardLogEvent).store(in: &subscriptions)
-        self.store.on("log", forwardLogEvent).store(in: &subscriptions)
-        self.blockchains.on("log", forwardLogEvent).store(in: &subscriptions)
-        self.dex.on("log", forwardLogEvent).store(in: &subscriptions)
-        self.swaps.on("log", forwardLogEvent).store(in: &subscriptions)
+        subscribe(network.on("log", forwardLog()))
+        subscribe(store.on("log", forwardLog()))
+        subscribe(blockchains.on("log", forwardLog()))
+        subscribe(dex.on("log", forwardLog()))
+        subscribe(swaps.on("log", forwardLog()))
         
-        self.blockchains.on("error", onError).store(in: &subscriptions)
+        // Handling errors
+        subscribe(blockchains.on("error", forwardError()))
+        subscribe(swaps.on("error", forwardError()))
     }
 
     func start() -> Promise<Void> {
-        debug("starting", self)
+        debug("starting")
 
         return Promise { [unowned self] resolve, reject in
             all(
-                self.network.connect(),
-                self.store.open(),
-                self.blockchains.connect(),
-                self.dex.open()
-            ).then { network, store, blockchains, dex in
-                self.info("start", self)
-                self.emit(event: "start")
+                network.connect(),
+                blockchains.connect(),
+                store.open(),
+                dex.open()
+            ).then { [unowned self] network, blockchains, store, dex in
+                info("started")
                 resolve(())
             }.catch { error in
                 reject(error)
@@ -103,49 +90,15 @@ class Sdk: BaseClass {
 
         return Promise { [unowned self] resolve, reject in
             all(
-                self.network.disconnect(),
-                self.store.close(),
-                self.blockchains.disconnect(),
-                self.dex.close()
-            ).then { network, store, blockchains, dex in
-                self.info("stop", self)
-                self.emit(event: "stop")
+                network.disconnect(),
+                blockchains.disconnect(),
+                store.close(),
+                dex.close()
+            ).then { [unowned self] network, blockchains, store, dex in
+                info("stopped")
                 resolve(())
             }.catch { error in
                 reject(error)
-            }
-        }
-    }
-}
-
-extension Sdk {
-    private func forwardEvent(_ self: BaseClass, event: String) -> ([Any]) -> Void {
-        return { args in
-            self.emit(event: event, args: args)
-        }
-    }
-    
-    private func getLoggingFunction(for level: LogLevel) -> ([Any]) -> Void {
-        switch level {
-        case .debug:
-            return { args in
-                print("SWAP SDK DEBUG:", args)
-            }
-        case .info:
-            return { args in
-                print("SWAP SDK INFO:", args)
-            }
-        case .warn:
-            return { args in
-                print("SWAP SDK WARN:", args)
-            }
-        case .error:
-            return { args in
-                print("SWAP SDK ERROR:", args)
-            }
-        case .unknown:
-            return { args in
-                print("SWAP SDK Unknown:", args)
             }
         }
     }

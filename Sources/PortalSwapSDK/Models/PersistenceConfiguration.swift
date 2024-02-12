@@ -1,5 +1,4 @@
-public struct PersistenceConfiguration {
-    
+struct PersistenceConfiguration {
     public init(
         modelName: String,
         cloudIdentifier: String,

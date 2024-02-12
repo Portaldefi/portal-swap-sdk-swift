@@ -51,17 +51,11 @@ public struct SwapSdkConfig {
     
     public let id: String
     public let network: Network
-    public let store: [String: Any]
     public let blockchains: Blockchains
-    public let dex: [String: Any]
-    public let swaps: [String: Any]
     
-    public init(id: String, network: Network, store: [String: Any], blockchains: Blockchains, dex: [String: Any], swaps: [String: Any]) {
+    public init(id: String, network: Network, blockchains: Blockchains) {
         self.id = id
         self.network = network
-        self.store = store
         self.blockchains = blockchains
-        self.dex = dex
-        self.swaps = swaps
     }
 }
