@@ -3,6 +3,12 @@ import Promises
 import SwiftBTC
 
 final class Lightning: BaseClass, IBlockchain {
+    func register(swapId: Data, intent: SwapIntent) -> Promise<[String : String]> {
+        Promise {
+            [String : String]()
+        }
+    }
+    
     private let sdk: Sdk
     private let client: ILightningClient
     //sdk seems unused
@@ -21,6 +27,10 @@ final class Lightning: BaseClass, IBlockchain {
     func disconnect() -> Promise<Void> {
         emit(event: "disconnect")
         return Promise { () }
+    }
+    
+    func registerSwap(intent: SwapIntent) -> Promise<[String: String]> {
+        Promise { [String: String]() }
     }
     
     func createInvoice(party: Party) -> Promise<[String: String]> {
@@ -149,9 +159,9 @@ final class Lightning: BaseClass, IBlockchain {
                         "amount": result.amount
                     ]
                     resolve(reciep)
-                }.catch { error in
-                    self.error("PayViaPaymentRequest", [error, paymentRequest, party])
-                    self.emit(event: "error", args: [error, paymentRequest, party])
+                }.catch { [weak self] error in
+                    self?.error("PayViaPaymentRequest", [error, paymentRequest, party])
+                    self?.emit(event: "error", args: [error, paymentRequest, party])
                     reject(SwapSDKError.msg("Cannot pay lightning invoice: \(error)"))
                 }
             }.catch { error in
