@@ -72,7 +72,7 @@ final class Swaps: BaseClass {
 
                 swap.createInvoice().then { [unowned self] _ in
                     _onSwap(swap.toJSON())
-                }.catch { error in
+                }.catch { [unowned self] error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
                 }
@@ -81,7 +81,7 @@ final class Swaps: BaseClass {
                 
                 info("swap.\(swap.status)", swap.toJSON())
                 
-                try swap.sendInvoice().catch { error in
+                try swap.sendInvoice().catch { [unowned self] error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
                 }
@@ -92,7 +92,7 @@ final class Swaps: BaseClass {
                 
                 swap.createInvoice().then { [unowned self] _ in
                     self._onSwap(swap.toJSON())
-                }.catch { error in
+                }.catch { [unowned self] error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
                 }
@@ -101,7 +101,7 @@ final class Swaps: BaseClass {
 
                 info("swap.\(swap.status)", swap.toJSON())
                 
-                try swap.sendInvoice().catch { error in
+                try swap.sendInvoice().catch { [unowned self] error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
                 }
@@ -110,7 +110,7 @@ final class Swaps: BaseClass {
 
                 info("swap.\(swap.status)", swap.toJSON())
                 
-                swap.payInvoice().catch { error in
+                swap.payInvoice().catch { [unowned self] error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
                 }
@@ -119,7 +119,7 @@ final class Swaps: BaseClass {
 
                 info("swap.\(swap.status)", swap.toJSON())
 
-                swap.payInvoice().catch { error in
+                swap.payInvoice().catch { [unowned self] error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
                 }
@@ -130,7 +130,7 @@ final class Swaps: BaseClass {
                 
                 swap.counterparty.update(swap: swap)
                 
-                swap.settleInvoice().catch { error in
+                swap.settleInvoice().catch { [unowned self] error in
                     self.error("swap.error", error)
                     self.emit(event: "error", args: [error, obj])
                 }
@@ -138,7 +138,7 @@ final class Swaps: BaseClass {
                 if swap.partyType == .secretSeeker {
                     info("swap.\(swap.status)", swap.toJSON())
                     
-                    swap.settleInvoice().catch { error in
+                    swap.settleInvoice().catch { [unowned self] error in
                         self.error("swap.error", error)
                         self.emit(event: "error", args: [error, obj])
                     }
