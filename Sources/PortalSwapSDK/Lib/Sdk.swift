@@ -72,11 +72,11 @@ final class Sdk: BaseClass {
 
         return Promise { [unowned self] resolve, reject in
             all(
-                network.connect(),
+//                network.connect(),
                 blockchains.connect(),
-                store.open(),
-                dex.open()
-            ).then { [unowned self] network, blockchains, store, dex in
+                store.open()
+//                dex.open()
+            ).then { [unowned self] blockchains, store in
                 info("started")
                 resolve(())
             }.catch { error in
