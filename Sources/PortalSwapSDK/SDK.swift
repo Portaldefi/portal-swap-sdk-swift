@@ -43,6 +43,22 @@ public final class SDK: BaseClass {
         sdk.stop()
     }
     
+    public func registerSwap(intent: SwapIntent) -> Promise<[String: String]> {
+        Promise { [unowned self] resolve, reject in
+            let blockchainID = "ethereum"
+            
+            guard let blockchain = sdk.blockchains.blockchain(id: blockchainID) else {
+                return reject(SwapSDKError.msg("\(blockchainID) is nil"))
+            }
+            
+            blockchain.registerSwap(intent: intent).catch { error in
+                reject(error)
+            }.then { result in
+                resolve(result)
+            }
+        }
+    }
+    
     public func submitLimitOrder(_ request: OrderRequest) -> Promise<Order> {
         sdk.dex.submitLimitOrder(request)
     }
