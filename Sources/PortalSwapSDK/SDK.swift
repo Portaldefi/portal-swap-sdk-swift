@@ -18,16 +18,8 @@ public final class SDK: BaseClass {
         subscribe(sdk.on("order.opened", forwardEvent("order.opened")))
         subscribe(sdk.on("order.closed", forwardEvent("order.closed")))
         
-        subscribe(sdk.on("swap.received", forwardSwap()))
-        subscribe(sdk.on("swap.holder.invoice.created", forwardSwap()))
-        subscribe(sdk.on("swap.holder.invoice.sent", forwardSwap()))
-        subscribe(sdk.on("swap.seeker.invoice.created", forwardSwap()))
-        subscribe(sdk.on("swap.seeker.invoice.sent", forwardSwap()))
-        subscribe(sdk.on("swap.holder.invoice.paid", forwardSwap()))
-        subscribe(sdk.on("swap.seeker.invoice.paid", forwardSwap()))
-        subscribe(sdk.on("swap.holder.invoice.settled", forwardSwap()))
-        subscribe(sdk.on("swap.seeker.invoice.settled", forwardSwap()))
-        subscribe(sdk.on("swap.completed", forwardSwap()))
+        subscribe(sdk.on("swap.completed", forwardEvent("swap.completed")))
+        subscribe(sdk.on("notary.validator.match.intent", forwardEvent("notary.validator.match.intent")))
         
         subscribe(sdk.on("log", forwardLog()))
         subscribe(sdk.on("error", forwardError()))
@@ -43,27 +35,7 @@ public final class SDK: BaseClass {
         sdk.stop()
     }
     
-    public func registerSwap(intent: SwapIntent) -> Promise<[String: String]> {
-        Promise { [unowned self] resolve, reject in
-            let blockchainID = "ethereum"
-            
-            guard let blockchain = sdk.blockchains.blockchain(id: blockchainID) else {
-                return reject(SwapSDKError.msg("\(blockchainID) is nil"))
-            }
-            
-            blockchain.registerSwap(intent: intent).catch { error in
-                reject(error)
-            }.then { result in
-                resolve(result)
-            }
-        }
-    }
-    
-    public func submitLimitOrder(_ request: OrderRequest) -> Promise<Order> {
-        sdk.dex.submitLimitOrder(request)
-    }
-    
-    public func cancelLimitOrder(_ order: Order) -> Promise<Order> {
-        sdk.dex.cancelLimitOrder(order)
+    public func submitOrder(_ request: OrderRequest) -> Promise<[String: String]> {
+        sdk.dex.submitOrder(request)
     }
 }
