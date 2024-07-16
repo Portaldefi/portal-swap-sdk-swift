@@ -19,7 +19,7 @@ final class Sdk: BaseClass {
     init(config: SwapSdkConfig) {
         userId = config.id
         
-        super.init(id: "Sdk")
+        super.init(id: "sdk")
         
         // Interface to the underlying network
         network = .init(sdk: self, props: config.network)
@@ -42,18 +42,8 @@ final class Sdk: BaseClass {
         subscribe(network.on("order.opened", forwardEvent("order.opened")))
         subscribe(network.on("order.closed", forwardEvent("order.closed")))
         
-        // Subscribe for swap state changes
-        subscribe(swaps.on("swap.received", forwardSwap()))
-        subscribe(swaps.on("swap.created", forwardSwap()))
-        subscribe(swaps.on("swap.holder.invoice.created", forwardSwap()))
-        subscribe(swaps.on("swap.holder.invoice.sent", forwardSwap()))
-        subscribe(swaps.on("swap.seeker.invoice.created", forwardSwap()))
-        subscribe(swaps.on("swap.seeker.invoice.sent", forwardSwap()))
-        subscribe(swaps.on("swap.holder.invoice.paid", forwardSwap()))
-        subscribe(swaps.on("swap.seeker.invoice.paid", forwardSwap()))
-        subscribe(swaps.on("swap.holder.invoice.settled", forwardSwap()))
-        subscribe(swaps.on("swap.seeker.invoice.settled", forwardSwap()))
-        subscribe(swaps.on("swap.completed", forwardSwap()))
+        subscribe(dex.on("swap.completed", forwardEvent("swap.completed")))
+        subscribe(blockchains.on("notary.validator.match.intent", forwardEvent("notary.validator.match.intent")))
         
         // Bubble up the log events
         subscribe(network.on("log", forwardLog()))
