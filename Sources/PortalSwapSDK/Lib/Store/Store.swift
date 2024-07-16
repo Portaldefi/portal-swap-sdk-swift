@@ -65,7 +65,7 @@ final class Store: BaseClass {
             let newEntity = manager.secretEntity()
             try newEntity.update(json: obj, key: key)
             
-            debug("Put secret with ID: \(newEntity.swapID ?? "Unknown")")
+            debug("Put secret with ID: \(key)")
         case .swaps:
             let swap = try Swap.from(json: obj).update(sdk: sdk)
             
