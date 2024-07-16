@@ -5,7 +5,7 @@ final class Blockchains: BaseClass {
     private let sdk: Sdk
     private let ethereum: IBlockchain
     private let lightning: IBlockchain
-    private let portal: IBlockchain
+    let portal: Portal
     
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains) {
         self.sdk = sdk
@@ -17,11 +17,18 @@ final class Blockchains: BaseClass {
         super.init(id: "Blockchains")
         
         subscribe(ethereum.on("log", forwardLog()))
-        subscribe(lightning.on("log", forwardLog()))
-        subscribe(portal.on("log", forwardLog()))
         subscribe(ethereum.on("error", forwardError()))
-        subscribe(lightning.on("error", forwardError()))
+        subscribe(ethereum.on("trader.intent.created", forwardEvent("trader.intent.created")))
+        
+        subscribe(portal.on("log", forwardLog()))
         subscribe(portal.on("error", forwardError()))
+        subscribe(portal.on("notary.validator.match.intent", forwardEvent("notary.validator.match.intent")))
+        
+        subscribe(lightning.on("log", forwardLog()))
+        subscribe(lightning.on("error", forwardError()))
+        subscribe(lightning.on("invoice.paid", forwardEvent("invoice.paid")))
+        subscribe(lightning.on("invoice.settled", forwardEvent("invoice.settled")))
+        subscribe(lightning.on("invoice.canceled", forwardEvent("invoice.canceled")))
     }
     
     func connect() -> Promise<Void> {
