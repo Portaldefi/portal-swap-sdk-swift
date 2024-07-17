@@ -9,7 +9,6 @@ final class Sdk: BaseClass {
     private(set) var dex: Dex!
     private(set) var store: Store!
     private(set) var blockchains: Blockchains!
-    private(set) var swaps: Swaps!
             
     public var isConnected: Bool {
         network.isConnected
@@ -33,9 +32,6 @@ final class Sdk: BaseClass {
         // Interface to the underlying data store
         store = .init(sdk: self)
         
-        // Interface to atomic swaps
-        swaps = .init(sdk: self)
-        
         // Subscribe for order state changes
         subscribe(network.on("order.created", forwardEvent("order.created")))
         subscribe(network.on("order.created", forwardEvent("order.created")))
@@ -48,13 +44,11 @@ final class Sdk: BaseClass {
         // Bubble up the log events
         subscribe(network.on("log", forwardLog()))
         subscribe(store.on("log", forwardLog()))
-        subscribe(blockchains.on("log", forwardLog()))
         subscribe(dex.on("log", forwardLog()))
-        subscribe(swaps.on("log", forwardLog()))
+        subscribe(blockchains.on("log", forwardLog()))
         
         // Handling errors
         subscribe(blockchains.on("error", forwardError()))
-        subscribe(swaps.on("error", forwardError()))
     }
 
     func start() -> Promise<Void> {
