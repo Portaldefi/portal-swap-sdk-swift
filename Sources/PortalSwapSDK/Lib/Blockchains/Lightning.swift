@@ -201,17 +201,4 @@ final class Lightning: BaseClass, IBlockchain {
     func settleInvoice(secret: Data) -> Promise<[String: String]> {
         client.settleHodlInvoice(secret: secret)
     }
-    
-    func bigUIntToInt64(_ value: BigUInt) -> Int64? {
-        // Ensure the BigUInt value fits within the range of Int64
-        let maxInt64 = BigUInt(Int64.max)
-        
-        // If the value exceeds Int64.max, return nil to indicate overflow
-        guard value <= maxInt64 else {
-            return nil
-        }
-        
-        // Perform the conversion
-        return Int64(value.description)  // Convert BigUInt to its string representation and then to Int64
-    }
 }
