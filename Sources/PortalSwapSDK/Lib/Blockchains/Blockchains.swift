@@ -16,14 +16,15 @@ final class Blockchains: BaseClass {
         
         super.init(id: "Blockchains")
         
+        // Subscribe for eth events
         subscribe(ethereum.on("log", forwardLog()))
         subscribe(ethereum.on("error", forwardError()))
         subscribe(ethereum.on("trader.intent.created", forwardEvent("trader.intent.created")))
-        
+        // Subscribe for portal events
         subscribe(portal.on("log", forwardLog()))
         subscribe(portal.on("error", forwardError()))
         subscribe(portal.on("notary.validator.match.intent", forwardEvent("notary.validator.match.intent")))
-        
+        // Subscribe for lightning events
         subscribe(lightning.on("log", forwardLog()))
         subscribe(lightning.on("error", forwardError()))
         subscribe(lightning.on("invoice.paid", forwardEvent("invoice.paid")))
