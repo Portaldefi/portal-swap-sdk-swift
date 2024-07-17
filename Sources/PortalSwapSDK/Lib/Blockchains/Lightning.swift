@@ -1,14 +1,9 @@
 import Foundation
+import BigInt
 import Promises
 import SwiftBTC
 
 final class Lightning: BaseClass, IBlockchain {
-    func register(swapId: Data, intent: SwapIntent) -> Promise<[String : String]> {
-        Promise {
-            [String : String]()
-        }
-    }
-    
     private let sdk: Sdk
     private let client: ILightningClient
     //sdk seems unused
@@ -27,10 +22,6 @@ final class Lightning: BaseClass, IBlockchain {
     func disconnect() -> Promise<Void> {
         emit(event: "disconnect")
         return Promise { () }
-    }
-    
-    func registerSwap(intent: SwapIntent) -> Promise<[String: String]> {
-        Promise { [String: String]() }
     }
     
     func createInvoice(party: Party) -> Promise<[String: String]> {
@@ -120,19 +111,15 @@ final class Lightning: BaseClass, IBlockchain {
             guard let swap = party.swap else {
                 return reject(SwapSDKError.msg("Party has no swap"))
             }
-            
-            guard let secretHash = swap.secretHash else {
-                return reject(SwapSDKError.msg("Swap has no secret hash"))
-            }
-                        
+                                    
             decodePaymentRequest(party: party).then { [weak self] paymentRequest in
                 guard let self = self else {
                     return reject(SwapSDKError.msg("decodePaymentRequest(party: ) self is nil"))
                 }
                 
-                if paymentRequest.id != secretHash {
+                if paymentRequest.id != swap.secretHash {
                     let actual = paymentRequest.id
-                    reject(SwapSDKError.msg("expected swap hash \(secretHash), got \(actual)"))
+                    reject(SwapSDKError.msg("expected swap hash \(swap.secretHash), got \(actual)"))
                 } else if paymentRequest.swap.id != swap.swapId {
                     let actual = paymentRequest.swap.id
                     reject(SwapSDKError.msg("expected swap identifier \(swap.swapId), got \(actual)"))
@@ -203,7 +190,28 @@ final class Lightning: BaseClass, IBlockchain {
         }
     }
     
+    func swapIntent(_ intent: SwapIntent) -> Promise<[String : String]> {
+        Promise { [String: String]() }
+    }
+    
     func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]> {
         client.settleHodlInvoice(secret: secret)
+    }
+    
+    func settleInvoice(secret: Data) -> Promise<[String: String]> {
+        client.settleHodlInvoice(secret: secret)
+    }
+    
+    func bigUIntToInt64(_ value: BigUInt) -> Int64? {
+        // Ensure the BigUInt value fits within the range of Int64
+        let maxInt64 = BigUInt(Int64.max)
+        
+        // If the value exceeds Int64.max, return nil to indicate overflow
+        guard value <= maxInt64 else {
+            return nil
+        }
+        
+        // Perform the conversion
+        return Int64(value.description)  // Convert BigUInt to its string representation and then to Int64
     }
 }
