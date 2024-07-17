@@ -97,7 +97,7 @@ extension BaseClass {
     
     func forwardSwap() -> ([Any]) -> Void {
         { [unowned self] args in
-            if let data = args as? [Swap], let swap = data.first {
+            if let data = args as? [AmmSwap], let swap = data.first {
                 emit(event: "swap.\(swap.status)", args: [swap])
             } else {
                 debug("Unexpected arguments on forwardSwap: \(args) [Sdk]")

@@ -19,7 +19,7 @@ extension DBSwap {
         self.timestamp = Int64(Date().timeIntervalSince1970)
     }
     
-    func update(swap: Swap) throws {
+    func update(swap: AmmSwap) throws {
         guard let context = managedObjectContext else {
             throw SwapSDKError.msg("Cannot obtain manage object context")
         }
@@ -29,50 +29,29 @@ extension DBSwap {
             self.secretHash = swap.secretHash
             self.status = swap.status
             self.timestamp = Int64(Date().timeIntervalSince1970)
-            self.partyType = swap.partyType.rawValue
-            
-            guard let secretSeeker = secretSeeker else {
-                throw SwapSDKError.msg("Swap db entity has no seeker")
-            }
-            
-            secretSeeker.partyID = swap.secretSeeker.id
-            secretSeeker.oid = swap.secretSeeker.oid
-            secretSeeker.blockchain = swap.secretSeeker.blockchain
-            secretSeeker.asset = swap.secretSeeker.asset
-            secretSeeker.quantity = swap.secretSeeker.quantity
-            
-            guard let secretHolder = secretHolder else {
-                throw SwapSDKError.msg("Swap db entity has no holder")
-            }
-            
-            secretHolder.partyID = swap.secretHolder.id
-            secretHolder.oid = swap.secretHolder.oid
-            secretHolder.blockchain = swap.secretHolder.blockchain
-            secretHolder.asset = swap.secretHolder.asset
-            secretHolder.quantity = swap.secretHolder.quantity
             
             var jsonInvoices = [[String: String]]()
             var dbInvoices = [DBInvoice]()
             
-            if let seekerInvoice = swap.secretSeeker.invoice {
-                jsonInvoices.append(seekerInvoice)
-                
-                guard let invoice = secretSeeker.invoice else {
-                    throw SwapSDKError.msg("SecretSeeker has no db invocie")
-                }
-                
-                dbInvoices.append(invoice)
-            }
-            
-            if let holderInvoice = swap.secretHolder.invoice {
-                jsonInvoices.append(holderInvoice)
-                
-                guard let invoice = secretHolder.invoice else {
-                    throw SwapSDKError.msg("SecretHolder has no db invocie")
-                }
-                
-                dbInvoices.append(invoice)
-            }
+//            if let seekerInvoice = swap.secretSeeker.invoice {
+//                jsonInvoices.append(seekerInvoice)
+//                
+//                guard let invoice = secretSeeker.invoice else {
+//                    throw SwapSDKError.msg("SecretSeeker has no db invocie")
+//                }
+//                
+//                dbInvoices.append(invoice)
+//            }
+//            
+//            if let holderInvoice = swap.secretHolder.invoice {
+//                jsonInvoices.append(holderInvoice)
+//                
+//                guard let invoice = secretHolder.invoice else {
+//                    throw SwapSDKError.msg("SecretHolder has no db invocie")
+//                }
+//                
+//                dbInvoices.append(invoice)
+//            }
             
             guard !jsonInvoices.isEmpty && !dbInvoices.isEmpty && jsonInvoices.count == dbInvoices.count else { return }
             
