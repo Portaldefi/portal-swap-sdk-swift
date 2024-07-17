@@ -99,6 +99,10 @@ final class Ethereum: BaseClass, IBlockchain {
                     }
                 }
                 
+                for method in dexContract.methods {
+                    print(method)
+                }
+                
                 self.info("connect")
                 self.emit(event: "connect", args: [self])
                 resolve(())
@@ -127,24 +131,10 @@ final class Ethereum: BaseClass, IBlockchain {
             }
         }
     }
-    
-    func register(swapId: Data, intent: SwapIntent) -> Promise<[String : String]> {
-        Promise {
-            [String : String]()
-        }
-    }
-    
-    func registerSwap(intent: SwapIntent) -> Promise<[String: String]> {
+        
+    func swapIntent(_ intent: SwapIntent) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
-            let secret = Utils.createSecret()
-            let secretHash = Utils.sha256(data: secret)
-            let secretHashString = secretHash.toHexString()
-            
-            debug("Swap Secret Hash: \(secretHashString)")
-            
-            let secretDictionary = ["secret" : secret.toHexString(), "swap": UUID().uuidString]
-            
-            try sdk.store.put(.secrets, secretHashString, secretDictionary)
+            debug("Swap Secret Hash: \(intent.secretHash.toHexString())")
             
             guard let sellAsset = EthereumAddress(hexString: intent.sellAddress) else {
                 return reject(SwapSDKError.msg("Cannot unwrap sell asset address"))
@@ -153,12 +143,19 @@ final class Ethereum: BaseClass, IBlockchain {
             guard let buyAsset = EthereumAddress(hexString: intent.buyAddress) else {
                 return reject(SwapSDKError.msg("Cannot unwrap buy asset address"))
             }
-            
+                        
+            let secretHash = intent.secretHash
             let traderBuyId = BigUInt(intent.traderBuyId.makeBytes())
             let sellAmount = BigUInt(intent.sellAmount.makeBytes())
             let buyAmount = BigUInt(intent.buyAmount.makeBytes())
             let buyAmountSlippage = BigUInt(intent.buyAmountSlippage.makeBytes())
             
+            let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
+            
+            guard let swapOwner = EthereumAddress(hexString: privKey.address.hex(eip55: false)) else {
+                return reject(SwapSDKError.msg("Cannot unwrap buy asset address"))
+            }
+                        
             let params = SolidityTuple([
                 SolidityWrappedValue(value: secretHash, type: .bytes(length: 32)),
                 SolidityWrappedValue(value: traderBuyId, type: .uint256),
@@ -166,11 +163,10 @@ final class Ethereum: BaseClass, IBlockchain {
                 SolidityWrappedValue(value: sellAmount, type: .uint256),
                 SolidityWrappedValue(value: buyAsset, type: .address),
                 SolidityWrappedValue(value: buyAmount, type: .uint256),
-                SolidityWrappedValue(value: buyAmountSlippage, type: .uint256)
+                SolidityWrappedValue(value: buyAmountSlippage, type: .uint256),
+                SolidityWrappedValue(value: swapOwner, type: .address)
             ])
-            
-            let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
-            
+                                    
             web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { [weak self] response in
                 guard let self = self else {
                     return reject(SwapSDKError.msg("web3.eth.getTransactionCount self is nil"))
@@ -257,13 +253,13 @@ final class Ethereum: BaseClass, IBlockchain {
     
     func createInvoice(party: Party) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
-            guard let swap = party.swap, let secretHash = swap.secretHash else {
+            guard let swap = party.swap else {
                 return reject(SwapSDKError.msg("There is no swap or secret hash"))
             }
             
-            debug("Creating invoice for \(party.partyType) with id: \(party.id)")
-            
-            guard let id = Utils.hexToData(secretHash) else {
+            debug("Creating invoice for party with id: \(party.id)")
+                        
+            guard let id = Utils.hexToData(swap.secretHash) else {
                 return reject(SwapSDKError.msg("Cannot unwrap secret hash"))
             }
             
@@ -347,9 +343,11 @@ final class Ethereum: BaseClass, IBlockchain {
     
     func payInvoice(party: Party) -> Promise<[String: Any]> {
         Promise { [unowned self] resolve, reject in
-            guard let swap = party.swap, let secretHash = swap.secretHash else {
+            guard let swap = party.swap else {
                 return reject(SwapSDKError.msg("There is no swap or secret hash"))
             }
+            
+            let secretHash = swap.secretHash
             
             guard let id = Utils.hexToData(secretHash) else {
                 return reject(SwapSDKError.msg("Cannot unwrap secret hash"))
