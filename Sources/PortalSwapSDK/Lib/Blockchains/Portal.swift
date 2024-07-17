@@ -83,40 +83,34 @@ final class Portal: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                debug("\(sdk.userId) SwapIntended subscription failed with error: \(error)")
+                                debug("\(sdk.userId) SwapMatched subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
-                        } onEvent: { (response: Web3Response<SwapMatchedEvent>) in
-                            print("SwapMatchedEvent: \(response)")
-                            
-                            let status = "notary.validator.match.intent"
-                            self.info(status, [response])
-                            self.emit(event: status, args: [response])
-                        }
-                    case "InvoiceRegistered":
-                        websocketProvider.subscribe(request: request) { [weak self] response in
+                        } onEvent: { [weak self] (response: Web3Response<SwapMatchedEvent>) in
                             guard let self = self else {
-                                return reject(SwapSDKError.msg("SwapIntended self is nil"))
+                                return reject(SwapSDKError.msg("SwapMatchedEvent self is nil"))
                             }
                             
                             switch response.status {
-                            case .success(let subscriptionID):
-                                self.subscriptionAccessQueue.async {
-                                    self.subscriptionsIDS.append(subscriptionID)
-                                }
+                            case .success(let event):
+                                print("SwapMatchedEvent: \(event)")
+
+                                let status = "notary.validator.match.intent"
+                                
+                                self.info(status, [event])
+                                self.emit(event: status, args: [event])
                             case .failure(let error):
-                                debug("\(sdk.userId) SwapIntended subscription failed with error: \(error)")
+                                debug("\(sdk.userId) SwapMatched subscription event fail error: \(error)")
                                 self.error("error", [error, self])
                             }
-                        } onEvent: { (response: Web3Response<InvoiceRegisteredEvent>) in
-                            print("InvoiceRegisteredEvent: \(response)")
-                            let status = "invoice.registered"
-                            self.info(status, [response])
-                            self.emit(event: status, args: [response])
                         }
                     default:
                         continue
                     }
+                }
+                
+                for method in portalADMMContract.methods {
+                    print(method)
                 }
                             
                 self.info("connect")
@@ -148,10 +142,14 @@ final class Portal: BaseClass, IBlockchain {
         }
     }
     
-    func registerInvoice(swapId: Data, invoice: String) -> Promise<[String: String]> {
+    func registerInvoice(swapId: String, invoice: String) -> Promise<[String: String]> {
         Promise { [unowned self] resolve, reject in
+            guard let id = Utils.hexToData(swapId) else {
+                return reject(SwapSDKError.msg("Cannot convert id"))
+            }
+            
             let params = SolidityTuple([
-                SolidityWrappedValue(value: swapId, type: .bytes(length: 32)),
+                SolidityWrappedValue(value: id, type: .bytes(length: 32)),
                 SolidityWrappedValue(value: invoice, type: .string)
             ])
             
@@ -165,7 +163,7 @@ final class Portal: BaseClass, IBlockchain {
                 switch response.status {
                 case .success(let nonce):
                     debug("PRTL create invoice nonce: \(nonce.quantity)")
-                                        
+                    
                     guard let tx = self.portalADMMContract["registerInvoice"]?(params).createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
@@ -213,7 +211,7 @@ final class Portal: BaseClass, IBlockchain {
                                                 "transactionHash": txReceipt.transactionHash.hex()
                                             ]
                                             
-                                            self.info("registerLpInvoice", receipt, self as Any)
+                                            self.info("registerLpInvoice", receipt, txReceipt)
                                             resolve(receipt)
                                         }
                                     case .failure(let error):
@@ -239,7 +237,7 @@ final class Portal: BaseClass, IBlockchain {
         }
     }
     
-    func registerSwap(intent: SwapIntent) -> Promise<[String: String]> {
+    func swapIntent(_ intent: SwapIntent) -> Promise<[String : String]> {
         Promise { resolve, reject in }
     }
     
