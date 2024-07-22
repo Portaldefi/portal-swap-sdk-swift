@@ -3,7 +3,7 @@ import Promises
 
 final class Dex: BaseClass {
     private var sdk: Sdk
-    private var ammSwap: AmmSwap?
+//    private var ammSwap: AmmSwap?
     
     init(sdk: Sdk) {
         self.sdk = sdk
@@ -30,16 +30,29 @@ final class Dex: BaseClass {
             switch event {
             case "trader.intent.created":
                 debug("trader.intent.created", args)
-                guard let swapIntendedEvent = args.first as? SwapIntendedEvent else { return }
+                
+                guard let swapIntendedEvent = args.first as? SwapIntendedEvent else {
+                    return
+                }
+                
                 let ammSwap = AmmSwap.from(swapIntendedEvent: swapIntendedEvent)
-                self.ammSwap = ammSwap
+                
+                try? sdk.store.put(.swaps, ammSwap.swapId, ammSwap.toJSON())
+                
                 emit(event: "dex.\(ammSwap.status)", args: [ammSwap])
             case "notary.validator.match.intent":
                 debug("notary.validator.match.intent", args)
+                                
+                guard let swapmatchedEvent = args.first as? SwapMatchedEvent else { return }
+                guard let swap = try? sdk.store.getAmmSwap(key: swapmatchedEvent.swapId) else { return }
+                                
+                swap.status = "notary.validator.match.intent"
                 
-                guard let swap = ammSwap, let swapmatchedEvent = args.first as? SwapMatchedEvent else { return }
-                let party = createParty(swap: swap, swapMatchedEvent: swapmatchedEvent)
+                try? sdk.store.update(.swaps, swapmatchedEvent.swapId, swap.toJSON())
+                
                 guard let traderBlockchain = sdk.blockchains.blockchain(id: swap.buyNetwork) else { return }
+                
+                let party = createParty(swap: swap, swapMatchedEvent: swapmatchedEvent)
                                 
                 traderBlockchain.createInvoice(party: party).then { invoice in
                     self.info("trader.invoice.created", invoice)
@@ -59,9 +72,16 @@ final class Dex: BaseClass {
                     self.error("error", error)
                 }
             case "invoice.paid":
-                guard let swap = ammSwap, let secret = try? sdk.store.get(.secrets, ammSwap!.secretHash)["secret"] as? Data else { return }
+                guard let swapId = args.first as? String else { return }
+                guard let swap = try? sdk.store.getAmmSwap(key: swapId) else { return }
                 
+                swap.status = "invoice.paid"
+                
+                try? sdk.store.update(.swaps, swapId, swap.toJSON())
+                
+                guard let secret = try? sdk.store.get(.secrets, swap.secretHash)["secret"] as? Data else { return }
                 guard let traderBlockchain = sdk.blockchains.blockchain(id: swap.buyNetwork) else { return }
+                
                 let party = Party(id: "trader", quantity: Int64(1), swap: swap)
                 
                 traderBlockchain.settleInvoice(party: party, secret: secret)
@@ -72,6 +92,13 @@ final class Dex: BaseClass {
                         self.error("error", error)
                     }
             case "invoice.settled":
+                guard let swapId = args.first as? String else { return }
+                guard let swap = try? sdk.store.getAmmSwap(key: swapId) else { return }
+                
+                swap.status = "swap.completed"
+                
+                try? sdk.store.update(.swaps, swapId, swap.toJSON())
+                
                 self.emit(event: "swap.completed")
             default:
                 print("Unsupported event")
