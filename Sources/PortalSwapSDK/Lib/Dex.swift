@@ -45,14 +45,14 @@ final class Dex: BaseClass {
                                 
                 guard let swapmatchedEvent = args.first as? SwapMatchedEvent else { return }
                 guard let swap = try? sdk.store.getAmmSwap(key: swapmatchedEvent.swapId) else { return }
+                guard let traderBlockchain = sdk.blockchains.blockchain(id: swap.buyNetwork) else { return }
                                 
-                swap.status = "notary.validator.match.intent"
+                let party = createParty(swap: swap, swapMatchedEvent: swapmatchedEvent)
+                
+                swap.status = event
+                swap.buyQuantity = party.quantity
                 
                 try? sdk.store.update(.swaps, swapmatchedEvent.swapId, swap.toJSON())
-                
-                guard let traderBlockchain = sdk.blockchains.blockchain(id: swap.buyNetwork) else { return }
-                
-                let party = createParty(swap: swap, swapMatchedEvent: swapmatchedEvent)
                                 
                 traderBlockchain.createInvoice(party: party).then { invoice in
                     self.info("trader.invoice.created", invoice)
@@ -75,8 +75,7 @@ final class Dex: BaseClass {
                 guard let swapId = args.first as? String else { return }
                 guard let swap = try? sdk.store.getAmmSwap(key: swapId) else { return }
                 
-                swap.status = "invoice.paid"
-                
+                swap.status = event
                 try? sdk.store.update(.swaps, swapId, swap.toJSON())
                 
                 guard let secret = try? sdk.store.get(.secrets, swap.secretHash)["secret"] as? Data else { return }
@@ -95,8 +94,7 @@ final class Dex: BaseClass {
                 guard let swapId = args.first as? String else { return }
                 guard let swap = try? sdk.store.getAmmSwap(key: swapId) else { return }
                 
-                swap.status = "swap.completed"
-                
+                swap.status = "completed"
                 try? sdk.store.update(.swaps, swapId, swap.toJSON())
                 
                 self.emit(event: "swap.completed")
@@ -120,43 +118,76 @@ final class Dex: BaseClass {
     
     func submitOrder(_ request: OrderRequest) -> Promise<[String : String]> {
         Promise { [unowned self] resolve, reject in
-            guard let traderBlockchain = sdk.blockchains.blockchain(id: request.sellNetwork) else {
-                return reject(SwapSDKError.msg("sdk.blockchains.blockchain(id: \(request.sellNetwork)) is failed"))
-            }
-            
             let secretHash = Utils.sha256(data: request.secret)
-            
             let secretDictionary = ["secret" : request.secret.toHexString()]
             try sdk.store.put(.secrets, secretHash.toHexString(), secretDictionary)
-
+            
             let traderBuyId = UInt64.random(in: 1000...100_000_000)
             let buyAmount = UInt64(request.buyQuantity)
-            let buyAddress = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
             let sellAmount = UInt64(request.sellQuantity)
-            let sellAddress = "0x0000000000000000000000000000000000000000"
             let buyAmountSlippage = UInt64(1)
             
-            let intent = SwapIntent(
-                secretHash: secretHash,
-                traderBuyId: traderBuyId,
-                buyAmount: buyAmount,
-                buyAddress: buyAddress,
-                sellAmount: sellAmount,
-                sellAddress: sellAddress,
-                buyAmountSlippage: buyAmountSlippage
-            )
+            let buyAddress: String
+            let sellAddress: String
             
-            traderBlockchain.swapIntent(intent)
-                .then { [weak self] response in
-                    self?.info("processSwap", response)
-
-                    resolve(response)
-                }.catch { [weak self] error in
-                    self?.debug("traderBlockchain.swapIntent(\(intent))\n error: \(error)")
-                    self?.error("error", [error])
-                    
-                    reject(error)
+            switch request.sellNetwork {
+            case "ethereum":
+                buyAddress = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+                sellAddress = "0x0000000000000000000000000000000000000000"
+                
+                guard let traderBlockchain = sdk.blockchains.blockchain(id: request.sellNetwork) else {
+                    return reject(SwapSDKError.msg("sdk.blockchains.blockchain(id: \(request.sellNetwork)) is failed"))
                 }
+                
+                let intent = SwapIntent(
+                    secretHash: secretHash,
+                    traderBuyId: traderBuyId,
+                    buyAmount: buyAmount,
+                    buyAddress: buyAddress,
+                    sellAmount: sellAmount,
+                    sellAddress: sellAddress,
+                    buyAmountSlippage: buyAmountSlippage
+                )
+                
+                traderBlockchain.swapIntent(intent)
+                    .then { [weak self] response in
+                        self?.info("processSwap", response)
+
+                        resolve(response)
+                    }.catch { [weak self] error in
+                        self?.debug("traderBlockchain.swapIntent(\(intent))\n error: \(error)")
+                        self?.error("error", [error])
+                        
+                        reject(error)
+                    }
+            case "lightning":
+                buyAddress = "0x0000000000000000000000000000000000000000"
+                sellAddress = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+                                
+                let intent = SwapIntent(
+                    secretHash: secretHash,
+                    traderBuyId: traderBuyId,
+                    buyAmount: buyAmount,
+                    buyAddress: buyAddress,
+                    sellAmount: sellAmount,
+                    sellAddress: sellAddress,
+                    buyAmountSlippage: buyAmountSlippage
+                )
+                
+                sdk.blockchains.portal.swapIntent(intent)
+                    .then { [weak self] response in
+                        self?.info("processSwap", response)
+
+                        resolve(response)
+                    }.catch { [weak self] error in
+                        self?.debug("notary blockchain.swapIntent(\(intent))\n error: \(error)")
+                        self?.error("error", [error])
+                        
+                        reject(error)
+                    }
+            default:
+                return reject(SwapSDKError.msg("unsupported sell network: \(request.sellNetwork)"))
+            }
         }
     }
 }
