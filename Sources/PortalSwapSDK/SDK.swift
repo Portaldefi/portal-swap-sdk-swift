@@ -4,10 +4,6 @@ import Promises
 
 public final class SDK: BaseClass {
     private let sdk: Sdk
-
-    public var isConnected: Bool {
-        sdk.network.isConnected
-    }
     
     public init(config: SwapSdkConfig) {
         sdk = .init(config: config)
@@ -33,6 +29,10 @@ public final class SDK: BaseClass {
     
     public func stop() -> Promise<Void> {
         sdk.stop()
+    }
+    
+    public func assetPairs() -> Promise<[AssetPair]> {
+        sdk.assetPairs()
     }
     
     public func submitOrder(_ request: OrderRequest) -> Promise<[String: String]> {
