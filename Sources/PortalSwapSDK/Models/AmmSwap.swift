@@ -11,7 +11,7 @@ import Promises
 
 final class AmmSwap: BaseClass, Codable {
     private enum CodingKeys: String, CodingKey {
-        case swapId, status, secretHash, sellerAddress, sellNetwork, sellAsset, sellAmount, buyNetwork, buyAddress, buyAsset, buyAmount, buyAmountSlippage, tsCreation
+        case swapId, status, secretHash, sellerAddress, sellNetwork, sellAsset, sellAmount, buyNetwork, buyAddress, buyAsset, buyAmount, buyQuantity, buyAmountSlippage, tsCreation
     }
     
     let AMM_SWAP_STATUS = [
@@ -34,7 +34,6 @@ final class AmmSwap: BaseClass, Codable {
     ]
     
     let swapId: String
-    let status: String
     let secretHash: String
     let sellerAddress: String
     let sellNetwork: String
@@ -46,6 +45,9 @@ final class AmmSwap: BaseClass, Codable {
     let buyAmount: BigUInt
     let buyAmountSlippage: BigUInt
     let tsCreation: String
+    
+    var status: String
+    var buyQuantity: Int64?
 
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -63,7 +65,11 @@ final class AmmSwap: BaseClass, Codable {
         buyAmountSlippage = try container.decode(BigUInt.self, forKey: .buyAmountSlippage)
         tsCreation = try container.decode(String.self, forKey: .tsCreation)
 
-        super.init(id: "AmmSwap")
+        if let buyQuantity = try? container.decode(Int64.self, forKey: .buyQuantity) {
+            self.buyQuantity = buyQuantity
+        }
+        
+        super.init(id: "AmmSwap: \(swapId)")
     }
     
     init(event: SwapIntendedEvent) {
@@ -83,8 +89,49 @@ final class AmmSwap: BaseClass, Codable {
         
         super.init(id: "amm.swap")
     }
+    
+    init(record: DBAmmSwap) {
+        swapId = record.swapId!
+        status = record.status!
+        secretHash = record.secretHash!
+        sellerAddress = record.sellerAddress!
+        sellNetwork = record.sellNetwork!
+        sellAsset = record.sellAsset!
+        sellAmount = BigUInt(stringLiteral: record.sellAmount!)
+        buyAddress = record.buyAddress!
+        buyNetwork = record.buyNetwork!
+        buyAsset = record.buyAsset!
+        buyAmount = BigUInt(stringLiteral: record.buyAmount!)
+        buyAmountSlippage = BigUInt(stringLiteral: record.buyAmountSlippage!)
+        tsCreation = record.tsCreation!
         
-    func encode(to encoder: Encoder) throws {}
+        if let quantity = record.buyQuantity, let buyQuantity = Int64(quantity) {
+            self.buyQuantity = buyQuantity
+        }
+        
+        super.init(id: "amm.swap.\(swapId)")
+    }
+        
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(swapId, forKey: .swapId)
+        try container.encode(status, forKey: .status)
+        try container.encode(secretHash, forKey: .secretHash)
+        
+        try container.encode(sellNetwork, forKey: .sellNetwork)
+        try container.encode(sellAsset, forKey: .sellAsset)
+        try container.encode(sellerAddress, forKey: .sellerAddress)
+        try container.encode(sellAmount, forKey: .sellAmount)
+        
+        try container.encode(buyNetwork, forKey: .buyNetwork)
+        try container.encode(buyAddress, forKey: .buyAddress)
+        try container.encode(buyAsset, forKey: .buyAsset)
+        try container.encode(buyAmount, forKey: .buyAmount)
+        try container.encode(buyQuantity, forKey: .buyQuantity)
+        
+        try container.encode(buyAmountSlippage, forKey: .buyAmountSlippage)
+        try container.encode(tsCreation, forKey: .tsCreation)
+    }
     
     func update(swap: AmmSwap) throws {
         guard swapId == swap.swapId else {
