@@ -30,16 +30,16 @@ public final class LocalPersistenceManager {
         try DBSecret.entity(key: key, context: viewContext)
     }
     
-    internal func swapEntity() -> DBSwap {
-        DBSwap(context: viewContext)
+    internal func swapEntity() -> DBAmmSwap {
+        DBAmmSwap(context: viewContext)
     }
     
-    internal func swap(key: String) throws -> DBSwap {
-        try DBSwap.entity(key: key, context: viewContext)
+    internal func swap(key: String) throws -> DBAmmSwap {
+        try DBAmmSwap.entity(key: key, context: viewContext)
     }
     
-    public func fetchSwaps() throws -> [SwapModel] {
-        try DBSwap.entities(context: viewContext).compactMap{ try? SwapModel(record: $0) }
+    public func fetchSwaps(accountId: String) throws -> [AmmSwapModel] {
+        try DBAmmSwap.entities(context: viewContext).filter{ $0.accountId == accountId }.compactMap{ try? AmmSwapModel(record: $0) }
     }
 }
 
