@@ -8,6 +8,7 @@ final class Sdk: BaseClass {
     private(set) var dex: Dex!
     private(set) var store: Store!
     private(set) var blockchains: Blockchains!
+    private(set) var assetManagement: AssetManagement!
     
     // Creates a new instance of Portal SDK
     init(config: SwapSdkConfig) {
@@ -16,6 +17,7 @@ final class Sdk: BaseClass {
         super.init(id: "sdk")
         
         // Interface to the underlying network
+        assetManagement = .init(props: config.blockchains.portal)
         
         // Interface to all the blockchain networks
         blockchains = .init(sdk: self, props: config.blockchains)
@@ -71,5 +73,9 @@ final class Sdk: BaseClass {
                 reject(error)
             }
         }
+    }
+    
+    func assetPairs() -> Promise<[AssetPair]> {
+        assetManagement.assetPairs()
     }
 }
