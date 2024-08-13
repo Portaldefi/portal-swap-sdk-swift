@@ -17,8 +17,8 @@ final class Portal: BaseClass, IBlockchain {
     
     private var web3: Web3!
     private var websocketProvider: Web3WebSocketProvider!
-    private var portalADMMContract: DynamicContract!
-    
+    private var admmContract: DynamicContract!
+
     private var subscriptionsIDS = [String]()
     private let subscriptionAccessQueue = DispatchQueue(label: "swap.sdk.subscriptionAccessQueue")
     
@@ -26,7 +26,7 @@ final class Portal: BaseClass, IBlockchain {
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Portal) {
         self.sdk = sdk
         self.props = props
-        super.init(id: "Portal")
+        super.init(id: "portal")
     }
         
     func connect() -> Promise<Void> {
@@ -41,22 +41,22 @@ final class Portal: BaseClass, IBlockchain {
                     let abiArray = contract["abi"] as? [[String: Any]],
                     let contractAddressHex = contract["address"] as? String
                 else {
-                    return reject(SwapSDKError.msg("Portal cannot prepare contract"))
+                    return reject(SwapSDKError.msg("Portal cannot prepare NotaryADMM contract"))
                 }
                 
-                let portalADMMContractAddresisEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)
+                let admmContractAddresIsEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)
                 
-                let portalADMMContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: portalADMMContractAddresisEipp55)
-                let portalADMMContractData = try JSONSerialization.data(withJSONObject: abiArray, options: [])
+                let admmContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: admmContractAddresIsEipp55)
+                let admmContractData = try JSONSerialization.data(withJSONObject: abiArray, options: [])
                 
-                portalADMMContract = try web3.eth.Contract(json: portalADMMContractData, abiKey: nil, address: portalADMMContractAddress)
+                admmContract = try web3.eth.Contract(json: admmContractData, abiKey: nil, address: admmContractAddress)
                                 
                 //notaryADMM contract subscriptions
-                for (index, event) in portalADMMContract.events.enumerated() {
+                for (index, event) in admmContract.events.enumerated() {
                     print(event.name)
                     
                     let signatureHex = "0x\(Utils.keccak256Hash(of: event.signature))"
-                    let addresses = [portalADMMContractAddress]
+                    let addresses = [admmContractAddress]
                     let data = try EthereumData(ethereumValue: signatureHex)
                     let topics = [[data]]
                     
@@ -104,12 +104,45 @@ final class Portal: BaseClass, IBlockchain {
                                 self.error("error", [error, self])
                             }
                         }
+//                    case "SwapRegistered":
+//                        websocketProvider.subscribe(request: request) { [weak self] response in
+//                            guard let self = self else {
+//                                return reject(SwapSDKError.msg("SwapRegistered self is nil"))
+//                            }
+//                            
+//                            switch response.status {
+//                            case .success(let subscriptionID):
+//                                self.subscriptionAccessQueue.async {
+//                                    self.subscriptionsIDS.append(subscriptionID)
+//                                }
+//                            case .failure(let error):
+//                                debug("\(sdk.userId) SwapRegistered subscription failed with error: \(error)")
+//                                self.error("error", [error, self])
+//                            }
+//                        } onEvent: { [weak self] (response: Web3Response<SwapRegisteredEvent>) in
+//                            guard let self = self else {
+//                                return reject(SwapSDKError.msg("SwapRegistered self is nil"))
+//                            }
+//                            
+//                            switch response.status {
+//                            case .success(let event):
+//                                print("SwapRegistered: \(event)")
+//
+//                                let status = "notary.validator.match.intent"
+//                                
+//                                self.info(status, [event])
+//                                self.emit(event: status, args: [event])
+//                            case .failure(let error):
+//                                debug("\(sdk.userId) SwapMatched subscription event fail error: \(error)")
+//                                self.error("error", [error, self])
+//                            }
+//                        }
                     default:
                         continue
                     }
                 }
                 
-                for method in portalADMMContract.methods {
+                for method in admmContract.methods {
                     print(method)
                 }
                             
@@ -164,7 +197,7 @@ final class Portal: BaseClass, IBlockchain {
                 case .success(let nonce):
                     debug("PRTL create invoice nonce: \(nonce.quantity)")
                     
-                    guard let tx = self.portalADMMContract["registerInvoice"]?(params).createTransaction(
+                    guard let tx = self.admmContract["registerInvoice"]?(params).createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
                         maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
@@ -207,7 +240,7 @@ final class Portal: BaseClass, IBlockchain {
                                             let receipt = [
                                                 "blockHash": txReceipt.blockHash.hex(),
                                                 "from": privKey.address.hex(eip55: false),
-                                                "to": self.portalADMMContract.address!.hex(eip55: false),
+                                                "to": self.admmContract.address!.hex(eip55: false),
                                                 "transactionHash": txReceipt.transactionHash.hex()
                                             ]
                                             
@@ -233,12 +266,127 @@ final class Portal: BaseClass, IBlockchain {
                     break
                 }
             })
-            
         }
     }
     
     func swapIntent(_ intent: SwapIntent) -> Promise<[String : String]> {
-        Promise { resolve, reject in }
+        Promise { [unowned self] resolve, reject in
+            guard let sellAsset = EthereumAddress(hexString: intent.sellAddress) else {
+                return reject(SwapSDKError.msg("Cannot unwrap sell asset address"))
+            }
+            
+            guard let buyAsset = EthereumAddress(hexString: intent.buyAddress) else {
+                return reject(SwapSDKError.msg("Cannot unwrap buy asset address"))
+            }
+                        
+            let swapId = intent.secretHash
+            let traderBuyId = BigUInt(intent.traderBuyId.makeBytes())
+            let sellAmount = BigUInt(intent.sellAmount.makeBytes())
+            let buyAmount = BigUInt(intent.buyAmount.makeBytes())
+            let buyAmountSlippage = BigUInt(intent.buyAmountSlippage.makeBytes())
+            let sellAssetChainId = BigUInt(UInt64(0).makeBytes())
+            let buyAssetChainId = BigUInt(UInt64(1).makeBytes())
+            let poolFee = BigUInt(UInt64(0).makeBytes())
+            
+            let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
+            
+            guard let swapOwner = EthereumAddress(hexString: privKey.address.hex(eip55: false)) else {
+                return reject(SwapSDKError.msg("Cannot unwrap buy asset address"))
+            }
+                        
+            let params = SolidityTuple([
+                SolidityWrappedValue(value: traderBuyId, type: .uint256),
+                SolidityWrappedValue(value: sellAsset, type: .address),
+                SolidityWrappedValue(value: sellAssetChainId, type: .uint256),
+                SolidityWrappedValue(value: sellAmount, type: .uint256),
+                SolidityWrappedValue(value: buyAsset, type: .address),
+                SolidityWrappedValue(value: buyAssetChainId, type: .uint256),
+                SolidityWrappedValue(value: poolFee, type: .uint256),
+                SolidityWrappedValue(value: buyAmount, type: .uint256),
+                SolidityWrappedValue(value: buyAmountSlippage, type: .uint256),
+                SolidityWrappedValue(value: swapId, type: .bytes(length: 32)),
+                SolidityWrappedValue(value: swapOwner, type: .address)
+            ])
+                        
+            web3.eth.getTransactionCount(address: privKey.address, block: .latest, response: { [weak self] response in
+                guard let self = self else {
+                    return reject(SwapSDKError.msg("web3.eth.getTransactionCount self is nil"))
+                }
+                
+                switch response.status {
+                case .success(let nonce):
+                    debug("PRTL create invoice nonce: \(nonce.quantity)")
+                    
+                    guard let tx = self.admmContract["registerSwapIntent"]?(params).createTransaction(
+                        nonce: nonce,
+                        gasPrice: nil,
+                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
+                        gasLimit: EthereumQuantity(quantity: 300_000),
+                        from: privKey.address,
+                        value: EthereumQuantity(quantity: 0),
+                        accessList: [:],
+                        transactionType: .eip1559
+                    ) else {
+                        self.debug("SWAP INTENT TX ERROR")
+                        return reject(SwapSDKError.msg("Ethereum failed to create swap intent transaction"))
+                    }
+                    
+                    do {
+                        let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
+                        
+                        try self.web3.eth.sendRawTransaction(transaction: signedTx) { [weak self] response in
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("web3.eth.sendRawTransaction self is nil"))
+                            }
+                            
+                            switch response.status {
+                            case .success(let data):
+                                self.debug("register invoice TH HASH: \(data.hex())")
+                                
+                                Thread.sleep(forTimeInterval: 1)
+                                
+                                self.web3.eth.getTransactionReceipt(transactionHash: data) { [weak self] response in
+                                    guard let self = self else {
+                                        return reject(SwapSDKError.msg("getTransactionReceipt self is nil"))
+                                    }
+                                    
+                                    switch response.status {
+                                    case .success(let txReceipt):
+                                        if let txReceipt {
+                                            print("logs: \(txReceipt.logs)")
+                                            print("status: \(txReceipt.status)")
+                                            
+                                            let receipt = [
+                                                "blockHash": txReceipt.blockHash.hex(),
+                                                "from": privKey.address.hex(eip55: false),
+                                                "to": self.admmContract.address!.hex(eip55: false),
+                                                "transactionHash": txReceipt.transactionHash.hex()
+                                            ]
+                                            
+                                            self.info("registerLpInvoice", receipt, txReceipt)
+                                            resolve(receipt)
+                                        }
+                                    case .failure(let error):
+                                        print("Register invoice receip error: \(error)")
+                                        return reject(error)
+                                    }
+                                }
+                            case .failure(let error):
+                                self.debug("SENDING TX ERROR: \(error)")
+                                reject(error)
+                            }
+                        }
+                    } catch {
+                        self.debug("SENDING TX ERROR: \(error)")
+                        reject(error)
+                    }
+                case .failure(let error):
+                    self.debug("Getting nonce ERROR: \(error)")
+                    break
+                }
+            })
+        }
     }
     
     func createInvoice(party: Party) -> Promise<[String: String]> {
