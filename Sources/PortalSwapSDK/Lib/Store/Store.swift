@@ -55,6 +55,14 @@ final class Store: BaseClass {
         }
     }
     
+    func getAmmSwap(key: String) throws -> AmmSwap {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        
+        return AmmSwap(record: try manager.swap(key: key))
+    }
+    
     func put(_ namespace: StoreNamespace, _ key: String, _ obj: [String: Any]) throws {
         guard let manager = persistenceManager else {
             throw SwapSDKError.msg("Cannot obtain persistenceManager")
@@ -72,7 +80,7 @@ final class Store: BaseClass {
             let newEntity = manager.swapEntity()
             try newEntity.update(swap: swap)
             
-            debug("Put swap with ID: \(newEntity.swapID ?? "Unknown")")
+            debug("Put swap with ID: \(newEntity.swapId ?? "Unknown")")
         }
         
         try manager.saveContext()
