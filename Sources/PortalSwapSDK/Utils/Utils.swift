@@ -7,11 +7,7 @@ class Utils {
         return hash.toHexString()
     }
     
-    static func toHex(_ value: Int64) -> String {
-        "0x" + String(value, radix: 16)
-    }
-    
-    static func createSecret() -> Data {
+    static func secret() -> Data {
         var randomBytes = [UInt8](repeating: 0, count: 32)
         _ = randomBytes.withUnsafeMutableBufferPointer { bufferPointer in
             SecRandomCopyBytes(kSecRandomDefault, 32, bufferPointer.baseAddress!)
@@ -50,22 +46,5 @@ class Utils {
             print("Error converting object to JSON dictionary: \(error)")
         }
         return nil
-    }
-    
-    static func hexToData(_ string: String) -> Data? {
-        var hex = string
-        if hex.hasPrefix("0x") {
-            hex = String(hex.dropFirst(2))
-        }
-        var data = Data()
-        while(hex.count > 0) {
-            let subIndex = hex.index(hex.startIndex, offsetBy: 2)
-            let c = String(hex[..<subIndex])
-            hex = String(hex[subIndex...])
-            var ch: UInt64 = 0
-            Scanner(string: c).scanHexInt64(&ch)
-            data.append(try! UInt8(ch))
-        }
-        return data
     }
 }
