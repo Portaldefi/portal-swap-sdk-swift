@@ -19,11 +19,11 @@ final class Blockchains: BaseClass {
         // Subscribe for eth events
         subscribe(ethereum.on("log", forwardLog()))
         subscribe(ethereum.on("error", forwardError()))
-        subscribe(ethereum.on("trader.intent.created", forwardEvent("trader.intent.created")))
+        subscribe(ethereum.on("trader.order.created", forwardEvent("trader.order.created")))
         // Subscribe for portal events
         subscribe(portal.on("log", forwardLog()))
         subscribe(portal.on("error", forwardError()))
-        subscribe(portal.on("notary.validator.match.intent", forwardEvent("notary.validator.match.intent")))
+        subscribe(portal.on("notary.validator.match.order", forwardEvent("notary.validator.match.order")))
         // Subscribe for lightning events
         subscribe(lightning.on("log", forwardLog()))
         subscribe(lightning.on("error", forwardError()))

@@ -9,8 +9,8 @@ final class Dex: BaseClass {
         self.sdk = sdk
         super.init(id: "dex")
         
-        subscribe(sdk.blockchains.on("trader.intent.created", onSwap("trader.intent.created")))
-        subscribe(sdk.blockchains.on("notary.validator.match.intent", onSwap("notary.validator.match.intent")))
+        subscribe(sdk.blockchains.on("trader.order.created", onSwap("trader.order.created")))
+        subscribe(sdk.blockchains.on("notary.validator.match.order", onSwap("notary.validator.match.order")))
         subscribe(sdk.blockchains.on("invoice.paid", onSwap("invoice.paid")))
         subscribe(sdk.blockchains.on("invoice.settled", onSwap("invoice.settled")))
     }
@@ -28,14 +28,15 @@ final class Dex: BaseClass {
     func onSwap(_ event: String) -> ([Any]) -> Void {
         { [unowned self] args in
             switch event {
-            case "trader.intent.created":
-                debug("trader.intent.created", args)
+            case "trader.order.created":
+                debug("trader.order.created", args)
                 
                 guard let swapIntendedEvent = args.first as? SwapIntendedEvent else {
+                guard let orderCreatedEvent = args.first as? OrderCreatedEvent else {
                     return
                 }
                 
-                let ammSwap = AmmSwap.from(swapIntendedEvent: swapIntendedEvent)
+                let ammSwap = AmmSwap.from(orderCreatedEvent: orderCreatedEvent)
                 
                 try? sdk.store.put(.swaps, ammSwap.swapId, ammSwap.toJSON())
                 
@@ -180,7 +181,7 @@ final class Dex: BaseClass {
 
                         resolve(response)
                     }.catch { [weak self] error in
-                        self?.debug("notary blockchain.swapIntent(\(intent))\n error: \(error)")
+                        self?.debug("\(traderBlockchain).swapOrder(\(request))\n error: \(error)")
                         self?.error("error", [error])
                         
                         reject(error)

@@ -77,15 +77,15 @@ final class Ethereum: BaseClass, IBlockchain {
                                     self.subscriptionsIDS.append(subscriptionID)
                                 }
                             case .failure(let error):
-                                debug("\(sdk.userId) SwapIntended subscription failed with error: \(error)")
+                                debug("\(sdk.userId) OrderCreated subscription failed with error: \(error)")
                                 self.error("error", [error, self])
                             }
-                        } onEvent: { [unowned self] (response: Web3Response<SwapIntendedEvent>) in
+                        } onEvent: { [unowned self] (response: Web3Response<OrderCreatedEvent>) in
                             switch response.status {
                             case .success(let event):
-                                print("SwapIntendedEvent: \(event)")
+                                print("OrderCreatedEvent: \(event)")
 
-                                let status = "trader.intent.created"
+                                let status = "trader.order.created"
                                 
                                 self.info(status, [event])
                                 self.emit(event: status, args: [event])
@@ -203,7 +203,7 @@ final class Ethereum: BaseClass, IBlockchain {
                             
                             switch response.status {
                             case .success(let data):
-                                self.debug("swap intent TH HASH: \(data.hex())")
+                                self.debug("swap order TH HASH: \(data.hex())")
                                 
                                 Thread.sleep(forTimeInterval: 1)
                                 
@@ -225,7 +225,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                                 "transactionHash": txReceipt.transactionHash.hex()
                                             ]
                                             
-                                            self.info("swap intent reciep", receipt, self as Any)
+                                            self.info("swap order reciep", receipt, self as Any)
                                             resolve(receipt)
                                         }
                                     case .failure(let error):

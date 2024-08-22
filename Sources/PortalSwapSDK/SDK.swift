@@ -15,7 +15,7 @@ public final class SDK: BaseClass {
         subscribe(sdk.on("order.closed", forwardEvent("order.closed")))
         
         subscribe(sdk.on("swap.completed", forwardEvent("swap.completed")))
-        subscribe(sdk.on("notary.validator.match.intent", forwardEvent("notary.validator.match.intent")))
+        subscribe(sdk.on("notary.validator.match.order", forwardEvent("notary.validator.match.order")))
         
         subscribe(sdk.on("log", forwardLog()))
         subscribe(sdk.on("error", forwardError()))

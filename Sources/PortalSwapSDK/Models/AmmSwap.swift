@@ -15,19 +15,19 @@ final class AmmSwap: BaseClass, Codable {
     }
     
     let AMM_SWAP_STATUS = [
-        "trader.intent.created",
-        "trader.intent.sent.to.notary",
-        "notary.trader.intent.created",
-        "notary.intent.timer.started",
+        "trader.order.created",
+        "trader.order.sent.to.notary",
+        "notary.trader.order.created",
+        "notary.order.timer.started",
         "notary.trader.intent.sent",
         "notary.lp.notified.intent",
         "notary.lp.commit.liquidity",
-        "notary.intent.timer.ended",
-        "notary.validator.match.intent",
-        "notary.match.intent.sent.to.matchedlp",
+        "notary.order.timer.ended",
+        "notary.validator.match.order",
+        "notary.match.order.sent.to.matchedlp",
         "lp.invoice.created",
         "lp.invoice.sent",
-        "intent.authorized",
+        "order.authorized",
         "lp.invoice.paid",
         "trader.settle.invoice",
         "lp.settle.invoice"
@@ -74,7 +74,7 @@ final class AmmSwap: BaseClass, Codable {
     
     init(event: SwapIntendedEvent) {
         swapId = "0x\(event.swapId)"
-        status = "trader.intent.created"
+        status = "trader.order.created"
         secretHash = event.secretHash
         sellerAddress = event.swapOwner
         sellNetwork = "ethereum"

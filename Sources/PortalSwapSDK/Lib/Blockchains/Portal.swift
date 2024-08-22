@@ -95,7 +95,7 @@ final class Portal: BaseClass, IBlockchain {
                             case .success(let event):
                                 print("SwapMatchedEvent: \(event)")
 
-                                let status = "notary.validator.match.intent"
+                                let status = "notary.validator.match.order"
                                 
                                 self.info(status, [event])
                                 self.emit(event: status, args: [event])

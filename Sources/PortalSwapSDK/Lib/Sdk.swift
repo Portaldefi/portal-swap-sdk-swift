@@ -30,7 +30,7 @@ final class Sdk: BaseClass {
         
         // Subscribe for order state changes
         subscribe(dex.on("swap.completed", forwardEvent("swap.completed")))
-        subscribe(blockchains.on("notary.validator.match.intent", forwardEvent("notary.validator.match.intent")))
+        subscribe(blockchains.on("notary.validator.match.order", forwardEvent("notary.validator.match.order")))
         
         // Bubble up the log events
         subscribe(store.on("log", forwardLog()))
