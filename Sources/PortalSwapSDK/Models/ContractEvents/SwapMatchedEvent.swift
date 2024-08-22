@@ -1,10 +1,3 @@
-//
-//  SwapMatchedEvent.swift
-//
-//
-//  Created by farid on 14.06.2024.
-//
-
 import BigInt
 
 struct SwapMatchedEvent: Codable {
@@ -59,4 +52,3 @@ struct SwapMatchedEvent: Codable {
 
     public func encode(to encoder: Encoder) throws {}
 }
-
