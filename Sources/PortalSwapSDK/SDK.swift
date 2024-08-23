@@ -31,11 +31,11 @@ public final class SDK: BaseClass {
         sdk.stop()
     }
     
-    public func assetPairs() -> Promise<[AssetPair]> {
-        sdk.assetPairs()
+    public func listPools() -> Promise<[Pool]> {
+        sdk.listPools()
     }
     
-    public func submitOrder(_ request: OrderRequest) -> Promise<[String: String]> {
-        sdk.dex.submitOrder(request)
+    public func submit(_ order: SwapOrder) -> Promise<[String: String]> {
+        sdk.submit(order)
     }
 }
