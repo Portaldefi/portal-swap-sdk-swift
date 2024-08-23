@@ -21,7 +21,7 @@ public struct Pool: Identifiable {
     public let maxOrderSize: BigUInt
     
     init(model: PoolModel, baseAsset: Asset, quoteAsset: Asset) {
-        self.id = model.id.toHexString()
+        self.id = model.id.hexString
         self.baseAsset = baseAsset
         self.quoteAsset = quoteAsset
         self.fee = model.fee
