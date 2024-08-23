@@ -60,8 +60,6 @@ final class Blockchains: BaseClass {
             return ethereum
         case "lightning":
             return lightning
-        case "portal":
-            return portal
         default:
             return nil
         }
