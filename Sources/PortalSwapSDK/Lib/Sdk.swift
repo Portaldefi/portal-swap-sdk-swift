@@ -36,6 +36,7 @@ final class Sdk: BaseClass {
         subscribe(store.on("log", forwardLog()))
         subscribe(dex.on("log", forwardLog()))
         subscribe(blockchains.on("log", forwardLog()))
+        subscribe(assetManagement.on("log", forwardLog()))
         
         // Handling errors
         subscribe(blockchains.on("error", forwardError()))
@@ -75,7 +76,11 @@ final class Sdk: BaseClass {
         }
     }
     
-    func assetPairs() -> Promise<[AssetPair]> {
-        assetManagement.assetPairs()
+    func listPools() -> Promise<[Pool]> {
+        assetManagement.listPools()
+    }
+    
+    func submit(_ order: SwapOrder) -> Promise<[String: String]> {
+        dex.submit(order)
     }
 }
