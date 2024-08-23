@@ -163,4 +163,76 @@ final class AssetManagement: BaseClass {
         }
     }
     
+    func retrieveAssetByNativeProps(blockchainName: String, blockchainAddress: String) -> Promise<Pool.Asset?> {
+        Promise { [unowned self] resolve, reject in
+            listAssets().then { assets in
+                resolve(
+                    assets.first(where: { $0.blockchainName == blockchainName })
+                )
+            }.catch { listAssetsError in
+                reject(listAssetsError)
+            }
+//            guard let assetManagement else {
+//                return reject(SwapSDKError.msg("Asset Management contract is not set"))
+//            }
+//            
+//            assetManagement
+//                .retrieveAssetByNativeProps(
+//                    blockchainName: blockchainName,
+//                    blockchainAddress: blockchainAddress
+//                )
+//                .call { response, error in
+//                    if let response {
+//                        guard let asset = response[""] else {
+//                            return reject(SwapSDKError.msg("Failed to parse assets array"))
+//                        }
+//                        
+//                        resolve(
+//                            Pool.Asset(id: EthereumAddress(hexString: "")!, name: "", symbol: "", logo: "", blockchainId: 0, blockchainName: "", blockchainAddress: "", blockchainDecimals: 0)
+//                        )
+//                    } else if let error {
+//                        reject(error)
+//                    } else {
+//                        resolve(nil)
+//                    }
+//                }
+//            
+//            guard let amAbi = props.contracts["AssetManagement"] as? [String: Any],
+//                  let abiArray = amAbi["abi"] as? [[String: Any]],
+//                  let amContractAddressHex = amAbi["address"] as? String,
+//                  let amContractAddress = try? EthereumAddress(
+//                    hex: amContractAddressHex,
+//                    eip55: Utils.isEIP55Compliant(address: amContractAddressHex)
+//                  ) 
+//            else {
+//                return reject(SwapSDKError.msg("Asset Management contract is not set"))
+//            }
+//            
+//            let dexContractData = try JSONSerialization.data(withJSONObject: abiArray, options: [])
+//            
+//            let contract = try web3.eth.Contract(json: dexContractData, abiKey: nil, address: amContractAddress)
+//            
+//            let params = SolidityTuple([
+//                SolidityWrappedValue(value: blockchainName, type: .string),
+//                SolidityWrappedValue(value: blockchainAddress, type: .string)
+//            ])
+//
+//            
+//            contract["retrieveAssetByNativeProps"]?(params).call(completion: { response, error in
+//                if let response {
+//                    guard let assetsArray = response[""] as? [Any] else {
+//                        return reject(SwapSDKError.msg("Failed to parse assets array"))
+//                    }
+//                    
+//                    resolve(
+//                        Pool.Asset(id: EthereumAddress(hexString: "")!, name: "", symbol: "", logo: "", blockchainId: 0, blockchainName: "", blockchainAddress: "", blockchainDecimals: 0)
+//                    )
+//                } else if let error {
+//                    reject(error)
+//                } else {
+//                    resolve(nil)
+//                }
+//            })
+        }
+    }
 }
