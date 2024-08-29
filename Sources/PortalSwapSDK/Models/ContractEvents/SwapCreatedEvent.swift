@@ -17,6 +17,7 @@ struct SwapCreatedEvent: Codable {
     let swapCreation: BigUInt
     let swapOwner: String
     let buyId: String
+    let status: String
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -79,6 +80,10 @@ struct SwapCreatedEvent: Codable {
         let remainingData10 = remainingData9.dropFirst(64)
         let buyIdHex = String(remainingData10.prefix(64))
         buyId = decodeBytes32(from: buyIdHex)
+        
+        let remainingData11 = remainingData10.dropFirst(64)
+        let statusHex = String(remainingData11.prefix(64))
+        status = decodeBytes32(from: statusHex)
     }
     
     public func encode(to encoder: Encoder) throws {}

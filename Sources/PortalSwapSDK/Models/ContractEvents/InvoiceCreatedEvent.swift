@@ -1,55 +1,53 @@
+import Foundation
+import BigInt
+
 struct InvoiceCreatedEvent: Codable {
-    let id: String
-    let swap: String
-    let payee: String
-    let asset: String
-    let quantity: String
-    let eventSignature: String
-    let address: String
-    let removed: Bool
-    
     private enum CodingKeys: String, CodingKey {
-        case address, topics, data, removed
+        case address, topics, data, blockNumber, transactionHash, transactionIndex, blockHash, logIndex, removed
     }
+
+    let swapId: String
+    let swapOwner: String
+    let counterParty: String
+    let sellAsset: String
+    let sellAmount: BigUInt
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let topics = try container.decode([String].self, forKey: .topics)
-        let data = try container.decode(String.self, forKey: .data)
-        
-        address = try container.decode(String.self, forKey: .address)
-        removed = try container.decode(Bool.self, forKey: .removed)
+        let dataString = try container.decode(String.self, forKey: .data)
 
-        guard topics.count >= 3 else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .topics,
-                in: container,
-                debugDescription: "Expected at least 3 topics."
-            )
+        // Decode indexed parameters
+        guard topics.count >= 4 else {
+            throw SwapSDKError.msg("Insufficient topics to decode indexed parameters")
         }
         
-        eventSignature = topics[0]
-        id = topics[1]
-        swap = topics[2]
+        func decodeAddress(from hexString: String) -> String {
+            var hex = hexString
+            if hex.hasPrefix("0x") {
+                hex.removeFirst(2)
+            }
+            return "0x" + hex.suffix(40)
+        }
 
-        // The data field contains the concatenated non-indexed parameters (payee, asset, and quantity).
-        // Each parameter is 32 bytes long, represented as 64 hex characters.
-        let dataSubstring = data.dropFirst(2) // Remove "0x" prefix
-        let payeeHex = String(dataSubstring.prefix(64))
-        payee = payeeHex
+        func decodeBigUInt(from hexString: String) -> BigUInt {
+            BigUInt(hexString, radix: 16) ?? BigUInt(0)
+        }
 
-        let remainingData = dataSubstring.dropFirst(64)
-        let assetHex = String(remainingData.prefix(64))
-        asset = assetHex
+        swapId = topics[1]
+        swapOwner = decodeAddress(from: topics[2])
+        counterParty = decodeAddress(from: topics[3])
 
-        let quantityHex = String(remainingData.dropFirst(64))
-        quantity = quantityHex
+        // Decode non-indexed parameters
+        var dataSubstring = dataString.dropFirst(2) // Remove "0x" prefix
+
+        let sellAssetHex = String(dataSubstring.prefix(64))
+        sellAsset = decodeAddress(from: sellAssetHex)
+        dataSubstring = dataSubstring.dropFirst(64)
+
+        let sellAmountHex = String(dataSubstring.prefix(64))
+        sellAmount = decodeBigUInt(from: sellAmountHex)
     }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode([eventSignature, id, swap], forKey: .topics)
-        let dataValue = payee + asset + quantity
-        try container.encode(dataValue, forKey: .data)
-    }
+
+    public func encode(to encoder: Encoder) throws {}
 }
