@@ -3,8 +3,8 @@ import Promises
 
 final class Blockchains: BaseClass {
     private let sdk: Sdk
-    private let ethereum: IBlockchain
-    private let lightning: IBlockchain
+    let ethereum: Ethereum
+    let lightning: Lightning
     let portal: Portal
     
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains) {
@@ -20,6 +20,8 @@ final class Blockchains: BaseClass {
         subscribe(ethereum.on("log", forwardLog()))
         subscribe(ethereum.on("error", forwardError()))
         subscribe(ethereum.on("trader.order.created", forwardEvent("trader.order.created")))
+        subscribe(ethereum.on("lp.invoice.created", forwardEvent("lp.invoice.created")))
+        subscribe(ethereum.on("invoice.settled", forwardEvent("invoice.settled")))
         // Subscribe for portal events
         subscribe(portal.on("log", forwardLog()))
         subscribe(portal.on("error", forwardError()))
