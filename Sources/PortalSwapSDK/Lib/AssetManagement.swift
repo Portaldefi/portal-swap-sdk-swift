@@ -10,6 +10,7 @@ final class AssetManagement: BaseClass {
     
     private var assetManagement: IAssetManagementContract?
     private var liquidityPool: ILiquidityPoolContract?
+    var assets: [Pool.Asset] = []
     
     init(props: SwapSdkConfig.Blockchains.Portal) {
         self.props = props
@@ -82,34 +83,34 @@ final class AssetManagement: BaseClass {
                     guard let assetsArray = response[""] as? [Any] else {
                         return reject(SwapSDKError.msg("Failed to parse assets array"))
                     }
-                    
-                    resolve(
-                        assetsArray.compactMap { dataArray in
-                            guard let asset = dataArray as? [Any],
-                                  let id = asset[0] as? EthereumAddress,
-                                  let name = asset[1] as? String,
-                                  let symbol = asset[2] as? String,
-                                  let logo = asset[3] as? String,
-                                  let blockchainId = asset[4] as? BigUInt,
-                                  let blockchainName = asset[5] as? String,
-                                  let blockchainAddress = asset[6] as? String,
-                                  let blockchainDecimals = asset[7] as? UInt8 
-                            else {
-                                return nil
-                            }
-                            
-                            return Pool.Asset(
-                                id: id,
-                                name: name,
-                                symbol: symbol,
-                                logo: logo,
-                                blockchainId: blockchainId,
-                                blockchainName: blockchainName,
-                                blockchainAddress: blockchainAddress,
-                                blockchainDecimals: blockchainDecimals
-                            )
+
+                    self.assets = assetsArray.compactMap { dataArray in
+                        guard let asset = dataArray as? [Any],
+                              let id = asset[0] as? EthereumAddress,
+                              let name = asset[1] as? String,
+                              let symbol = asset[2] as? String,
+                              let logo = asset[3] as? String,
+                              let blockchainId = asset[4] as? BigUInt,
+                              let blockchainName = asset[5] as? String,
+                              let blockchainAddress = asset[6] as? String,
+                              let blockchainDecimals = asset[7] as? UInt8
+                        else {
+                            return nil
                         }
-                    )
+                        
+                        return Pool.Asset(
+                            id: id,
+                            name: name,
+                            symbol: symbol,
+                            logo: logo,
+                            blockchainId: blockchainId,
+                            blockchainName: blockchainName,
+                            blockchainAddress: blockchainAddress,
+                            blockchainDecimals: blockchainDecimals
+                        )
+                    }
+                    
+                    resolve(self.assets)
                 } else if let error {
                     reject(error)
                 } else {
@@ -163,9 +164,15 @@ final class AssetManagement: BaseClass {
         }
     }
     
+    func retrieveAsset(_ id: String) -> Pool.Asset? {
+        assets.first(where: { $0.id.hex(eip55: false) == id })
+    }
+    
     func retrieveAssetByNativeProps(blockchainName: String, blockchainAddress: String) -> Promise<Pool.Asset?> {
         Promise { [unowned self] resolve, reject in
             listAssets().then { assets in
+                self.assets = assets
+                
                 resolve(
                     assets.first(where: { $0.blockchainName == blockchainName })
                 )
