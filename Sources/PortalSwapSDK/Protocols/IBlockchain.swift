@@ -1,11 +1,10 @@
 import Foundation
 import Promises
+import Web3
 
 protocol IBlockchain: BaseClass {
     func connect() -> Promise<Void>
     func disconnect() -> Promise<Void>
-    func swapOrder(_ order: OrderRequest) -> Promise<[String: String]>
-    func createInvoice(party: Party) -> Promise<[String: String]>
-    func payInvoice(party: Party) -> Promise<[String: Any]>
-    func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]>
+    func create(invoice: [String: String]) -> Promise<[String: String]>
+    func settle(invoice: [String: String], secret: Data) -> Promise<[String: String]>
 }
