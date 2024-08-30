@@ -75,7 +75,7 @@ final class Store: BaseClass {
             
             debug("Put secret with ID: \(key)")
         case .swaps:
-            let swap = try AmmSwap.from(json: obj)//.update(sdk: sdk)
+            let swap = try AmmSwap.from(json: obj)
             
             let newEntity = manager.swapEntity()
             try newEntity.update(swap: swap)
@@ -93,7 +93,7 @@ final class Store: BaseClass {
                 
         switch namespace {
         case .swaps:
-            let swap = try AmmSwap.from(json: obj)//.update(sdk: sdk)
+            let swap = try AmmSwap.from(json: obj)
             let dbSwap = try manager.swap(key: key)
             try dbSwap.update(swap: swap)
             
