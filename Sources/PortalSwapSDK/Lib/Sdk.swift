@@ -30,7 +30,7 @@ final class Sdk: BaseClass {
         
         // Subscribe for order state changes
         subscribe(dex.on("swap.completed", forwardEvent("swap.completed")))
-        subscribe(blockchains.on("notary.validator.match.order", forwardEvent("notary.validator.match.order")))
+        subscribe(blockchains.on("swap.matched", forwardEvent("swap.matched")))
         
         // Bubble up the log events
         subscribe(store.on("log", forwardLog()))
@@ -80,7 +80,7 @@ final class Sdk: BaseClass {
         assetManagement.listPools()
     }
     
-    func submit(_ order: SwapOrder) -> Promise<[String: String]> {
+    func submit(_ order: SwapOrder) -> Promise<Void> {
         dex.submit(order)
     }
 }
