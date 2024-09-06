@@ -1,21 +1,21 @@
 import Promises
 
 public struct SwapSdkConfig {
-    public struct Network {
-        public enum NetworkProtocol {
-            case unencrypted
-            case encrypted
-        }
-        public let networkProtocol: NetworkProtocol
-        public let hostname: String
-        public let port: Int
-        
-        public init(networkProtocol: NetworkProtocol, hostname: String, port: Int) {
-            self.networkProtocol = networkProtocol
-            self.hostname = hostname
-            self.port = port
-        }
-    }
+//    public struct Network {
+//        public enum NetworkProtocol {
+//            case unencrypted
+//            case encrypted
+//        }
+//        public let networkProtocol: NetworkProtocol
+//        public let hostname: String
+//        public let port: Int
+//        
+//        public init(networkProtocol: NetworkProtocol, hostname: String, port: Int) {
+//            self.networkProtocol = networkProtocol
+//            self.hostname = hostname
+//            self.port = port
+//        }
+//    }
     
     public struct Blockchains {
         public struct Portal {
@@ -66,12 +66,12 @@ public struct SwapSdkConfig {
     }
     
     public let id: String
-    public let network: Network
+//    public let network: Network
     public let blockchains: Blockchains
     
-    public init(id: String, network: Network, blockchains: Blockchains) {
+    public init(id: String, blockchains: Blockchains) {
         self.id = id
-        self.network = network
+//        self.network = network
         self.blockchains = blockchains
     }
 }
