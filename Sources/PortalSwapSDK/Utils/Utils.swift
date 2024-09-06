@@ -2,6 +2,12 @@ import CryptoKit
 import Foundation
 
 class Utils {
+    static func createSecret() -> (Data, Data) {
+        let secret = secret()
+        let secretHash = sha256(data: secret)
+        
+        return (secret, secretHash)
+    }
     static func keccak256Hash(of eventSignature: String) -> String {
         let hash = eventSignature.data(using: .utf8)!.sha3(.keccak256)
         return hash.toHexString()
