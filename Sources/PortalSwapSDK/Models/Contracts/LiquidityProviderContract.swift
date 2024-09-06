@@ -4,6 +4,7 @@ import Web3ContractABI
 
 protocol ILiquidityProviderContract: EthereumContract {
     static var InvoiceCreated: SolidityEvent { get }
+    static var InvoiceSettled: SolidityEvent { get }
     func settle(secret: Data, swapId: Data) -> SolidityInvocation
 }
 
@@ -32,6 +33,17 @@ extension LiquidityProvider: ILiquidityProviderContract {
             SolidityEvent.Parameter(name: "sellAmount", type: .uint256, indexed: false)
         ]
         return SolidityEvent(name: "InvoiceCreated", anonymous: false, inputs: inputs)
+    }
+    
+    static var InvoiceSettled: SolidityEvent {
+        let inputs: [SolidityEvent.Parameter] = [
+            SolidityEvent.Parameter(name: "swapId", type: .bytes(length: 32), indexed: true),
+            SolidityEvent.Parameter(name: "secret", type: .bytes(length: 32), indexed: true),
+            SolidityEvent.Parameter(name: "counterParty", type: .address, indexed: true),
+            SolidityEvent.Parameter(name: "sellAsset", type: .address, indexed: false),
+            SolidityEvent.Parameter(name: "sellAmount", type: .uint256, indexed: false)
+        ]
+        return SolidityEvent(name: "InvoiceSettled", anonymous: false, inputs: inputs)
     }
     
     func settle(secret: Data, swapId: Data) -> SolidityInvocation {
