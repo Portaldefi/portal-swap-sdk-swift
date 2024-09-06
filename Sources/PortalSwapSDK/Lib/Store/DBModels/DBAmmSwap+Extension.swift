@@ -15,42 +15,38 @@ extension DBAmmSwap {
         }
         
         context.performAndWait {
-            self.swapId = swap.swapId
-            self.status = swap.status
-            self.secretHash = swap.secretHash
-            self.sellerAddress = swap.sellerAddress
-            self.sellNetwork = swap.sellNetwork
-            self.sellAsset = swap.sellAsset
+            self.swapId = swap.swapId.hexString
+            self.liquidityPoolId = swap.liquidityPoolId.hexString
+            self.secretHash = swap.secretHash.hexString
+            self.sellAssetSymbol = swap.sellAssetSymbol
+            self.sellAsset = swap.sellAsset.hex(eip55: true)
             self.sellAmount = swap.sellAmount.description
-            self.buyAddress = swap.buyAddress
-            self.buyNetwork = swap.buyNetwork
-            self.buyAsset = swap.buyAsset
+            self.buyAssetSymbol = swap.buyAssetSymbol
+            self.buyAsset = swap.buyAsset.hex(eip55: true)
             self.buyAmount = swap.buyAmount.description
-            self.buyAmountSlippage = swap.buyAmountSlippage.description
-            self.tsCreation = swap.tsCreation
-            
-            if let buyQuantity = swap.buyQuantity?.description {
-                self.buyQuantity = buyQuantity
-            }
+            self.slippage = swap.slippage.description
+            self.swapCreation = swap.swapCreation.description
+            self.swapOwner = swap.swapOwner.hex(eip55: true)
+            self.status = swap.status
+            self.buyId = swap.buyId
         }
     }
     
     func toJSON() -> [String: Any] {
         return [
             "swapId": swapId as Any,
-            "status": status as Any,
+            "liquidityPoolId": liquidityPoolId as Any,
             "secretHash": secretHash as Any,
-            "sellerAddress" : sellerAddress as Any,
-            "sellNetwork" : sellNetwork as Any,
             "sellAsset": sellAsset as Any,
             "sellAmount": BigUInt(stringLiteral: sellAmount!) as Any,
-            "buyAddress": buyAddress as Any,
-            "buyNetwork": buyNetwork as Any,
             "buyAsset": buyAsset as Any,
             "buyAmount": BigUInt(stringLiteral: buyAmount!) as Any,
-            "buyQuantity": buyQuantity as Any,
-            "buyAmountSlippage": BigUInt(stringLiteral: buyAmountSlippage!) as Any,
-            "tsCreation": tsCreation as Any
+            "slippage": BigUInt(stringLiteral: slippage!) as Any,
+            "swapOwner": swapOwner as Any,
+            "swapCreation": swapCreation as Any,
+            "status": status as Any,
+            "buyId": buyId as Any
+
         ]
     }
         

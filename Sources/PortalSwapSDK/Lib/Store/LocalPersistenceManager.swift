@@ -38,8 +38,10 @@ public final class LocalPersistenceManager {
         try DBAmmSwap.entity(key: key, context: viewContext)
     }
     
-    public func fetchSwaps(accountId: String) throws -> [AmmSwapModel] {
-        try DBAmmSwap.entities(context: viewContext).filter{ $0.accountId == accountId }.compactMap{ try? AmmSwapModel(record: $0) }
+    public func fetchSwaps(accountId: String) throws -> [AmmSwap] {
+        try DBAmmSwap.entities(context: viewContext)
+        /*.filter{ $0.accountId == accountId }*/
+            .map{ AmmSwap(record: $0) }
     }
 }
 

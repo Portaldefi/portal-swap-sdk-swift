@@ -2,20 +2,20 @@
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="23A344" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
     <entity name="DBAmmSwap" representedClassName="DBAmmSwap" syncable="YES" codeGenerationType="class">
         <attribute name="accountId" optional="YES" attributeType="String"/>
-        <attribute name="buyAddress" optional="YES" attributeType="String"/>
         <attribute name="buyAmount" optional="YES" attributeType="String"/>
-        <attribute name="buyAmountSlippage" optional="YES" attributeType="String"/>
         <attribute name="buyAsset" optional="YES" attributeType="String"/>
-        <attribute name="buyNetwork" optional="YES" attributeType="String"/>
-        <attribute name="buyQuantity" optional="YES" attributeType="String"/>
+        <attribute name="buyAssetSymbol" optional="YES" attributeType="String"/>
+        <attribute name="buyId" optional="YES" attributeType="String"/>
+        <attribute name="liquidityPoolId" optional="YES" attributeType="String"/>
         <attribute name="secretHash" optional="YES" attributeType="String"/>
         <attribute name="sellAmount" optional="YES" attributeType="String"/>
         <attribute name="sellAsset" optional="YES" attributeType="String"/>
-        <attribute name="sellerAddress" optional="YES" attributeType="String"/>
-        <attribute name="sellNetwork" optional="YES" attributeType="String"/>
+        <attribute name="sellAssetSymbol" optional="YES" attributeType="String"/>
+        <attribute name="slippage" optional="YES" attributeType="String"/>
         <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="swapCreation" optional="YES" attributeType="String"/>
         <attribute name="swapId" optional="YES" attributeType="String"/>
-        <attribute name="tsCreation" optional="YES" attributeType="String"/>
+        <attribute name="swapOwner" optional="YES" attributeType="String"/>
     </entity>
     <entity name="DBEvmInvoice" representedClassName="DBEvmInvoice" syncable="YES" codeGenerationType="class">
         <attribute name="blockHash" attributeType="String"/>

@@ -8,9 +8,10 @@ extension DBSecret {
         
         if
             let dataDict = json as? [String: String],
-            let secretString = dataDict["secret"],
-            let secret = Utils.hexToData(secretString)
+            let secretString = dataDict["secret"]
         {
+            let secret = Data(hex: secretString)
+
             context.performAndWait {
                 self.data = secret
                 self.swapID = UUID().uuidString

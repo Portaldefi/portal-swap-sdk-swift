@@ -24,78 +24,11 @@ extension DBSwap {
             throw SwapSDKError.msg("Cannot obtain manage object context")
         }
         
-        try context.performAndWait {
-            self.swapID = swap.swapId
-            self.secretHash = swap.secretHash
+        context.performAndWait {
+            self.swapID = swap.swapId.hexString
+            self.secretHash = swap.secretHash.hexString
             self.status = swap.status
             self.timestamp = Int64(Date().timeIntervalSince1970)
-            
-            var jsonInvoices = [[String: String]]()
-            var dbInvoices = [DBInvoice]()
-            
-//            if let seekerInvoice = swap.secretSeeker.invoice {
-//                jsonInvoices.append(seekerInvoice)
-//                
-//                guard let invoice = secretSeeker.invoice else {
-//                    throw SwapSDKError.msg("SecretSeeker has no db invocie")
-//                }
-//                
-//                dbInvoices.append(invoice)
-//            }
-//            
-//            if let holderInvoice = swap.secretHolder.invoice {
-//                jsonInvoices.append(holderInvoice)
-//                
-//                guard let invoice = secretHolder.invoice else {
-//                    throw SwapSDKError.msg("SecretHolder has no db invocie")
-//                }
-//                
-//                dbInvoices.append(invoice)
-//            }
-            
-            guard !jsonInvoices.isEmpty && !dbInvoices.isEmpty && jsonInvoices.count == dbInvoices.count else { return }
-            
-            for (json, dbInvoice) in zip(jsonInvoices, dbInvoices) {
-                if json.contains(where: { $0.key == "request"}) {
-                    //Lightning Invoice
-                    if let lightningInvoice = dbInvoice.lightningInvoice {
-                        lightningInvoice.invoiceID = json["id"]
-                        lightningInvoice.request = json["request"]
-                        lightningInvoice.swap = json["swap"]
-                    } else {
-                        let entityName = String(describing: DBLightningInvoice.self)
-                        let entity = NSEntityDescription.entity(forEntityName: entityName, in: context)!
-                        let lightningInvoice = DBLightningInvoice(entity: entity, insertInto: context)
-                        
-                        lightningInvoice.invoiceID = json["id"]
-                        lightningInvoice.request = json["request"]
-                        lightningInvoice.swap = json["swap"]
-                        
-                        dbInvoice.lightningInvoice = lightningInvoice
-                    }
-                } else if json.contains(where: { $0.key == "transactionHash"}) {
-                    // EMV Invoice
-                    if let evmInvoice = dbInvoice.evmInvoice {
-                        evmInvoice.blockHash = json["blockHash"]
-                        evmInvoice.from = json["from"]
-                        evmInvoice.to = json["to"]
-                        evmInvoice.transactionHash = json["transactionHash"]
-                    } else {
-                        let entityName = String(describing: DBEvmInvoice.self)
-                        let entity = NSEntityDescription.entity(forEntityName: entityName, in: context)!
-                        let evmInvoice = DBEvmInvoice(entity: entity, insertInto: context)
-                        
-                        evmInvoice.blockHash = json["blockHash"]
-                        evmInvoice.from = json["from"]
-                        evmInvoice.to = json["to"]
-                        evmInvoice.transactionHash = json["transactionHash"]
-                        
-                        dbInvoice.evmInvoice = evmInvoice
-                    }
-                } else {
-                    throw SwapSDKError.msg("Unknown invoice type")
-                }
-            }
         }
     }
     
