@@ -25,7 +25,7 @@ final class Lightning: BaseClass, IBlockchain {
         return Promise { () }
     }
     
-    func create(invoice: [String: String]) -> Promise<[String: String]> {
+    func create(invoice: Invoice) -> Promise<Response> {
         Promise { [unowned self] resolve, reject in
             guard 
                 let swapId = invoice["swapId"],
@@ -232,7 +232,7 @@ final class Lightning: BaseClass, IBlockchain {
         }
     }
         
-    func settle(invoice: [String: String], secret: Data) -> Promise<[String: String]> {
+    func settle(invoice: Invoice, secret: Data) -> Promise<Response> {
         client.settleHodlInvoice(secret: secret)
     }
 }
