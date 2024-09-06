@@ -2,41 +2,47 @@ import Foundation
 import Promises
 import Web3
 
-struct AmmSwap: Codable {
-    let swapId: Data
-    let secretHash: Data
-    let liquidityPoolId: Data
-    let sellAsset: EthereumAddress
-    let sellAmount: BigUInt
-    let buyAsset: EthereumAddress
-    let buyAmount: BigUInt
-    let slippage: BigUInt
-    let swapCreation: BigUInt
-    let swapOwner: EthereumAddress
-    let buyId: String
-    let status: String
+public struct AmmSwap: Codable {
+    public let swapId: Data
+    public let secretHash: Data
+    public let liquidityPoolId: Data
+    public let sellAssetSymbol: String
+    public let sellAsset: EthereumAddress
+    public let sellAmount: BigUInt
+    public let buyAssetSymbol: String
+    public let buyAsset: EthereumAddress
+    public let buyAmount: BigUInt
+    public let slippage: BigUInt
+    public let swapCreation: BigUInt
+    public let swapOwner: EthereumAddress
+    public let buyId: String
+    public let status: String
     
-    init(record: DBAmmSwap) {
+    public init(record: DBAmmSwap) {
         swapId = Data(hex: record.swapId!)
         secretHash = Data(hex: record.secretHash!)
-        liquidityPoolId = Data(hex: record.secretHash!)
-        sellAsset = EthereumAddress(hexString: record.sellerAddress!)!
+        liquidityPoolId = Data(hex: record.liquidityPoolId!)
+        sellAssetSymbol = record.sellAssetSymbol ?? ""
+        sellAsset = EthereumAddress(hexString: record.sellAsset!)!
         sellAmount = BigUInt(stringLiteral: record.sellAmount!)
+        buyAssetSymbol = record.buyAssetSymbol ?? ""
         buyAsset = EthereumAddress(hexString: record.buyAsset!)!
         buyAmount = BigUInt(stringLiteral: record.buyAmount!)
-        slippage = BigUInt(stringLiteral: record.buyAmountSlippage!)
-        swapCreation = BigUInt(stringLiteral: record.tsCreation!)
-        swapOwner = EthereumAddress(hexString: record.buyAsset!)!
-        buyId = record.status!
-        status = record.status!
+        slippage = BigUInt(stringLiteral: record.slippage ?? "0")
+        swapCreation = BigUInt(stringLiteral: record.swapCreation ?? "0")
+        swapOwner = EthereumAddress(hexString: record.swapOwner!)!
+        buyId = record.buyId ?? "0"
+        status = record.status ?? "unknown"
     }
     
-    init(swapId: Data, secretHash: Data, liquidityPoolId: Data, sellAsset: EthereumAddress, sellAmount: BigUInt, buyAsset: EthereumAddress, buyAmount: BigUInt, slippage: BigUInt, swapCreation: BigUInt, swapOwner: EthereumAddress, buyId: String, status: String) {
+    init(swapId: Data, secretHash: Data, liquidityPoolId: Data, sellAssetSymbol: String, sellAsset: EthereumAddress, sellAmount: BigUInt, buyAssetSymbol: String, buyAsset: EthereumAddress, buyAmount: BigUInt, slippage: BigUInt, swapCreation: BigUInt, swapOwner: EthereumAddress, buyId: String, status: String) {
         self.swapId = swapId
         self.secretHash = secretHash
         self.liquidityPoolId = liquidityPoolId
+        self.sellAssetSymbol = sellAssetSymbol
         self.sellAsset = sellAsset
         self.sellAmount = sellAmount
+        self.buyAssetSymbol = buyAssetSymbol
         self.buyAsset = buyAsset
         self.buyAmount = buyAmount
         self.slippage = slippage
