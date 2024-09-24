@@ -26,6 +26,8 @@ final class Blockchains: BaseClass {
         // Subscribe for portal events
         subscribe(portal.on("log", forwardLog()))
         subscribe(portal.on("error", forwardError()))
+        subscribe(portal.on("swap.created", forwardEvent("swap.created")))
+        subscribe(portal.on("swap.validated", forwardEvent("swap.validated")))
         subscribe(portal.on("swap.matched", forwardEvent("swap.matched")))
         // Subscribe for lightning events
         subscribe(lightning.on("log", forwardLog()))
