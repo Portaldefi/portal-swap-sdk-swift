@@ -4,6 +4,7 @@ import Web3ContractABI
 
 protocol IAdmmContract: EthereumContract {
     static var SwapCreated: SolidityEvent { get }
+    static var SwapValidated: SolidityEvent { get }
     static var SwapMatched: SolidityEvent { get }
     static var InvoiceRegistered: SolidityEvent { get }
     
@@ -20,7 +21,12 @@ open class ADMMContract: StaticContract {
     
     open var constructor: SolidityConstructor?
     open var events: [SolidityEvent] {
-        [ADMMContract.SwapCreated, ADMMContract.SwapMatched, ADMMContract.InvoiceRegistered]
+        [
+            ADMMContract.SwapCreated,
+            ADMMContract.SwapValidated,
+            ADMMContract.SwapMatched,
+            ADMMContract.InvoiceRegistered
+        ]
     }
 
     public required init(address: EthereumAddress?, eth: Web3.Eth) {
@@ -51,6 +57,29 @@ extension ADMMContract: IAdmmContract {
         ]
         
         return SolidityEvent(name: "SwapCreated", anonymous: false, inputs: inputs)
+    }
+    
+    static var SwapValidated: SolidityEvent {
+        let inputs: [SolidityEvent.Parameter] = [
+            SolidityEvent.Parameter(name: "swap", type: .tuple(
+                [
+                    .bytes(length: 32),
+                    .bytes(length: 32),
+                    .bytes(length: 32),
+                    .address,
+                    .uint256,
+                    .address,
+                    .uint256,
+                    .uint256,
+                    .uint256,
+                    .address,
+                    .string,
+                    .string
+                ]
+            ), indexed: false)
+        ]
+        
+        return SolidityEvent(name: "SwapValidated", anonymous: false, inputs: inputs)
     }
     
     static var SwapMatched: SolidityEvent {
