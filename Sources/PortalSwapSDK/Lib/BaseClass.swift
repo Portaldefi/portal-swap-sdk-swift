@@ -93,6 +93,7 @@ extension BaseClass {
 
     func error(_ event: String, _ args: Any...) {
         logFunction("error", event, args)
+        emit(event: "error", args: [event, args])
     }
     
     func forwardSwap() -> ([Any]) -> Void {
