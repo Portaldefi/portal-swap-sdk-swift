@@ -23,7 +23,10 @@ final class Dex: BaseClass {
         self.sdk = sdk
         super.init(id: "dex")
         
+        subscribe(sdk.blockchains.on("error", forwardError()))
         subscribe(sdk.blockchains.on("order.created", onSwap("order.created")))
+        subscribe(sdk.blockchains.on("swap.created", onSwap("swap.created")))
+        subscribe(sdk.blockchains.on("swap.validated", onSwap("swap.validated")))
         subscribe(sdk.blockchains.on("swap.matched", onSwap("swap.matched")))
         subscribe(sdk.blockchains.on("invoice.paid", onSwap("invoice.paid")))
         subscribe(sdk.blockchains.on("lp.invoice.created", onSwap("lp.invoice.created")))
@@ -70,7 +73,8 @@ final class Dex: BaseClass {
                 ).then { [weak self] response in
                     self?.info("notary.createSwap", ["order": order, "response": response])
                 }.catch { [weak self] swapOrderError in
-                    self?.warn("notary.createSwap", ["error": swapOrderError])
+                    self?.error("notary.createSwap", ["error": swapOrderError])
+                    reject(SwapSDKError.msg("\(swapOrderError)"))
                 }
             default:
                 reject(SwapSDKError.msg("Unsupported network: \(order.sellNetwork)"))
