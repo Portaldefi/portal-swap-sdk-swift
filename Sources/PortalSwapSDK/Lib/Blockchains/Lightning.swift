@@ -49,9 +49,9 @@ final class Lightning: BaseClass, IBlockchain {
                     return reject(SwapSDKError.msg("Decoded invoice doesn't have hash"))
                 }
                 
-                guard paymentHash == secretHash else {
-                    return reject(SwapSDKError.msg("Payment hashes doesn't match"))
-                }
+//                guard paymentHash == secretHash else {
+//                    return reject(SwapSDKError.msg("Payment hashes doesn't match"))
+//                }
                 
                 guard decodedInvoice.description == swapId else {
                     return reject(SwapSDKError.msg("Description doesn't match"))
