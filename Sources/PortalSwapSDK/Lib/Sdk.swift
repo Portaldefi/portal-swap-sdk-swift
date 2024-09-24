@@ -30,6 +30,9 @@ final class Sdk: BaseClass {
         
         // Subscribe for order state changes
         subscribe(dex.on("swap.completed", forwardEvent("swap.completed")))
+        subscribe(blockchains.on("order.created", forwardEvent("order.created")))
+        subscribe(blockchains.on("swap.created", forwardEvent("swap.created")))
+        subscribe(blockchains.on("swap.validated", forwardEvent("swap.validated")))
         subscribe(blockchains.on("swap.matched", forwardEvent("swap.matched")))
         
         // Bubble up the log events
@@ -40,6 +43,9 @@ final class Sdk: BaseClass {
         
         // Handling errors
         subscribe(blockchains.on("error", forwardError()))
+        subscribe(store.on("error", forwardError()))
+        subscribe(assetManagement.on("error", forwardError()))
+        subscribe(dex.on("error", forwardError()))
     }
 
     func start() -> Promise<Void> {
@@ -49,7 +55,6 @@ final class Sdk: BaseClass {
             all(
                 blockchains.connect(),
                 store.open()
-//                dex.open()
             ).then { [unowned self] blockchains, store in
                 info("started")
                 resolve(())
@@ -82,5 +87,14 @@ final class Sdk: BaseClass {
     
     func submit(_ order: SwapOrder) -> Promise<Void> {
         dex.submit(order)
+    }
+    
+    func secret(id: String) throws -> String? {
+        let secret = try store.get(.secrets, id)
+        if let hash = secret["secretHash"] as? String {
+            return hash
+        } else {
+            return nil
+        }
     }
 }
