@@ -43,6 +43,9 @@ public final class LocalPersistenceManager {
         /*.filter{ $0.accountId == accountId }*/
             .map{ AmmSwap(record: $0) }
     }
+    public func fetchSecret(key: String) throws -> Data? {
+        (try DBSecret.entity(key: key, context: viewContext)).data
+    }
 }
 
 extension LocalPersistenceManager {
