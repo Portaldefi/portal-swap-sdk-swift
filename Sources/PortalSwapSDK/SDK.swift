@@ -14,8 +14,10 @@ public final class SDK: BaseClass {
         subscribe(sdk.on("order.opened", forwardEvent("order.opened")))
         subscribe(sdk.on("order.closed", forwardEvent("order.closed")))
         
-        subscribe(sdk.on("swap.completed", forwardEvent("swap.completed")))
+        subscribe(sdk.on("swap.created", forwardEvent("swap.created")))
+        subscribe(sdk.on("swap.validated", forwardEvent("swap.validated")))
         subscribe(sdk.on("swap.matched", forwardEvent("swap.matched")))
+        subscribe(sdk.on("swap.completed", forwardEvent("swap.completed")))
         
         subscribe(sdk.on("log", forwardLog()))
         subscribe(sdk.on("error", forwardError()))
@@ -38,4 +40,9 @@ public final class SDK: BaseClass {
     public func submit(_ order: SwapOrder) -> Promise<Void> {
         sdk.submit(order)
     }
+    
+    public func secret(id: String) throws -> String? {
+        try sdk.secret(id: id)
+    }
+
 }
