@@ -41,6 +41,24 @@ final class Sdk: BaseClass {
         subscribe(blockchains.on("log", forwardLog()))
         subscribe(assetManagement.on("log", forwardLog()))
         
+        // Bubble up the info events
+        subscribe(store.on("info", forwardLog()))
+        subscribe(dex.on("info", forwardLog()))
+        subscribe(blockchains.on("info", forwardLog()))
+        subscribe(assetManagement.on("info", forwardLog()))
+        
+        // Bubble up the warn events
+        subscribe(store.on("warn", forwardLog()))
+        subscribe(dex.on("warn", forwardLog()))
+        subscribe(blockchains.on("warn", forwardLog()))
+        subscribe(assetManagement.on("warn", forwardLog()))
+        
+        // Bubble up the debug events
+        subscribe(store.on("debug", forwardLog()))
+        subscribe(dex.on("debug", forwardLog()))
+        subscribe(blockchains.on("debug", forwardLog()))
+        subscribe(assetManagement.on("debug", forwardLog()))
+        
         // Handling errors
         subscribe(blockchains.on("error", forwardError()))
         subscribe(store.on("error", forwardError()))

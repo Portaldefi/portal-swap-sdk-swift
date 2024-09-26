@@ -20,6 +20,8 @@ public final class SDK: BaseClass {
         subscribe(sdk.on("swap.completed", forwardEvent("swap.completed")))
         
         subscribe(sdk.on("log", forwardLog()))
+        subscribe(sdk.on("info", forwardLog()))
+        subscribe(sdk.on("debug", forwardLog()))
         subscribe(sdk.on("error", forwardError()))
         
         debug("SWAP SDK init \(config.id)")
