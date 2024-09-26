@@ -22,7 +22,7 @@ open class DexContract: StaticContract {
     open var constructor: SolidityConstructor?
 
     open var events: [SolidityEvent] {
-        [DexContract.OrderCreated]
+        [DexContract.OrderCreated, DexContract.Authorized]
     }
 
     public required init(address: EthereumAddress?, eth: Web3.Eth) {
@@ -42,6 +42,13 @@ extension DexContract: IDexContract {
             SolidityEvent.Parameter(name: "swapCreation", type: .uint256, indexed: false)
         ]
         return SolidityEvent(name: "OrderCreated", anonymous: false, inputs: inputs)
+    }
+    
+    static var Authorized: SolidityEvent {
+        let inputs: [SolidityEvent.Parameter] = [
+            SolidityEvent.Parameter(name: "swapId", type: .bytes(length: 32), indexed: false)
+        ]
+        return SolidityEvent(name: "Authorized", anonymous: false, inputs: inputs)
     }
     
     func swapOrder(secretHash: Data, sellAsset: EthereumAddress, sellAmount: BigUInt, swapOwner: EthereumAddress) -> SolidityInvocation {
