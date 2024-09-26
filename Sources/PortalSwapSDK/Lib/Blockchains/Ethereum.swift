@@ -99,6 +99,37 @@ final class Ethereum: BaseClass, IBlockchain {
                                 self.error("error", [error, self])
                             }
                         }
+                    case DexContract.Authorized.name:
+                        websocketProvider.subscribe(request: request) { [weak self] response in
+                            guard let self = self else {
+                                return reject(SwapSDKError.msg("OrderCreated event self is nil"))
+                            }
+                            
+                            switch response.status {
+                            case .success(let subscriptionID):
+                                self.subscriptionAccessQueue.async {
+                                    self.subscriptionsIDS.append(subscriptionID)
+                                }
+                            case .failure(let error):
+                                self.error("subscription failed", [
+                                    "userId": sdk.userId,
+                                    "event": event.name,
+                                    "error": error
+                                ])
+                            }
+                        } onEvent: { [unowned self] (response: Web3Response<AuthorizedEvent>) in
+                            switch response.status {
+                            case .success(let event):
+                                print("\(DexContract.Authorized.name): \(event)")
+                                
+                                self.info("authorized event", [
+                                    "event": event
+                                ])
+                            case .failure(let error):
+                                debug("\(sdk.userId) SwapIntended subscription event fail error: \(error)")
+                                self.error("error", [error, self])
+                            }
+                        }
                     default:
                         continue
                     }
@@ -287,7 +318,7 @@ final class Ethereum: BaseClass, IBlockchain {
                         print("settle invoice suggested hight fees: \(gasEstimation.high)")
                         
                         let maxFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxFeePerGas).gwei)
-                        let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.high.suggestedMaxPriorityFeePerGas).gwei)
+                        let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxPriorityFeePerGas).gwei)
                         
                         guard let swapOrderTx = dexContract.swapOrder(
                             secretHash: secretHash,
@@ -449,7 +480,7 @@ final class Ethereum: BaseClass, IBlockchain {
 
                     suggestedGasFees { [weak self] gasEstimation in
                         guard let self else {
-                            return reject(SwapSDKError.msg("gas fees self is nil"))
+                            return reject(SwapSDKError.msg("gas fee s self is nil"))
                         }
                         guard let gasEstimation else {
                             return reject(SwapSDKError.msg("failed update gas fees"))
@@ -459,7 +490,7 @@ final class Ethereum: BaseClass, IBlockchain {
                         print("settle invoice suggested hight fees: \(gasEstimation.high)")
                         
                         let maxFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxFeePerGas).gwei)
-                        let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.high.suggestedMaxPriorityFeePerGas).gwei)
+                        let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxPriorityFeePerGas).gwei)
                         
                         guard let authorizeTx = dexContract.authorize(
                             swapId: swapId,
@@ -645,7 +676,7 @@ final class Ethereum: BaseClass, IBlockchain {
                         print("settle invoice suggested hight fees: \(gasEstimation.high)")
                         
                         let maxFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxFeePerGas).gwei)
-                        let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.high.suggestedMaxPriorityFeePerGas).gwei)
+                        let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxPriorityFeePerGas).gwei)
                         
                         guard let settleTx = liquidityProvider.settle(
                             secret: secret,
