@@ -116,8 +116,23 @@ extension BaseClass {
         { [unowned self] args in
             if let level = args.first as? String
             {
+                let argsArray = Array(args.dropFirst())
                 let loggingFunction = getLoggingFunction(for: LogLevel.level(level))
-                loggingFunction(Array(args.dropFirst()))
+                loggingFunction(argsArray)
+                
+                switch LogLevel.level(level) {
+                case .debug:
+                    emit(event: "debug", args: [argsArray])
+                case .info:
+                    emit(event: "info", args: [argsArray])
+                case .warn:
+                    emit(event: "warn", args: [argsArray])
+                case .error:
+                    emit(event: "error", args: [argsArray])
+                case .unknown:
+                    break
+                }
+                
             } else {
                 emit(event: "log", args: args)
             }
@@ -140,15 +155,15 @@ extension BaseClass {
         return { args in
             switch level {
             case .debug:
-                print("SWAP SDK DEBUG: \(args.first ?? String())")
+                print("[\(Date())] SWAP SDK DEBUG: \(args.first ?? String())")
             case .info:
-                print("SWAP SDK INFO: \(args.first ?? String())")
+                print("[\(Date())] SWAP SDK INFO: \(args.first ?? String())")
             case .warn:
-                print("SWAP SDK WARN: \(args.first ?? String())")
+                print("[\(Date())] SWAP SDK WARN: \(args.first ?? String())")
             case .error:
-                print("SWAP SDK ERROR: \(args.first ?? String())")
+                print("[\(Date())] SWAP SDK ERROR: \(args.first ?? String())")
             case .unknown:
-                print("SWAP SDK unknown message level: \(args.first ?? String())")
+                print("[\(Date())] SWAP SDK unknown message level: \(args.first ?? String())")
             }
             
             for arg in args.dropFirst() {
