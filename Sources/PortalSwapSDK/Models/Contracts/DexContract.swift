@@ -3,6 +3,7 @@ import Web3ContractABI
 import Foundation
 
 protocol IDexContract: EthereumContract {
+    static var Authorized: SolidityEvent { get }
     static var OrderCreated: SolidityEvent { get }
     func createInvoice(id: Data, swapId: Data, asset: EthereumAddress, quantity: BigUInt) -> SolidityInvocation
     func swapOrder(secretHash: Data, sellAsset: EthereumAddress, sellAmount: BigUInt, swapOwner: EthereumAddress) -> SolidityInvocation
