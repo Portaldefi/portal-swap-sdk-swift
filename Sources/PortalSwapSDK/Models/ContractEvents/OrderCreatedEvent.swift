@@ -52,6 +52,15 @@ struct OrderCreatedEvent: Codable {
         swapCreation = decodeBigUInt(from: swapCreationHex)
     }
     
+    public init(secretHash: String, sellAsset: String, sellAmount: BigUInt, swapOwner: String, swapId: String, swapCreation: BigUInt) {
+        self.secretHash = secretHash
+        self.sellAsset = sellAsset
+        self.sellAmount = sellAmount
+        self.swapOwner = swapOwner
+        self.swapId = swapId
+        self.swapCreation = swapCreation
+    }
+    
     public func encode(to encoder: Encoder) throws {}
 }
 
