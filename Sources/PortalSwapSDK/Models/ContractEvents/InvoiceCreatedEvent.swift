@@ -48,6 +48,14 @@ struct InvoiceCreatedEvent: Codable {
         let sellAmountHex = String(dataSubstring.prefix(64))
         sellAmount = decodeBigUInt(from: sellAmountHex)
     }
+    
+    public init(swapId: String, swapOwner: String, counterParty: String, sellAsset: String, sellAmount: BigUInt) {
+        self.swapId = swapId
+        self.swapOwner = swapOwner
+        self.counterParty = counterParty
+        self.sellAsset = sellAsset
+        self.sellAmount = sellAmount
+    }
 
     public func encode(to encoder: Encoder) throws {}
 }
