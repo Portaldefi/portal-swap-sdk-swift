@@ -26,9 +26,9 @@ open class LiquidityProvider: StaticContract {
 extension LiquidityProvider: ILiquidityProviderContract {
     static var InvoiceCreated: SolidityEvent {
         let inputs: [SolidityEvent.Parameter] = [
-            SolidityEvent.Parameter(name: "swapId", type: .bytes(length: 32), indexed: false),
-            SolidityEvent.Parameter(name: "swapOwner", type: .address, indexed: false),
-            SolidityEvent.Parameter(name: "counterParty", type: .address, indexed: false),
+            SolidityEvent.Parameter(name: "swapId", type: .bytes(length: 32), indexed: true),
+            SolidityEvent.Parameter(name: "swapOwner", type: .address, indexed: true),
+            SolidityEvent.Parameter(name: "counterParty", type: .address, indexed: true),
             SolidityEvent.Parameter(name: "sellAsset", type: .address, indexed: false),
             SolidityEvent.Parameter(name: "sellAmount", type: .uint256, indexed: false)
         ]
