@@ -14,6 +14,7 @@ final class Portal: BaseClass {
 
     private var subscriptionsIDS = [String]()
     private let subscriptionAccessQueue = DispatchQueue(label: "swap.sdk.subscriptionAccessQueue")
+    private var connected = false
     
     // Sdk seems unused
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Portal) {
@@ -86,6 +87,8 @@ final class Portal: BaseClass {
                                 info("swap.created.event", [event])
                                 emit(event: "swap.created", args: [event])
                             case .failure(let error):
+                                guard connected else { return }
+
                                 self.error("\(event.name)", [error])
                             }
                         }
@@ -113,6 +116,8 @@ final class Portal: BaseClass {
                                 info("swap.validated.event", [event])
                                 emit(event: "swap.validated", args: [event])
                             case .failure(let error):
+                                guard connected else { return }
+
                                 self.error("\(event.name)", [error])
                             }
                         }
@@ -142,6 +147,8 @@ final class Portal: BaseClass {
                                 self.info("swap.matched.event", [event])
                                 self.emit(event: status, args: [event])
                             case .failure(let error):
+                                guard connected else { return }
+
                                 self.error("\(event.name)", [error])
                             }
                         }
@@ -168,6 +175,8 @@ final class Portal: BaseClass {
                             case .success(let event):
                                 info("invoice.registered.event", [event])
                             case .failure(let error):
+                                guard connected else { return }
+
                                 self.error("\(event.name)", [error])
                             }
                         }
@@ -177,17 +186,21 @@ final class Portal: BaseClass {
                 }
                                                             
                 self.info("connect")
-                self.emit(event: "connect", args: [self])
+                self.emit(event: "connect")
+                self.connected = true
                 resolve(())
             } catch {
-                self.error("connect", [error, self])
+                self.error("connect", [error])
+                self.connected = false
                 reject(error)
             }
         }
     }
-    
+
     func disconnect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
+            connected = false
+            
             for subscriptionsId in subscriptionsIDS {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
             }
@@ -542,7 +555,7 @@ final class Portal: BaseClass {
                                                 }
                                             }
                                         case .failure(let error):
-                                            self.error("create swap tx error: \(error)")
+                                            self.error("create swap tx error: \(error)", [error])
                                             reject(error)
                                         }
                                     }
