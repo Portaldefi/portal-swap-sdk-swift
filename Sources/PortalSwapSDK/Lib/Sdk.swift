@@ -3,7 +3,7 @@ import Combine
 import Promises
 
 final class Sdk: BaseClass {
-    let userId: String
+    let accountId: String
     
     private(set) var dex: Dex!
     private(set) var store: Store!
@@ -12,7 +12,7 @@ final class Sdk: BaseClass {
     
     // Creates a new instance of Portal SDK
     init(config: SwapSdkConfig) {
-        userId = config.id
+        accountId = config.id
         
         super.init(id: "sdk")
         
@@ -26,7 +26,7 @@ final class Sdk: BaseClass {
         dex = .init(sdk: self)
         
         // Interface to the underlying data store
-        store = .init(sdk: self)
+        store = .init(accountId: accountId, sdk: self)
         
         // Subscribe for order state changes
         subscribe(dex.on("swap.completed", forwardEvent("swap.completed")))

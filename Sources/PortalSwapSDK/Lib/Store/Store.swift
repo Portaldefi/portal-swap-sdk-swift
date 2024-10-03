@@ -3,6 +3,7 @@ import CoreData
 import Promises
 
 final class Store: BaseClass {
+    private let accountId: String
     private let sdk: Sdk
     private var persistenceManager: LocalPersistenceManager?
     
@@ -10,7 +11,8 @@ final class Store: BaseClass {
         persistenceManager != nil
     }
     
-    init(sdk: Sdk) {
+    init(accountId: String, sdk: Sdk) {
+        self.accountId = accountId
         self.sdk = sdk
         
         super.init(id: "Store")
@@ -19,13 +21,7 @@ final class Store: BaseClass {
     func open() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             do {
-                persistenceManager = try LocalPersistenceManager.manager(
-                    configuration: .init(
-                        modelName: "DBModel",
-                        cloudIdentifier: String(),
-                        configuration: "Local"
-                    )
-                )
+                persistenceManager = try LocalPersistenceManager.manager(accountId: accountId)
                 
                 emit(event: "open", args: [])
                 
