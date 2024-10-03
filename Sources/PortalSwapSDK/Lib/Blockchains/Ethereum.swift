@@ -62,8 +62,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 try web3.eth.subscribeToLogs(addresses: [lpContractAddress], topics: topics) { subscription in
                     guard let error = subscription.error else {
                         guard let subscriptionId = subscription.result else { return }
-                        self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
-                        return
+                        return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
                     }
                     guard self.connected else { return }
                     self.error("InvoiceCreated subscription error", [error])
@@ -79,8 +78,7 @@ final class Ethereum: BaseClass, IBlockchain {
                             let sellAmount = invoiceCreatedEvent["sellAmount"] as? BigUInt
                         else {
                             guard self.connected else { return }
-                            self.error("invoice created logs error", ["unwrapping data failed"])
-                            return
+                            return self.error("invoice created logs error", ["unwrapping data failed"])
                         }
                         
                         let event = InvoiceCreatedEvent(
@@ -98,9 +96,7 @@ final class Ethereum: BaseClass, IBlockchain {
                             "event": event
                         ])
                         
-                        self.emit(event: status, args: [event])
-                        
-                        return
+                        return self.emit(event: status, args: [event])
                     }
                     guard self.connected else { return }
                     self.error("lp invoice created error", [error])
@@ -228,8 +224,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                         try web3.eth.subscribeToLogs(addresses: [dexContractAddress], topics: topics) { subscription in
                                             guard let error = subscription.error else {
                                                 guard let subscriptionId = subscription.result else { return }
-                                                self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
-                                                return
+                                                return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
                                             }
                                             guard self.connected else { return }
                                             self.error("OrderCreated subscription error", [error])
@@ -378,8 +373,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                         try web3.eth.subscribeToLogs(addresses: [dexContract.address!], topics: topics) { subscription in
                                             guard let error = subscription.error else {
                                                 guard let subscriptionId = subscription.result else { return }
-                                                self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
-                                                return
+                                                return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
                                             }
                                             guard self.connected else { return }
                                             self.error("Authorized subscription error", [error])
@@ -507,8 +501,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                         try web3.eth.subscribeToLogs(addresses: [liquidityProvider.address!], topics: topics) { subscription in
                                             guard let error = subscription.error else {
                                                 guard let subscriptionId = subscription.result else { return }
-                                                self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
-                                                return
+                                                return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
                                             }
                                             guard self.connected else { return }
                                             self.error("InvoiceSettled subscription error", [error])
