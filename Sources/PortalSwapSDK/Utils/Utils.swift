@@ -54,9 +54,3 @@ class Utils {
         return nil
     }
 }
-
-extension Data {
-    var hexString: String {
-        self.toHexString()
-    }
-}
