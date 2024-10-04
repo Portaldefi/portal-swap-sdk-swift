@@ -57,7 +57,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 
                 liquidityProvider = web3.eth.Contract(type: LiquidityProvider.self, address: lpContractAddress)
                                 
-                let topics = topics(event: LiquidityProvider.InvoiceCreated)
+                let topics = LiquidityProvider.InvoiceCreated.topics()
                 
                 try web3.eth.subscribeToLogs(addresses: [lpContractAddress], topics: topics) { subscription in
                     guard let error = subscription.error else {
@@ -218,7 +218,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                 case .success(let data):
                                     self.debug("swap order tx hash: \(data.hex())")
                                     
-                                    let topics = topics(event: DexContract.OrderCreated)
+                                    let topics = DexContract.OrderCreated.topics()
                                     
                                     do {
                                         try web3.eth.subscribeToLogs(addresses: [dexContractAddress], topics: topics) { subscription in
@@ -367,7 +367,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                 case .success(let data):
                                     self.debug("authorize tx hash: \(data.hex())")
                                     
-                                    let topics = topics(event: DexContract.Authorized)
+                                    let topics = DexContract.Authorized.topics()
                                     
                                     do {
                                         try web3.eth.subscribeToLogs(addresses: [dexContract.address!], topics: topics) { subscription in
@@ -495,7 +495,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                 case .success(let data):
                                     self.debug("settle invoice tx hash: \(data.hex())")
                                     
-                                    let topics = topics(event: LiquidityProvider.InvoiceSettled)
+                                    let topics = LiquidityProvider.InvoiceSettled.topics()
                                     
                                     do {
                                         try web3.eth.subscribeToLogs(addresses: [liquidityProvider.address!], topics: topics) { subscription in
@@ -612,14 +612,6 @@ final class Ethereum: BaseClass, IBlockchain {
         Promise { resolve, reject in
             
         }
-    }
-    
-    private func topics(event: SolidityEvent) -> [[EthereumData]]? {
-        guard let topic = try? EthereumData(ethereumValue: event.signature.sha3(.keccak256)) else {
-            return nil
-        }
-        
-        return [[topic]]
     }
     
     private func suggestedGasFees(_ completion: @escaping (GasEstimateResponse?) -> Void) {
