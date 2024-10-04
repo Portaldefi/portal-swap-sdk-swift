@@ -42,5 +42,12 @@ struct InvoiceRegisteredEvent: Codable {
         invoice = invoiceHex 
     }
     
+    init(swapId: String, secretHash: String, amount: BigUInt, invoice: String) {
+        self.swapId = swapId
+        self.secretHash = secretHash
+        self.amount = amount
+        self.invoice = invoice
+    }
+    
     public func encode(to encoder: Encoder) throws {}
 }
