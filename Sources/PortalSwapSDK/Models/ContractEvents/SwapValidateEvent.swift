@@ -6,7 +6,7 @@ struct SwapValidatedEvent: Codable {
         case address, topics, data, blockNumber, transactionHash, transactionIndex, blockHash, logIndex, removed
     }
     
-    let id: String
+    let swapId: String
     let liquidityPoolId: String
     let secretHash: String
     let sellAsset: String
@@ -39,7 +39,7 @@ struct SwapValidatedEvent: Codable {
         
         // Extract and decode each parameter
         let idHex = String(dataSubstring.prefix(64))
-        id = decodeBytes32(from: idHex)
+        swapId = decodeBytes32(from: idHex)
         
         let remainingData1 = dataSubstring.dropFirst(64)
         let liquidityPoolIdHex = String(remainingData1.prefix(64))
