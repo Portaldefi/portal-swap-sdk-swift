@@ -6,6 +6,8 @@ public final class SDK: BaseClass {
     private let sdk: Sdk
     
     public init(config: SwapSdkConfig) {
+        DispatchQueue.promises = .global(qos: .userInitiated)
+        
         sdk = .init(config: config)
         
         super.init(id: "SDK")
