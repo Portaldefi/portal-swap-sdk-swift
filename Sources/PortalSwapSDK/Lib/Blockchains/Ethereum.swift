@@ -14,7 +14,6 @@ final class Ethereum: BaseClass, IBlockchain {
     private var liquidityProvider: ILiquidityProviderContract?
     
     private var subscriptionsIds = [String]()
-    private let subscriptionAccessQueue = DispatchQueue(label: "swap.sdk.subscriptionAccessQueue")
     private var connected = false
     
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Ethereum) {
@@ -62,7 +61,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 try web3.eth.subscribeToLogs(addresses: [lpContractAddress], topics: topics) { subscription in
                     guard let error = subscription.error else {
                         guard let subscriptionId = subscription.result else { return }
-                        return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
+                        return self.subscriptionsIds.append(subscriptionId)
                     }
                     guard self.connected else { return }
                     self.error("InvoiceCreated subscription error", [error])
@@ -124,6 +123,10 @@ final class Ethereum: BaseClass, IBlockchain {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
             }
             subscriptionsIds.removeAll()
+            
+            guard !websocketProvider.webSocket.isClosed else {
+                return resolve(())
+            }
             
             websocketProvider.webSocket.close().whenComplete { [weak self] _ in
                 guard let self = self else {
@@ -219,7 +222,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                         try web3.eth.subscribeToLogs(addresses: [dexContractAddress], topics: topics) { subscription in
                                             guard let error = subscription.error else {
                                                 guard let subscriptionId = subscription.result else { return }
-                                                return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
+                                                return self.subscriptionsIds.append(subscriptionId)
                                             }
                                             guard self.connected else { return }
                                             self.error("OrderCreated subscription error", [error])
@@ -365,7 +368,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                         try web3.eth.subscribeToLogs(addresses: [dexContract.address!], topics: topics) { subscription in
                                             guard let error = subscription.error else {
                                                 guard let subscriptionId = subscription.result else { return }
-                                                return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
+                                                return self.subscriptionsIds.append(subscriptionId)
                                             }
                                             guard self.connected else { return }
                                             self.error("Authorized subscription error", [error])
@@ -493,7 +496,7 @@ final class Ethereum: BaseClass, IBlockchain {
                                         try web3.eth.subscribeToLogs(addresses: [liquidityProvider.address!], topics: topics) { subscription in
                                             guard let error = subscription.error else {
                                                 guard let subscriptionId = subscription.result else { return }
-                                                return self.subscriptionAccessQueue.async { self.subscriptionsIds.append(subscriptionId) }
+                                                return self.subscriptionsIds.append(subscriptionId)
                                             }
                                             guard self.connected else { return }
                                             self.error("InvoiceSettled subscription error", [error])

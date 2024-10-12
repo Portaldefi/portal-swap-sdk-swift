@@ -13,10 +13,8 @@ final class Portal: BaseClass {
     private var admm: IAdmmContract?
 
     private var subscriptionIds = [String]()
-    private let subscriptionAccessQueue = DispatchQueue(label: "swap.sdk.subscriptionAccessQueue")
     private var connected = false
     
-    // Sdk seems unused
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Portal) {
         self.sdk = sdk
         self.props = props
@@ -71,17 +69,15 @@ final class Portal: BaseClass {
                             
                             switch response.status {
                             case .success(let subscriptionID):
-                                self.subscriptionAccessQueue.async {
-                                    self.subscriptionIds.append(subscriptionID)
-                                }
+                                self.subscriptionIds.append(subscriptionID)
                             case .failure(let error):
-                                self.error("error", [error, event])
+                                self.error("Swap validated subscription error", [error, event])
                             }
                         } onEvent: { [weak self] (response: Web3Response<SwapValidatedEvent>) in
                             guard let self = self else {
                                 return reject(SwapSDKError.msg("notary blockchain interface is missing"))
                             }
-                            
+                                                        
                             switch response.status {
                             case .success(let event):
                                 info("swap.validated.event", [event])
@@ -89,7 +85,7 @@ final class Portal: BaseClass {
                             case .failure(let error):
                                 guard connected else { return }
 
-                                self.error("\(event.name)", [error])
+                                self.error("Swap validated event error", [error])
                             }
                         }
                     case ADMMContract.SwapMatched.name:
@@ -100,11 +96,9 @@ final class Portal: BaseClass {
                             
                             switch response.status {
                             case .success(let subscriptionID):
-                                self.subscriptionAccessQueue.async {
-                                    self.subscriptionIds.append(subscriptionID)
-                                }
+                                self.subscriptionIds.append(subscriptionID)
                             case .failure(let error):
-                                self.error("error", [error, event.name])
+                                self.error("swap matched subscription error", [error, event.name])
                             }
                         } onEvent: { [weak self] (response: Web3Response<SwapMatchedEvent>) in
                             guard let self = self else {
@@ -113,14 +107,12 @@ final class Portal: BaseClass {
                             
                             switch response.status {
                             case .success(let event):
-                                let status = "swap.matched"
-                                
                                 self.info("swap.matched.event", [event])
-                                self.emit(event: status, args: [event])
+                                self.emit(event: "swap.matched", args: [event])
                             case .failure(let error):
                                 guard connected else { return }
 
-                                self.error("\(event.name)", [error])
+                                self.error("Swap matched event error", [error])
                             }
                         }
                     default:
@@ -148,6 +140,10 @@ final class Portal: BaseClass {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
             }
             subscriptionIds.removeAll()
+            
+            guard !websocketProvider.webSocket.isClosed else {
+                return resolve(())
+            }
             
             websocketProvider.webSocket.close().whenComplete { [weak self] _ in
                 guard let self = self else {
@@ -202,12 +198,7 @@ final class Portal: BaseClass {
                                 accessList: [:],
                                 transactionType: .legacy
                             ) else {
-                                self.error("register invoice tx failed to build", [
-                                    "id": "0x\(swapId.hexString)",
-                                    "secretHash": "0x\(secretHash.hexString)",
-                                    "amount": amount.description,
-                                    "invoice": invoice
-                                ])
+                                self.error("register invoice tx failed error", [invoice])
                                 return reject(SwapSDKError.msg("register invoice tx failed to build"))
                             }
                             
@@ -229,7 +220,7 @@ final class Portal: BaseClass {
                                             try web3.eth.subscribeToLogs(addresses: [admmContractAddress], topics: topics) { subscription in
                                                 guard let error = subscription.error else {
                                                     guard let subscriptionId = subscription.result else { return }
-                                                    return self.subscriptionAccessQueue.async { self.subscriptionIds.append(subscriptionId) }
+                                                    return self.subscriptionIds.append(subscriptionId)
                                                 }
                                                 guard self.connected else { return }
                                                 self.error("register invoice subscription", [error])
@@ -418,7 +409,7 @@ final class Portal: BaseClass {
                                                 try web3.eth.subscribeToLogs(addresses: [admmContractAddress], topics: topics) { subscription in
                                                     guard let error = subscription.error else {
                                                         guard let subscriptionId = subscription.result else { return }
-                                                        return self.subscriptionAccessQueue.async { self.subscriptionIds.append(subscriptionId) }
+                                                        return self.subscriptionIds.append(subscriptionId)
                                                     }
                                                     guard self.connected else { return }
                                                     self.error("swap created subscription", [error])
