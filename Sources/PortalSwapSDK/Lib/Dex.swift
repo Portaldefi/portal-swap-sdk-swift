@@ -56,7 +56,7 @@ final class Dex: BaseClass {
                     self?.info("order submitted", ["order": order, "response": response])
                     resolve(())
                 }.catch { [weak self] error in
-                    self?.error("submitting order error", ["order": order, "error": error])
+                    self?.error("submitting order error", [error])
                     reject(error)
                 }
             case "lightning":
@@ -73,7 +73,7 @@ final class Dex: BaseClass {
                 ).then { [weak self] response in
                     self?.info("notary.createSwap", ["order": order, "response": response])
                 }.catch { [weak self] swapOrderError in
-                    self?.error("notary.createSwap", ["error": swapOrderError])
+                    self?.error("notary.createSwap error", [swapOrderError])
                     reject(SwapSDKError.msg("\(swapOrderError)"))
                 }
             default:
@@ -100,12 +100,12 @@ extension Dex {
             switch event {
             case "order.created":
                 guard let orderCreated = args.first as? OrderCreatedEvent else {
-                    return error("order created event is missing", args)
+                    return error("order created event is missing", [args])
                 }
                 onOrderCreated(event: orderCreated)
             case "lp.invoice.created":
                 guard let invoiceCreated = args.first as? InvoiceCreatedEvent else {
-                    return error("invoice created event is missing", args)
+                    return error("invoice created event is missing", [args])
                 }
                 onLpInvoiceCreated(event: invoiceCreated)
             case "swap.matched":
@@ -113,14 +113,14 @@ extension Dex {
                 Thread.sleep(forTimeInterval: 3)
                 
                 guard let swapMatched = args.first as? SwapMatchedEvent else {
-                    return error("swap matched event is missing", args)
+                    return error("swap matched event is missing", [args])
                 }
                 onSwapMatched(event: swapMatched)
             case "invoice.paid":
                 onInvoicePaid(args: args)
             case "invoice.settled":
                 guard let swapId = args.first as? String else {
-                    return error("onInvoiceSettled", ["ERROR": "swapId is missing", "args": args])
+                    return error("onInvoiceSettled swapId is missing error", [args])
                 }
                 if let mainId = args.last as? String {
                     onInvoiceSettled(swapId: mainId)
@@ -135,13 +135,13 @@ extension Dex {
     
     private func onSwapMatched(event: SwapMatchedEvent) {
         guard let order else {
-            return error("onSwap", ["ERROR": "order is missing", "event": event])
+            return error("onSwapMatched", [event])
         }
         guard let traderBlockchain = sdk.blockchains.blockchain(id: order.buyNetwork) else {
-            return error("blockchain with id: \(order.buyNetwork) not found", event)
+            return error("blockchain with id: \(order.buyNetwork) not found", [event])
         }
         guard let swapOwner = try? ethereum.publicAddress() else {
-            return error("swap owner is unknown", event)
+            return error("swap owner is unknown", [event])
         }
 
         portal.getSwap(id: event.swapId).then { swap in
@@ -189,7 +189,7 @@ extension Dex {
                 }.then { [unowned self] response in
                     info("authorize call", ["response": response])
                 }.catch { [unowned self] error in
-                    self.error("createInvoice",["error": error])
+                    self.error("createInvoice", [error])
                 }
             default:
                 break
@@ -199,7 +199,7 @@ extension Dex {
     
     private func onOrderCreated(event: OrderCreatedEvent) {
         guard let order else {
-            return error("onSwap", ["ERROR": "order is missing", "event": event])
+            return error("onSwap order is missing error", [event])
         }
         
         portal.createSwap(
@@ -212,13 +212,13 @@ extension Dex {
             buyAmount: order.buyAmount,
             slippage: 100
         ).catch { error in
-            self.error("create.swap", ["ERROR": error])
+            self.error("[Portal] Swap creation error", [error])
         }
     }
     
     private func onLpInvoiceCreated(event: InvoiceCreatedEvent) {
         guard let order else {
-            return error("onSwap", ["ERROR": "order is missing", "event": event])
+            return error("onSwap order is missing error", [event])
         }
         
         switch order.sellNetwork {
@@ -239,7 +239,7 @@ extension Dex {
                 
                 return lightning.pay(invoice: request)
             }.catch { error in
-                self.error("paying ln invoice error", ["error": error])
+                self.error("paying ln invoice error", [error])
             }
         default:
             break
@@ -248,13 +248,13 @@ extension Dex {
     
     private func onInvoicePaid(args: [Any]) {
         guard let order else {
-            return error("onSwap", ["ERROR": "order is missing", "args": args])
+            return error("onSwap order is missing error", [args])
         }
         guard let traderBlockchain = sdk.blockchains.blockchain(id: order.buyNetwork) else {
-            return error("traderBlockchain (\(order.buyNetwork) is missing", order)
+            return error("traderBlockchain (\(order.buyNetwork) is missing", [order])
         }
         guard let swapOwner = try? ethereum.publicAddress() else {
-            return error("swap owner is unknown", order)
+            return error("swap owner is unknown", [order])
         }
         
         let _swapId: String
@@ -263,7 +263,7 @@ extension Dex {
         switch order.sellNetwork {
         case "lightning":
             guard let swapId = args[2] as? String else {
-                return error("swapId not passed with", args)
+                return error("swapId not passed with", [args])
             }
             _swapId = swapId
             
@@ -274,7 +274,7 @@ extension Dex {
             }
         default:
             guard let swapId = args.first as? String else {
-                return error("swapId is missing", args)
+                return error("swapId is missing", [args])
             }
             _swapId = swapId
         }
@@ -295,7 +295,7 @@ extension Dex {
                 guard 
                     let _secret = try? sdk.store.get(.secrets, swap.secretHash.hexString)["secret"] as? Data
                 else {
-                    return error("secret for is missing", swap)
+                    return error("OnInvoicePaid secret is missing", [swap])
                 }
                 secret = _secret
                 swapId = _swapId
@@ -308,13 +308,13 @@ extension Dex {
             info("invoice.settled", response)
         }.catch { error in
             self.debug("settleInvoice(party: party, secret: secret)", error)
-            self.error("error", error)
+            self.error("error", [error])
         }
     }
     
     private func onInvoiceSettled(swapId: String) {
         guard let swapOwner = try? ethereum.publicAddress() else {
-            return error("swap owner is unknown")
+            return error("OnInvoiceSettled", ["swap owner is unknown"])
         }
         
         portal.getSwap(id: swapId).then { [unowned self] swap in

@@ -99,7 +99,7 @@ final class Ethereum: BaseClass, IBlockchain {
                         return self.emit(event: status, args: [event])
                     }
                     guard self.connected else { return }
-                    self.error("lp invoice created error", [error])
+                    self.error("lp invoice error", [error])
                 }
 
                 self.info("connect")
@@ -173,8 +173,8 @@ final class Ethereum: BaseClass, IBlockchain {
                             return reject(SwapSDKError.msg("failed update gas fees"))
                         }
                         
-                        debug("settle invoice suggested medium fees: \(gasEstimation.medium)")
-                        debug("settle invoice suggested high fees: \(gasEstimation.high)")
+                        debug("swap order suggested medium fees: \(gasEstimation.medium)")
+                        debug("swap order suggested high fees: \(gasEstimation.high)")
                         
                         let maxFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxFeePerGas).gwei)
                         let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxPriorityFeePerGas).gwei)
@@ -195,12 +195,7 @@ final class Ethereum: BaseClass, IBlockchain {
                             accessList: [:],
                             transactionType: .eip1559
                         ) else {
-                            self.error("Create tx", [
-                                "secretHash": "0x\(secretHash.hexString)",
-                                "sellAsset": sellAsset.hex(eip55: true),
-                                "sellAmount": order.sellAmount.description,
-                                "swapOwner": swapOwner.hex(eip55: true)
-                            ])
+                            self.error("Failed to create swap transaction", ["Ethereum"])
                             
                             return reject(SwapSDKError.msg("failed to build swap order tx"))
                         }
@@ -347,10 +342,7 @@ final class Ethereum: BaseClass, IBlockchain {
                             accessList: [:],
                             transactionType: .eip1559
                         ) else {
-                            self.error("authorize tx", [
-                                "swapId": swapId,
-                                "withdrawals": withdrawals
-                            ])
+                            self.error("Authorize tx failed", ["Ethereum"])
                             return reject(SwapSDKError.msg("authorize tx build failed"))
                         }
                         
