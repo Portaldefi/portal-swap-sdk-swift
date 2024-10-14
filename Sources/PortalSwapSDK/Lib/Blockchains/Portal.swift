@@ -39,88 +39,99 @@ final class Portal: BaseClass {
                 let admmContractAddresIsEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)                
                 let admmContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: admmContractAddresIsEipp55)
                 admm = web3.eth.Contract(type: ADMMContract.self, address: admmContractAddress)
-                                
-                guard let admm else {
-                    return reject(SwapSDKError.msg("ADMM contract is missing"))
+                
+                let swapMatchedTopics = ADMMContract.SwapMatched.topics()
+                
+                try web3.eth.subscribeToLogs(addresses: [admmContractAddress], topics: swapMatchedTopics) { subscription in
+                    guard let error = subscription.error else {
+                        guard let subscriptionId = subscription.result else { return }
+                        return self.subscriptionIds.append(subscriptionId)
+                    }
+                    guard self.connected else { return }
+                    self.error("SwapMatched subscription error", [error])
+                } onEvent: { log in
+                    guard let error = log.error else {
+                        guard
+                            let topicValue = log.result,
+                            let swapMatchedEvent = try? ABI.decodeLog(event: ADMMContract.SwapMatched, from: topicValue),
+                            let swapId = swapMatchedEvent["id"] as? Data,
+                            let liquidityOwner = swapMatchedEvent["liquidityOwner"] as? EthereumAddress,
+                            let sellAsset = swapMatchedEvent["sellAsset"] as? EthereumAddress,
+                            let matchedSellAmount = swapMatchedEvent["matchedSellAmount"] as? BigUInt,
+                            let matchedBuyAmount = swapMatchedEvent["matchedBuyAmount"] as? BigUInt
+                        else {
+                            guard self.connected else { return }
+                            return self.error("invoice created logs error", ["unwrapping data failed"])
+                        }
+                        
+                        let event = SwapMatchedEvent(
+                            swapId: swapId.hexString,
+                            liquidityOwner: liquidityOwner.hex(eip55: true),
+                            sellAsset: sellAsset.hex(eip55: true),
+                            matchedSellAmount: matchedSellAmount,
+                            matchedBuyAmount: matchedBuyAmount
+                        )
+                        
+                        self.info("swap.matched.event", [event])
+                        return self.emit(event: "swap.matched", args: [event])
+                    }
+                    guard self.connected else { return }
+                    self.error("swap matched event error", [error])
                 }
                 
-                //notaryADMM contract subscriptions
-                for (index, event) in admm.events.enumerated() {
-                    let signatureHex = "0x\(Utils.keccak256Hash(of: event.signature))"
-                    let addresses = [admmContractAddress]
-                    let data = try EthereumData(ethereumValue: signatureHex)
-                    let topics = [[data]]
-                    
-                    let request = RPCRequest<[LogsParam]>(
-                        id: index + 1,
-                        jsonrpc: Web3.jsonrpc,
-                        method: "eth_subscribe",
-                        params: [
-                            LogsParam(params: nil),
-                            LogsParam(params: LogsParam.Params(address: addresses, topics: topics))
-                        ]
-                    )
-                    
-                    switch event.name {
-                    case ADMMContract.SwapValidated.name:
-                        websocketProvider.subscribe(request: request) { [weak self] response in
-                            guard let self = self else {
-                                return reject(SwapSDKError.msg("notary blockchain interface is missing"))
-                            }
-                            
-                            switch response.status {
-                            case .success(let subscriptionID):
-                                self.subscriptionIds.append(subscriptionID)
-                            case .failure(let error):
-                                self.error("Swap validated subscription error", [error, event])
-                            }
-                        } onEvent: { [weak self] (response: Web3Response<SwapValidatedEvent>) in
-                            guard let self = self else {
-                                return reject(SwapSDKError.msg("notary blockchain interface is missing"))
-                            }
-                                                        
-                            switch response.status {
-                            case .success(let event):
-                                info("swap.validated.event", [event])
-                                emit(event: "swap.validated", args: [event])
-                            case .failure(let error):
-                                guard connected else { return }
-
-                                self.error("Swap validated event error", [error])
-                            }
-                        }
-                    case ADMMContract.SwapMatched.name:
-                        websocketProvider.subscribe(request: request) { [weak self] response in
-                            guard let self = self else {
-                                return reject(SwapSDKError.msg("notary blockchain interface is missing"))
-                            }
-                            
-                            switch response.status {
-                            case .success(let subscriptionID):
-                                self.subscriptionIds.append(subscriptionID)
-                            case .failure(let error):
-                                self.error("swap matched subscription error", [error, event.name])
-                            }
-                        } onEvent: { [weak self] (response: Web3Response<SwapMatchedEvent>) in
-                            guard let self = self else {
-                                return reject(SwapSDKError.msg("notary blockchain interface is missing"))
-                            }
-                            
-                            switch response.status {
-                            case .success(let event):
-                                self.info("swap.matched.event", [event])
-                                self.emit(event: "swap.matched", args: [event])
-                            case .failure(let error):
-                                guard connected else { return }
-
-                                self.error("Swap matched event error", [error])
-                            }
-                        }
-                    default:
-                        continue
+                let swapValidatedTopics = ADMMContract.SwapValidated.topics()
+                
+                try web3.eth.subscribeToLogs(addresses: [admmContractAddress], topics: swapValidatedTopics) { subscription in
+                    guard let error = subscription.error else {
+                        guard let subscriptionId = subscription.result else { return }
+                        return self.subscriptionIds.append(subscriptionId)
                     }
+                    guard self.connected else { return }
+                    self.warn("SwapValidated subscription error", [error])
+                } onEvent: { log in
+                    guard let error = log.error else {
+                        guard
+                            let topicValue = log.result,
+                            let swapValidatedEvent = try? ABI.decodeLog(event: ADMMContract.SwapValidated, from: topicValue),
+                            let swap = swapValidatedEvent["swap"] as? [Any],
+                            let swapId = swap[0] as? Data,
+                            let liquidityPoolId = swap[1] as? Data,
+                            let secretHash = swap[2] as? Data,
+                            let sellAsset = swap[3] as? EthereumAddress,
+                            let sellAmount = swap[4] as? BigUInt,
+                            let buyAsset = swap[5] as? EthereumAddress,
+                            let buyAmount = swap[6] as? BigUInt,
+                            let slippage = swap[7] as? BigUInt,
+                            let swapCreation = swap[8] as? BigUInt,
+                            let swapOwner = swap[9] as? EthereumAddress,
+                            let buyId = swap[10] as? String,
+                            let status = swap[10] as? String
+                        else {
+                            guard self.connected else { return }
+                            return self.warn("swap validated logs error", ["unwrapping data failed"])
+                        }
+                        
+                        let event = SwapValidatedEvent(
+                            swapId: swapId.hexString,
+                            liquidityPoolId: liquidityPoolId.hexString,
+                            secretHash: secretHash.hexString,
+                            sellAsset: sellAsset.hex(eip55: true),
+                            sellAmount: sellAmount,
+                            buyAsset: buyAsset.hex(eip55: true),
+                            buyAmount: buyAmount,
+                            slippage: slippage,
+                            swapCreation: swapCreation,
+                            swapOwner: swapOwner.hex(eip55: true),
+                            buyId: buyId,
+                            status: status
+                        )
+                        
+                        return self.info("swap.validated.event", [event])
+                    }
+                    guard self.connected else { return }
+                    self.warn("swap validated event error", [error])
                 }
-                                                            
+                                      
                 self.info("connect")
                 self.emit(event: "connect")
                 self.connected = true
