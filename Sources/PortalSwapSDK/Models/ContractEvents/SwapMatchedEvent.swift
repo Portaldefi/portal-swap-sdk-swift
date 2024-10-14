@@ -51,6 +51,14 @@ struct SwapMatchedEvent: Codable {
         let matchedBuyAmountHex = String(dataSubstring.prefix(64))
         matchedBuyAmount = decodeBigUInt(from: matchedBuyAmountHex)
     }
+    
+    init(swapId: String, liquidityOwner: String, sellAsset: String, matchedSellAmount: BigUInt, matchedBuyAmount: BigUInt) {
+        self.swapId = swapId
+        self.liquidityOwner = liquidityOwner
+        self.sellAsset = sellAsset
+        self.matchedSellAmount = matchedSellAmount
+        self.matchedBuyAmount = matchedBuyAmount
+    }
 
     public func encode(to encoder: Encoder) throws {}
 }
