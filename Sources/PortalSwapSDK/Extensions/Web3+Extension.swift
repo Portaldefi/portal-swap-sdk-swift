@@ -27,4 +27,17 @@ extension Web3.Eth {
             }
         }
     }
+    
+    func fetchGasPrice() -> Promise<EthereumQuantity> {
+        Promise { resolve, reject in
+            gasPrice { response in
+                switch response.status {
+                case .success(let gasPrice):
+                    resolve(gasPrice)
+                case .failure(let error):
+                    reject(error)
+                }
+            }
+        }
+    }
 }
