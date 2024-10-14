@@ -86,5 +86,20 @@ struct SwapValidatedEvent: Codable {
         status = decodeBytes32(from: statusHex)
     }
     
+    init(swapId: String, liquidityPoolId: String, secretHash: String, sellAsset: String, sellAmount: BigUInt, buyAsset: String, buyAmount: BigUInt, slippage: BigUInt, swapCreation: BigUInt, swapOwner: String, buyId: String, status: String) {
+        self.swapId = swapId
+        self.liquidityPoolId = liquidityPoolId
+        self.secretHash = secretHash
+        self.sellAsset = sellAsset
+        self.sellAmount = sellAmount
+        self.buyAsset = buyAsset
+        self.buyAmount = buyAmount
+        self.slippage = slippage
+        self.swapCreation = swapCreation
+        self.swapOwner = swapOwner
+        self.buyId = buyId
+        self.status = status
+    }
+ 
     public func encode(to encoder: Encoder) throws {}
 }
