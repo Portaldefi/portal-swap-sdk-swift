@@ -16,6 +16,8 @@ final class Ethereum: BaseClass, IBlockchain {
     private var subscriptionsIds = [String]()
     private var connected = false
     
+    private(set) var currentSwapId: Data? = nil
+    
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Ethereum) {
         self.sdk = sdk
         self.props = props
@@ -80,6 +82,14 @@ final class Ethereum: BaseClass, IBlockchain {
                             return self.error("invoice created logs error", ["unwrapping data failed"])
                         }
                         
+                        let publicAddress = try? self.publicAddress()
+                        
+                        guard self.currentSwapId == swapId || self.sdk.blockchains.portal.currentSwapId == swapId || publicAddress == counterParty else {
+                            return self.warn("received lp InvoiceCreated event, publicAddress not equal counter party")
+                        }
+                        
+                        self.currentSwapId = swapId
+                        
                         let event = InvoiceCreatedEvent(
                             swapId: swapId.hexString,
                             swapOwner: swapOwner.hex(eip55: true),
@@ -118,6 +128,7 @@ final class Ethereum: BaseClass, IBlockchain {
     func disconnect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             connected = false
+            currentSwapId = nil
             
             for subscriptionsId in subscriptionsIds {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
@@ -211,13 +222,19 @@ final class Ethereum: BaseClass, IBlockchain {
                 } else {
                     if let topicValue = log.result,
                        let orderCreatedEvent = try? ABI.decodeLog(event: DexContract.OrderCreated, from: topicValue),
-                       let secretHash = orderCreatedEvent["secretHash"] as? Data,
+                       let _secretHash = orderCreatedEvent["secretHash"] as? Data,
                        let sellAsset = orderCreatedEvent["sellAsset"] as? EthereumAddress,
                        let sellAmount = orderCreatedEvent["sellAmount"] as? BigUInt,
                        let swapOwner = orderCreatedEvent["swapOwner"] as? EthereumAddress,
                        let swapId = orderCreatedEvent["swapId"] as? Data,
                        let swapCreation = orderCreatedEvent["swapCreation"] as? BigUInt
                     {
+                        guard secretHash == _secretHash else {
+                            return self.warn("received order created from differrent swap")
+                        }
+                        
+                        self.currentSwapId = swapId
+                        
                         let logEvent = [
                             "swapId": "0x\(swapId.hexString)",
                             "secretHash": "0x\(secretHash.hexString)",
@@ -228,7 +245,7 @@ final class Ethereum: BaseClass, IBlockchain {
                         ]
                         
                         let orderCreatedEvent = OrderCreatedEvent(
-                            secretHash: secretHash.hexString,
+                            secretHash: _secretHash.hexString,
                             sellAsset: sellAsset.hex(eip55: true),
                             sellAmount: sellAmount,
                             swapOwner: swapOwner.hex(eip55: true),
@@ -273,8 +290,8 @@ final class Ethereum: BaseClass, IBlockchain {
             let nonce = try awaitPromise(web3.eth.getNonce(address: swapOwner))
             let gasEstimation = try awaitPromise(suggestedGasFees())
             
-            debug("settle invoice suggested medium fees: \(gasEstimation.medium)")
-            debug("settle invoice suggested hight fees: \(gasEstimation.high)")
+            debug("authorize suggested medium fees: \(gasEstimation.medium)")
+            debug("authorize suggested hight fees: \(gasEstimation.high)")
             
             let maxFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxFeePerGas).gwei)
             let maxPriorityFeePerGas = EthereumQuantity(quantity: BigUInt(gasEstimation.medium.suggestedMaxPriorityFeePerGas).gwei)
@@ -321,6 +338,11 @@ final class Ethereum: BaseClass, IBlockchain {
                         let authorizedEvent = try? ABI.decodeLog(event: DexContract.Authorized, from: topicValue),
                         let swapId = authorizedEvent["swapId"] as? Data
                     {
+                        
+                        guard self.currentSwapId == swapId || self.sdk.blockchains.portal.currentSwapId == swapId else {
+                            return self.warn("received lp Authorized event, current swapId not matches swapId")
+                        }
+                        
                         let logEvent = [
                             "swapId": "0x\(swapId.hexString)"
                         ]
@@ -412,6 +434,10 @@ final class Ethereum: BaseClass, IBlockchain {
                         let sellAsset = settleEvent["sellAsset"] as? EthereumAddress,
                         let sellAmount = settleEvent["sellAmount"] as? BigUInt
                     {
+                        guard self.currentSwapId == swapId || self.sdk.blockchains.portal.currentSwapId == swapId else {
+                            return self.warn("received lp InvoiceSettled event, current swapId not matches swapId")
+                        }
+                        
                         let logEvent = [
                             "swapId": "0x\(swapId.hexString)",
                             "secret": "0x\(secret.hexString)",
