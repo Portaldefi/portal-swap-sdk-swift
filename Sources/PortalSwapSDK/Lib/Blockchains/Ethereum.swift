@@ -27,7 +27,7 @@ final class Ethereum: BaseClass, IBlockchain {
     func connect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             do {
-                websocketProvider = try Web3WebSocketProvider(wsUrl: props.url)
+                websocketProvider = try Web3WebSocketProvider(wsUrl: props.url, timeout: .seconds(5*60))
                 web3 = Web3(provider: websocketProvider)
                 
                 //dex contract
