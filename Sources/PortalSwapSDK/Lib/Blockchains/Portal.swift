@@ -16,6 +16,8 @@ final class Portal: BaseClass {
     private var subscriptionIds = [String]()
     private var connected = false
     
+    private(set) var currentSwapId: Data? = nil
+    
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Portal) {
         self.sdk = sdk
         self.props = props
@@ -62,6 +64,10 @@ final class Portal: BaseClass {
                         else {
                             guard self.connected else { return }
                             return self.error("invoice created logs error", ["unwrapping data failed"])
+                        }
+                    
+                        guard self.currentSwapId == swapId || self.sdk.blockchains.ethereum.currentSwapId == swapId else {
+                            return self.warn("received swap matched, current swapId not matches swapId")
                         }
                         
                         let event = SwapMatchedEvent(
@@ -111,6 +117,10 @@ final class Portal: BaseClass {
                             return self.warn("swap validated logs error", ["unwrapping data failed"])
                         }
                         
+                        guard self.currentSwapId == swapId || self.sdk.blockchains.ethereum.currentSwapId == swapId else {
+                            return self.warn("received swap validated, current swapId not matches swapId")
+                        }
+                        
                         let event = SwapValidatedEvent(
                             swapId: swapId.hexString,
                             liquidityPoolId: liquidityPoolId.hexString,
@@ -147,6 +157,7 @@ final class Portal: BaseClass {
     func disconnect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             connected = false
+            currentSwapId = nil
             
             for subscriptionsId in subscriptionIds {
                 websocketProvider.unsubscribe(subscriptionId: subscriptionsId, completion: { _ in ()})
@@ -234,6 +245,11 @@ final class Portal: BaseClass {
                        let amount = invoice[2] as? BigUInt,
                        let invoice = invoice[3] as? String
                     {
+                        
+                        guard self.currentSwapId == swapId || self.sdk.blockchains.ethereum.currentSwapId == swapId else {
+                            return self.warn("received invoice registered, current swapId not matches swapId")
+                        }
+                        
                         let logEvent = [
                             "swapId": "0x\(swapId.hexString)",
                             "secretHash": "0x\(secretHash.hexString)",
@@ -262,7 +278,7 @@ final class Portal: BaseClass {
                         
                         resolve(mergedReceipt)
                     } else {
-                        reject(SwapSDKError.msg("invoice.registered.event has no logs"))
+                        reject(SwapSDKError.msg("invoice.registered.event logs invalid"))
                     }
                 }
             }
@@ -381,7 +397,7 @@ final class Portal: BaseClass {
                        let swap = swapCreatedEvent["swap"] as? [Any],
                        let swapId = swap[0] as? Data,
                        let liquidityPoolId = swap[1] as? Data,
-                       let secretHash = swap[2] as? Data,
+                       let _secretHash = swap[2] as? Data,
                        let sellAsset = swap[3] as? EthereumAddress,
                        let sellAmount = swap[4] as? BigUInt,
                        let buyAsset = swap[5] as? EthereumAddress,
@@ -391,6 +407,15 @@ final class Portal: BaseClass {
                        let swapOwner = swap[9] as? EthereumAddress,
                        let buyId = swap[10] as? String
                     {
+                        
+                        guard self.currentSwapId == nil && secretHash == _secretHash else {
+                            return self.info("Received swap created event with unknown swapId")
+                        }
+                        
+                        self.debug("currentSwapId set", swapId.hexString)
+                        
+                        self.currentSwapId = swapId
+                        
                         let logEvent = [
                             "swapId": "0x\(swapId.hexString)",
                             "liquidityPoolId": "0x\(liquidityPoolId.hexString)",
