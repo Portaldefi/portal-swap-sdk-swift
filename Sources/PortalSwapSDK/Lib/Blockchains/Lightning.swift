@@ -209,15 +209,15 @@ final class Lightning: BaseClass, IBlockchain {
             }
             
             guard let paymentHash = bolt11Invoice.paymentHash else {
-                return reject(SwapSDKError.msg("Invoice has no payment hash"))
+                return reject(SwapSDKError.msg("Invoice invalid payment hash"))
             }
             
             guard let swapId = bolt11Invoice.description else {
-                return reject(SwapSDKError.msg("Invoice has no description"))
+                return reject(SwapSDKError.msg("Invoice invalid"))
             }
             
             guard let amount = bolt11Invoice.amount else {
-                return reject(SwapSDKError.msg("Invoice has no amount"))
+                return reject(SwapSDKError.msg("Invoice invalid amount"))
             }
             
             let decodedRequest = PaymentResult(
