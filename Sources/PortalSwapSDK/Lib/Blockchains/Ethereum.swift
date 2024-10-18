@@ -162,7 +162,7 @@ final class Ethereum: BaseClass, IBlockchain {
             }
             
             let swapOwner = try publicAddress()
-            let nonce = try awaitPromise(web3.eth.getNonce(address: swapOwner))
+            let nonce = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.getNonce(address: swapOwner) })
             let quantity = EthereumQuantity(quantity: order.sellAmount)
             
             debug("swap order params", [
@@ -172,7 +172,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 "swapOwner": swapOwner.hex(eip55: true)
             ])
             
-            let gasEstimation = try awaitPromise(suggestedGasFees())
+            let gasEstimation = try awaitPromise(retry(attempts: 3, delay: 2) { self.suggestedGasFees() })
 
             debug("swap order suggested medium fees: \(gasEstimation.medium)")
             debug("swap order suggested high fees: \(gasEstimation.high)")
@@ -201,7 +201,7 @@ final class Ethereum: BaseClass, IBlockchain {
             }
             
             let signedSwapOrderTx = try sign(transaction: swapOrderTx)
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedSwapOrderTx))
+            let txId = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.publish(transaction: signedSwapOrderTx) })
             
             debug("swap order tx hash: \(txId)")
             
@@ -287,8 +287,8 @@ final class Ethereum: BaseClass, IBlockchain {
             ])
             
             let swapOwner = try publicAddress()
-            let nonce = try awaitPromise(web3.eth.getNonce(address: swapOwner))
-            let gasEstimation = try awaitPromise(suggestedGasFees())
+            let nonce = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.getNonce(address: swapOwner) })
+            let gasEstimation = try awaitPromise(retry(attempts: 3, delay: 2) { self.suggestedGasFees() })
             
             debug("authorize suggested medium fees: \(gasEstimation.medium)")
             debug("authorize suggested hight fees: \(gasEstimation.high)")
@@ -315,7 +315,7 @@ final class Ethereum: BaseClass, IBlockchain {
             }
             
             let signedAuthorizeTx = try sign(transaction: authorizeTx)
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedAuthorizeTx))
+            let txId = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.publish(transaction: signedAuthorizeTx) })
             
             debug("authorize tx hash: \(txId)")
             
@@ -379,8 +379,8 @@ final class Ethereum: BaseClass, IBlockchain {
             let swapId = Data(hex: swapIdHex)
             let swapOwner = try publicAddress()
             
-            let nonce = try awaitPromise(web3.eth.getNonce(address: swapOwner))
-            let gasEstimation = try awaitPromise(suggestedGasFees())
+            let nonce = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.getNonce(address: swapOwner) })
+            let gasEstimation = try awaitPromise(retry(attempts: 3, delay: 2) { self.suggestedGasFees() })
             
             debug("settle invoice suggested medium fees: \(gasEstimation.medium)")
             debug("settle invoice suggested hight fees: \(gasEstimation.high)")
@@ -407,7 +407,7 @@ final class Ethereum: BaseClass, IBlockchain {
             }
             
             let signedSettleTx = try sign(transaction: settleTx)
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedSettleTx))
+            let txId = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.publish(transaction: signedSettleTx) })
 
             debug("settle invoice tx hash: \(txId)")
             

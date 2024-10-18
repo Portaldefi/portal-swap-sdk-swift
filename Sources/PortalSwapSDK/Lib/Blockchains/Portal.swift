@@ -187,7 +187,7 @@ final class Portal: BaseClass {
             }
             
             let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
-            let nonce = try awaitPromise(web3.eth.getNonce(address: privKey.address))
+            let nonce = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.getNonce(address: privKey.address) })
             
             debug("register invoice params", [
                 "id": "0x\(swapId.hexString)",
@@ -196,7 +196,7 @@ final class Portal: BaseClass {
                 "invoice": invoice
             ])
                         
-            let gasPrice = try awaitPromise(web3.eth.fetchGasPrice())
+            let gasPrice = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchGasPrice() })
             
             guard let registerInvoiceTx = admm.registerInvoice(
                 id: swapId,
@@ -219,7 +219,7 @@ final class Portal: BaseClass {
             }
             
             let signedRegisterInvoiceTx = try registerInvoiceTx.sign(with: privKey, chainId: portalChainId)
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedRegisterInvoiceTx))
+            let txId = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.publish(transaction: signedRegisterInvoiceTx) })
             
             debug("register invoice tx hash: \(txId)")
             
@@ -302,7 +302,7 @@ final class Portal: BaseClass {
             let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
             let buyId = "123456789"
             
-            let (sellAsset, buyAsset) = try awaitPromise(retriveNativeAddresses(order: order))
+            let (sellAsset, buyAsset) = try awaitPromise(retry(attempts: 3, delay: 2) { self.retriveNativeAddresses(order: order) })
             
             guard let sellAsset = EthereumAddress(hexString: sellAsset) else {
                 return reject(SwapSDKError.msg("sell asset address isn't valid"))
@@ -331,8 +331,8 @@ final class Portal: BaseClass {
                 "status": status
             ])
             
-            let nonce = try awaitPromise(web3.eth.getNonce(address: privKey.address))
-            let gasPrice = try awaitPromise(web3.eth.fetchGasPrice())
+            let nonce = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.getNonce(address: privKey.address) })
+            let gasPrice = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchGasPrice() })
             
             guard let createSwapTx = admm.createSwap(
                 id: id,
@@ -374,7 +374,7 @@ final class Portal: BaseClass {
             }
             
             let signedCreateSwapTx = try createSwapTx.sign(with: privKey, chainId: portalChainId)
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedCreateSwapTx))
+            let txId = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.publish(transaction: signedCreateSwapTx) })
             
             debug("create swap tx hash: \(txId)")
 
@@ -570,16 +570,20 @@ extension Portal {
     private func retriveNativeAddresses(order: SwapOrder) -> Promise<(String, String)> {
         Promise { [unowned self] resolve, _ in
             let sellAddress = try awaitPromise(
-                retrieveAssetByNativeProps(
-                    blockchainName: order.sellNetwork,
-                    blockchainAddress: order.sellAddress
-                )
+                retry(attempts: 3, delay: 2) {
+                    self.retrieveAssetByNativeProps(
+                        blockchainName: order.sellNetwork,
+                        blockchainAddress: order.sellAddress
+                    )
+                }
             )
             let buyAddress = try awaitPromise(
-                retrieveAssetByNativeProps(
-                    blockchainName: order.buyNetwork,
-                    blockchainAddress: order.buyAddress
-                )
+                retry(attempts: 3, delay: 2) {
+                    self.retrieveAssetByNativeProps(
+                        blockchainName: order.buyNetwork,
+                        blockchainAddress: order.buyAddress
+                    )
+                }
             )
             resolve((sellAddress, buyAddress))
         }
