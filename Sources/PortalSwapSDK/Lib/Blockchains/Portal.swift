@@ -531,12 +531,7 @@ extension Portal {
         
         warn("Unknown log event", log)
     }
-    
-    private func sign(transaction: EthereumTransaction) throws -> EthereumSignedTransaction {
-        let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
-        return try transaction.sign(with: privKey, chainId: EthereumQuantity.string(props.chainId))
-    }
-    
+        
     private func retriveNativeAddresses(order: SwapOrder) -> Promise<(String, String)> {
         retry(attempts: 3, delay: 2) {
             all(
@@ -548,9 +543,8 @@ extension Portal {
                     blockchainName: order.buyNetwork,
                     blockchainAddress: order.buyAddress
                 )
-            ).then { sellAddress, buyAddress in
-                return (sellAddress, buyAddress)
-            }
+            )
+            .then { ($0, $1) }
         }
     }
     
