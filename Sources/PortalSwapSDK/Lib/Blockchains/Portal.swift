@@ -152,19 +152,6 @@ final class Portal: BaseClass {
                 accessList: [:],
                 transactionType: .legacy
             ) else {
-                self.error("failed to create swap transaction", [
-                    "id": "0x\(id.hexString)",
-                    "liquidityPoolId": "0x\(liquidityPoolId.hexString)",
-                    "secretHash": "0x\(secretHash.hexString)",
-                    "sellAsset": sellAsset.hex(eip55: true),
-                    "sellAmount": sellAmount.description,
-                    "buyAsset": buyAsset.hex(eip55: true),
-                    "buyAmount": buyAmount.description,
-                    "swapOwner": swapOwner.hex(eip55: true),
-                    "buyId": buyId,
-                    "status": status
-                ])
-                
                 throw SwapSDKError.msg("failed to create swap transaction")
             }
                         
@@ -217,8 +204,7 @@ final class Portal: BaseClass {
                 accessList: [:],
                 transactionType: .legacy
             ) else {
-                self.error("register invoice tx failed error", [invoice])
-                throw SwapSDKError.msg("register invoice tx failed to build")
+                throw SwapSDKError.msg("failed to create register invoice tx")
             }
             
             let signedRegisterInvoiceTx = try registerInvoiceTx.sign(with: privKey, chainId: portalChainId)
@@ -343,7 +329,6 @@ extension Portal {
             if let subscriptionId = subscription.result {
                 logsSubscriptionId = subscriptionId
             } else if let error = subscription.error {
-                guard connected else { return }
                 self.error("event logs subscription error", [error])
             } else {
                 warn("invalid subscription response", [subscription])
@@ -553,24 +538,19 @@ extension Portal {
     }
     
     private func retriveNativeAddresses(order: SwapOrder) -> Promise<(String, String)> {
-        Promise { [unowned self] resolve, _ in
-            let sellAddress = try awaitPromise(
-                retry(attempts: 3, delay: 2) {
-                    self.retrieveAssetByNativeProps(
-                        blockchainName: order.sellNetwork,
-                        blockchainAddress: order.sellAddress
-                    )
-                }
-            )
-            let buyAddress = try awaitPromise(
-                retry(attempts: 3, delay: 2) {
-                    self.retrieveAssetByNativeProps(
-                        blockchainName: order.buyNetwork,
-                        blockchainAddress: order.buyAddress
-                    )
-                }
-            )
-            resolve((sellAddress, buyAddress))
+        retry(attempts: 3, delay: 2) {
+            all(
+                self.retrieveAssetByNativeProps(
+                    blockchainName: order.sellNetwork,
+                    blockchainAddress: order.sellAddress
+                ),
+                self.retrieveAssetByNativeProps(
+                    blockchainName: order.buyNetwork,
+                    blockchainAddress: order.buyAddress
+                )
+            ).then { sellAddress, buyAddress in
+                return (sellAddress, buyAddress)
+            }
         }
     }
     
