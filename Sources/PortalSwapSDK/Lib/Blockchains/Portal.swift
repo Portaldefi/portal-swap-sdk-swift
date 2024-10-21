@@ -430,7 +430,7 @@ extension Portal {
                 return error("swap created logs error", ["unwrapping data failed"])
             }
             
-            guard self.sdk.dex.swapId == nil && self.sdk.dex.secretHash == _secretHash else {
+            guard self.sdk.dex.secretHash == _secretHash else {
                 return info("Received swap created event with unknown swapId")
             }
             
