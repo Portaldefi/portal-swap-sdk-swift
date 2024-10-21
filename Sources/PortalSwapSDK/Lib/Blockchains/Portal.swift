@@ -16,9 +16,6 @@ final class Portal: BaseClass {
     private var logsSubscriptionId: String? = nil
     private var connected = false
     
-    private var secretHash: Data? = nil
-    private(set) var swapId: Data? = nil
-    
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Portal) {
         self.sdk = sdk
         self.props = props
@@ -27,7 +24,7 @@ final class Portal: BaseClass {
         
     func connect() -> Promise<Void> {
         Promise { [unowned self] in
-            websocketProvider = try Web3WebSocketProvider(wsUrl: props.url, timeout: .seconds(5*60))
+            websocketProvider = try Web3WebSocketProvider(wsUrl: props.url, timeout: .seconds(10*60))
             web3 = Web3(provider: websocketProvider)
                             
             guard
@@ -54,25 +51,22 @@ final class Portal: BaseClass {
     func disconnect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             connected = false
-            swapId = nil
-            secretHash = nil
             
             if let logsSubscriptionId {
-                websocketProvider.unsubscribe(subscriptionId: logsSubscriptionId, completion: { _ in ()})
-            }
-            
-            guard !websocketProvider.webSocket.isClosed else {
-                return resolve(())
-            }
-            
-            websocketProvider.webSocket.close().whenComplete { [weak self] _ in
-                guard let self = self else {
-                    return reject(SwapSDKError.msg("Cannot weakly handle self"))
+                websocketProvider.unsubscribe(subscriptionId: logsSubscriptionId) { success in
+                    if !success {
+                        self.warn("Unable unsubscribe from logs", logsSubscriptionId)
+                    } else {
+                        self.info("Unsubscribed from event subscription: \(logsSubscriptionId)")
+                    }
+
+                    self.websocketProvider = nil
+                    self.web3 = nil
+                    self.admm = nil
+                    self.logsSubscriptionId = nil
+                    
+                    resolve(())
                 }
-                guard self.websocketProvider.closed else {
-                    return reject(SwapSDKError.msg("Web socket isnt's closed"))
-                }
-                resolve(())
             }
         }
     }
@@ -110,7 +104,7 @@ final class Portal: BaseClass {
 
             let status = "inactive"
             
-            self.secretHash = secretHash
+            sdk.dex.secretHash = secretHash
 
             debug("create swap params", [
                 "id": "0x\(id.hexString)",
@@ -358,7 +352,7 @@ extension Portal {
                 return error("invoice created logs error", ["unwrapping data failed"])
             }
             
-            guard self.swapId == swapId || sdk.blockchains.ethereum.currentSwapId == swapId else {
+            guard self.sdk.dex.swapId == swapId else {
                 return warn("received swap matched, current swapId not matches swapId")
             }
             
@@ -395,7 +389,7 @@ extension Portal {
                 return error("swap validated logs error", ["unwrapping data failed"])
             }
             
-            guard self.swapId == swapId || sdk.blockchains.ethereum.currentSwapId == swapId else {
+            guard self.sdk.dex.swapId == swapId else {
                 return warn("received swap validated, current swapId not matches swapId")
             }
             
@@ -414,7 +408,7 @@ extension Portal {
                 status: status
             )
             
-            return info("swap.validated.event", [event])
+            return emit(event: "swap.validated", args: [event])
         }
         
         if let swapCreatedEvent = try? ABI.decodeLog(event: ADMMContract.SwapCreated, from: log) {
@@ -436,18 +430,18 @@ extension Portal {
                 return error("swap created logs error", ["unwrapping data failed"])
             }
             
-            guard self.swapId == nil && secretHash == _secretHash else {
+            guard self.sdk.dex.swapId == nil && self.sdk.dex.secretHash == _secretHash else {
                 return info("Received swap created event with unknown swapId")
             }
             
-            debug("currentSwapId set", swapId.hexString)
+            debug("swapId set", swapId.hexString)
             
-            self.swapId = swapId
+            self.sdk.dex.swapId = swapId
             
             let logEvent = [
                 "swapId": "0x\(swapId.hexString)",
                 "liquidityPoolId": "0x\(liquidityPoolId.hexString)",
-                "secretHash": "0x\(secretHash!.hexString)",
+                "secretHash": "0x\(_secretHash.hexString)",
                 "sellAsset": sellAsset.hex(eip55: true),
                 "sellAmount": sellAmount.description,
                 "buyAsset": buyAsset.hex(eip55: true),
@@ -461,7 +455,7 @@ extension Portal {
             let invoiceRegisteredEvent = SwapCreatedEvent(
                 swapId: swapId.hexString,
                 liquidityPoolId: liquidityPoolId.hexString,
-                secretHash: secretHash!.hexString,
+                secretHash: _secretHash.hexString,
                 sellAsset: sellAsset.hex(eip55: true),
                 sellAmount: sellAmount,
                 buyAsset: buyAsset.hex(eip55: true),
@@ -499,7 +493,7 @@ extension Portal {
                 return error("invoice registered logs error", ["unwrapping data failed"])
             }
             
-            guard self.swapId == swapId || sdk.blockchains.ethereum.currentSwapId == swapId else {
+            guard self.sdk.dex.swapId == swapId else {
                 return warn("received invoice registered, current swapId not matches swapId")
             }
             
@@ -525,8 +519,14 @@ extension Portal {
             
             let mergedReceipt = receipt.merging(logEvent) { (current, _) in current }
             info("invoice.registered.receipt", mergedReceipt)
-
-            return info("invoice.registered.event", [invoiceRegisteredEvent])
+            
+            let status = "lp.invoice.created"
+            
+            self.info(status, [
+                "event": invoiceRegisteredEvent
+            ])
+            
+            return self.emit(event: status, args: [invoiceRegisteredEvent])
         }
         
         warn("Unknown log event", log)
