@@ -63,7 +63,6 @@ final class Ethereum: BaseClass, IBlockchain {
     func disconnect() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             connected = false
-            web3 = nil
             dex = nil
             liquidityProvider = nil
         }
