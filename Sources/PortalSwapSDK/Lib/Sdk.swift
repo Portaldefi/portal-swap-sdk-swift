@@ -69,33 +69,23 @@ final class Sdk: BaseClass {
     func start() -> Promise<Void> {
         debug("starting")
 
-        return Promise { [unowned self] resolve, reject in
-            all(
-                blockchains.connect(),
-                store.open()
-            ).then { [unowned self] blockchains, store in
-                info("started")
-                resolve(())
-            }.catch { error in
-                reject(error)
-            }
+        return all(
+            blockchains.connect(),
+            store.open()
+        ).then { [unowned self] _, _ in
+            return info("started")
         }
     }
 
     func stop() -> Promise<Void> {
         debug("stopping", self)
 
-        return Promise { [unowned self] resolve, reject in
-            all(
-                blockchains.disconnect(),
-                store.close(),
-                dex.close()
-            ).then { [unowned self] blockchains, store, dex in
-                info("stopped")
-                resolve(())
-            }.catch { error in
-                reject(error)
-            }
+        return all(
+            blockchains.disconnect(),
+            store.close(),
+            dex.close()
+        ).then { [unowned self] _, _, _ in
+            return info("stopped")
         }
     }
     
