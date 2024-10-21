@@ -19,6 +19,9 @@ final class Dex: BaseClass {
         
     private(set) var order: SwapOrder?
     
+    var swapId: Data? = nil
+    var secretHash: Data? = nil
+    
     init(sdk: Sdk) {
         self.sdk = sdk
         super.init(id: "dex")
@@ -38,26 +41,30 @@ final class Dex: BaseClass {
     }
     
     func close() -> Promise<Void> {
-        Promise {()}	
+        Promise {
+            self.secretHash = nil
+            self.swapId = nil
+        }
     }
     
     func submit(_ order: SwapOrder) -> Promise<Void> {
-        Promise { [unowned self] resolve, reject in
+        Promise { [unowned self] in
             save(order: order)
             
             let (secret, secretHash) = Utils.createSecret()
+            
+            self.secretHash = secretHash
             
             switch order.sellNetwork {
             case "ethereum":
                 //Secret holder
                 try save(secret: secret, id: secretHash.hexString)
                                 
-                ethereum.swapOrder(secretHash: secretHash, order: order).then { [weak self] response in
-                    self?.info("order submitted", ["order": order, "response": response])
-                    resolve(())
-                }.catch { [weak self] error in
-                    self?.error("submitting order error", [error])
-                    reject(error)
+                ethereum.swapOrder(
+                    secretHash: secretHash,
+                    order: order
+                ).then { [unowned self] response in
+                    return info("order submitted", ["order": order, "response": response])
                 }
             case "lightning":
                 //Secret seeker
@@ -70,14 +77,11 @@ final class Dex: BaseClass {
                     buyAsset: order.buyAddress,
                     buyAmount: order.buyAmount,
                     slippage: 1000
-                ).then { [weak self] response in
-                    self?.info("notary.createSwap", ["order": order, "response": response])
-                }.catch { [weak self] swapOrderError in
-                    self?.error("notary.createSwap error", [swapOrderError])
-                    reject(SwapSDKError.msg("\(swapOrderError)"))
+                ).then { [unowned self] response in
+                    return info("notary.createSwap", ["order": order, "response": response])
                 }
             default:
-                reject(SwapSDKError.msg("Unsupported network: \(order.sellNetwork)"))
+                throw SwapSDKError.msg("Unsupported network: \(order.sellNetwork)")
             }
         }
     }
@@ -95,7 +99,7 @@ extension Dex {
         
     private func onSwap(_ event: String) -> ([Any]) -> Void {
         { [unowned self] args in
-            debug("receive swap event: \(event)", [args])
+            debug("\(event)", [args])
             
             switch event {
             case "order.created":
@@ -104,10 +108,10 @@ extension Dex {
                 }
                 onOrderCreated(event: orderCreated)
             case "lp.invoice.created":
-                guard let invoiceCreated = args.first as? InvoiceCreatedEvent else {
-                    return error("invoice created event is missing", [args])
+                guard let invoiceRegistered = args.first as? InvoiceRegisteredEvent else {
+                    return error("invoice registered event is missing", [args])
                 }
-                onLpInvoiceCreated(event: invoiceCreated)
+                onLpInvoiceCreated(event: invoiceRegistered)
             case "swap.matched":
                 //This pervents lp server to crash
                 Thread.sleep(forTimeInterval: 3)
@@ -145,29 +149,31 @@ extension Dex {
         }
 
         portal.getSwap(id: event.swapId).then { swap in
-            guard swap.swapOwner == swapOwner else { return }
-            
-            let invoice = [
-                "swapId": "0x" + swap.swapId.hexString,
-                "secretHash": swap.secretHash.hexString,
-                "quantity": event.matchedBuyAmount.description,
-            ]
-            
+            guard swap.swapOwner == swapOwner else {
+                return self.warn("On swap matched event received not owner")
+            }
+                        
             switch order.sellNetwork {
             case "ethereum":
+                let invoice = [
+                    "swapId": "0x" + swap.swapId.hexString,
+                    "secretHash": swap.secretHash.hexString,
+                    "quantity": event.matchedBuyAmount.description,
+                ]
+                
+                self.debug("invoice", invoice)
+
                 traderBlockchain.create(invoice: invoice).then { [unowned self] invoice in
                     info("trader.invoice.created", ["invoice": invoice])
                     
                     guard let invoice = invoice["request"] else {
                         throw SwapSDKError.msg("Cannot unwrap invoice")
                     }
-                    
-                    let amount = event.matchedBuyAmount
-                    
+                                        
                     return portal.registerInvoice(
                         swapId: swap.swapId,
                         secretHash: swap.secretHash,
-                        amount: amount,
+                        amount: event.matchedBuyAmount,
                         invoice: invoice
                     )
                 }.then { [unowned self] result in
@@ -216,7 +222,7 @@ extension Dex {
         }
     }
     
-    private func onLpInvoiceCreated(event: InvoiceCreatedEvent) {
+    private func onLpInvoiceCreated(event: InvoiceRegisteredEvent) {
         guard let order else {
             return error("onSwap order is missing error", [event])
         }
@@ -236,6 +242,8 @@ extension Dex {
                     "quantity": matcheedBuyAmount.description,
                     "request": invoice
                 ]
+                
+                debug("LP invoice", request)
                 
                 return lightning.pay(invoice: request)
             }.catch { error in
@@ -280,7 +288,9 @@ extension Dex {
         }
         
         portal.getSwap(id: _swapId).then { [unowned self] swap in
-            guard swap.swapOwner == swapOwner else { return }
+            guard swap.swapOwner == swapOwner else {
+                return self.warn("On invoice paid received not owner")
+            }
             
             let secret: Data
             let swapId: String
@@ -318,7 +328,9 @@ extension Dex {
         }
         
         portal.getSwap(id: swapId).then { [unowned self] swap in
-            guard swap.swapOwner == swapOwner else { return }
+            guard swap.swapOwner == swapOwner else {
+                return self.warn("onInvoiceSettled event received not owner")
+            }
             emit(event: "swap.completed", args: [swapId])
             try sdk.store.put(.swaps, swapId, swap.toJSON())
         }.catch { [unowned self] error in
