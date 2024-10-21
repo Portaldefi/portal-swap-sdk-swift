@@ -21,11 +21,11 @@ final class Blockchains: BaseClass {
         subscribe(ethereum.on("log", forwardLog()))
         subscribe(ethereum.on("error", forwardError()))
         subscribe(ethereum.on("order.created", forwardEvent("order.created")))
-        subscribe(ethereum.on("lp.invoice.created", forwardEvent("lp.invoice.created")))
         subscribe(ethereum.on("invoice.settled", forwardEvent("invoice.settled")))
         // Subscribe for portal events
         subscribe(portal.on("log", forwardLog()))
         subscribe(portal.on("error", forwardError()))
+        subscribe(portal.on("lp.invoice.created", forwardEvent("lp.invoice.created")))
         subscribe(portal.on("swap.created", forwardEvent("swap.created")))
         subscribe(portal.on("swap.validated", forwardEvent("swap.validated")))
         subscribe(portal.on("swap.matched", forwardEvent("swap.matched")))
@@ -38,32 +38,11 @@ final class Blockchains: BaseClass {
     }
     
     func connect() -> Promise<Void> {
-        Promise { [unowned self] resolve, reject in
-            all(
-                ethereum.connect(),
-                lightning.connect(),
-                portal.connect()
-            )
-            .then { ethereum, lightning, portal in
-                resolve(())
-            }.catch { error in
-                reject(error)
-            }
-        }
+        all(ethereum.connect(), lightning.connect(), portal.connect()).then { _ in return }
     }
     
     func disconnect() -> Promise<Void> {
-        Promise { [unowned self] resolve, reject in
-            all(
-                ethereum.disconnect(),
-                lightning.disconnect(),
-                portal.disconnect()
-            ).then { ethereum, lightning, portal in
-                resolve(())
-            }.catch { error in
-                reject(error)
-            }
-        }
+        all(ethereum.disconnect(), lightning.disconnect(), portal.disconnect()).then { _ in return }
     }
     
     func blockchain(id: String) -> IBlockchain? {
