@@ -9,8 +9,11 @@ final class Portal: BaseClass {
     private let props: SwapSdkConfig.Blockchains.Portal
     private let portalChainId = EthereumQuantity.init(quantity: BigUInt(7070))
     
-    private var web3: Web3!
+    private var web3WebSocketClient: Web3!
     private var websocketProvider: Web3WebSocketProvider!
+    
+    private var web3RpcClient: Web3!
+    
     private var admm: IAdmmContract?
 
     private var logsSubscriptionId: String? = nil
@@ -25,7 +28,8 @@ final class Portal: BaseClass {
     func connect() -> Promise<Void> {
         Promise { [unowned self] in
             websocketProvider = try Web3WebSocketProvider(wsUrl: props.url, timeout: .seconds(10*60))
-            web3 = Web3(provider: websocketProvider)
+            web3WebSocketClient = Web3(provider: websocketProvider)
+            web3RpcClient = Web3(rpcURL: "http://node.playnet.portaldefi.zone:9545")
                             
             guard
                 let contract = props.contracts["NotaryADMM"] as? [String: Any],
@@ -37,10 +41,8 @@ final class Portal: BaseClass {
             let admmContractAddresIsEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)
             let admmContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: admmContractAddresIsEipp55)
             
-            admm = web3.eth.Contract(type: ADMMContract.self, address: admmContractAddress)
+            admm = web3RpcClient.eth.Contract(type: ADMMContract.self, address: admmContractAddress)
             
-            try subscribeToLogs(address: admmContractAddress)
-                                  
             info("connect")
             emit(event: "connect")
             
@@ -61,7 +63,7 @@ final class Portal: BaseClass {
                     }
 
                     self.websocketProvider = nil
-                    self.web3 = nil
+                    self.web3WebSocketClient = nil
                     self.admm = nil
                     self.logsSubscriptionId = nil
                     
@@ -77,7 +79,7 @@ final class Portal: BaseClass {
                 throw SwapSDKError.msg("order is missing")
             }
             
-            guard let admm else {
+            guard let admm, let admmContractAddress = admm.address else {
                 throw SwapSDKError.msg("admm contract is missing")
             }
             
@@ -88,7 +90,7 @@ final class Portal: BaseClass {
             let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
             let buyId = "123456789"
             
-            let (sellAsset, buyAsset) = try awaitPromise(retry(attempts: 3, delay: 2) { self.retriveNativeAddresses(order: order) })
+            let (sellAsset, buyAsset) = try awaitPromise(retry(attempts: 3, delay: 3) { self.retriveNativeAddresses(order: order) })
             
             guard let sellAsset = EthereumAddress(hexString: sellAsset) else {
                 throw SwapSDKError.msg("sell asset address isn't valid")
@@ -119,8 +121,8 @@ final class Portal: BaseClass {
                 "status": status
             ])
             
-            let nonce = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.getNonce(address: privKey.address) })
-            let gasPrice = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchGasPrice() })
+            let nonce = try awaitPromise(retry(attempts: 3, delay: 3) { self.web3RpcClient.eth.getNonce(address: privKey.address) })
+            let gasPrice = try awaitPromise(retry(attempts: 3, delay: 3) { self.web3RpcClient.eth.fetchGasPrice() })
             
             guard let createSwapTx = admm.createSwap(
                 id: id,
@@ -150,7 +152,7 @@ final class Portal: BaseClass {
             }
                         
             let signedCreateSwapTx = try createSwapTx.sign(with: privKey, chainId: portalChainId)
-            let txId = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.publish(transaction: signedCreateSwapTx) })
+            let txId = try awaitPromise(retry(attempts: 3, delay: 3) { self.web3RpcClient.eth.publish(transaction: signedCreateSwapTx) })
             
             debug("create swap tx hash: \(txId)")
             
@@ -159,6 +161,8 @@ final class Portal: BaseClass {
                 "to": createSwapTx.to?.hex(eip55: true) ?? "?",
                 "transactionHash": txId
             ]
+            
+            try subscribeToLogs(address: admmContractAddress)
             
             return receipt
         }
@@ -171,7 +175,7 @@ final class Portal: BaseClass {
             }
             
             let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
-            let nonce = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.getNonce(address: privKey.address) })
+            let nonce = try awaitPromise(retry(attempts: 3, delay: 3) { self.web3RpcClient.eth.getNonce(address: privKey.address) })
             
             debug("register invoice params", [
                 "id": "0x\(swapId.hexString)",
@@ -180,7 +184,7 @@ final class Portal: BaseClass {
                 "invoice": invoice
             ])
                         
-            let gasPrice = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchGasPrice() })
+            let gasPrice = try awaitPromise(retry(attempts: 3, delay: 3) { self.web3RpcClient.eth.fetchGasPrice() })
             
             guard let registerInvoiceTx = admm.registerInvoice(
                 id: swapId,
@@ -202,7 +206,7 @@ final class Portal: BaseClass {
             }
             
             let signedRegisterInvoiceTx = try registerInvoiceTx.sign(with: privKey, chainId: portalChainId)
-            let txId = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.publish(transaction: signedRegisterInvoiceTx) })
+            let txId = try awaitPromise(retry(attempts: 3, delay: 3) { self.web3RpcClient.eth.publish(transaction: signedRegisterInvoiceTx) })
             
             debug("register invoice tx hash: \(txId)")
             
@@ -314,12 +318,12 @@ extension Portal {
     private func subscribeToLogs(address: EthereumAddress) throws {
         let topics: [EthereumData] = [
             try EthereumData(ethereumValue: ADMMContract.SwapCreated.signature.sha3(.keccak256)),
-            try EthereumData(ethereumValue: ADMMContract.SwapValidated.signature.sha3(.keccak256)),
+//            try EthereumData(ethereumValue: ADMMContract.SwapValidated.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.SwapMatched.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.InvoiceRegistered.signature.sha3(.keccak256))
         ]
         
-        try web3.eth.subscribeToLogs(addresses: [address], topics: [topics]) { [unowned self] subscription in
+        try web3WebSocketClient.eth.subscribeToLogs(addresses: [address], topics: [topics]) { [unowned self] subscription in
             if let subscriptionId = subscription.result {
                 logsSubscriptionId = subscriptionId
             } else if let error = subscription.error {
@@ -430,27 +434,13 @@ extension Portal {
                 return error("swap created logs error", ["unwrapping data failed"])
             }
             
-            guard self.sdk.dex.secretHash == _secretHash else {
+            guard sdk.dex.secretHash == _secretHash else {
                 return info("Received swap created event with unknown swapId")
             }
             
             debug("swapId set", swapId.hexString)
             
-            self.sdk.dex.swapId = swapId
-            
-            let logEvent = [
-                "swapId": "0x\(swapId.hexString)",
-                "liquidityPoolId": "0x\(liquidityPoolId.hexString)",
-                "secretHash": "0x\(_secretHash.hexString)",
-                "sellAsset": sellAsset.hex(eip55: true),
-                "sellAmount": sellAmount.description,
-                "buyAsset": buyAsset.hex(eip55: true),
-                "buyAmount": buyAmount.description,
-                "slippage": slippage.description,
-                "swapCreation": swapCreation.description,
-                "swapOwner": swapOwner.hex(eip55: true),
-                "buyId": buyId
-            ]
+            sdk.dex.swapId = swapId
             
             let invoiceRegisteredEvent = SwapCreatedEvent(
                 swapId: swapId.hexString,
@@ -472,11 +462,9 @@ extension Portal {
                 "transactionHash": log.transactionHash?.hex() ?? "?",
                 "status": "succeeded",
             ]
-            
-            let mergedReceipt = receipt.merging(logEvent) { (current, _) in current }
-            
+                        
             info("swap.created.event", [invoiceRegisteredEvent])
-            info("swap.created.receipt", mergedReceipt)
+            info("swap.created.receipt", receipt)
             
             return emit(event: "swap.created", args: [invoiceRegisteredEvent])
         }
@@ -497,13 +485,6 @@ extension Portal {
                 return warn("received invoice registered, current swapId not matches swapId")
             }
             
-            let logEvent = [
-                "swapId": "0x\(swapId.hexString)",
-                "secretHash": "0x\(secretHash.hexString)",
-                "amount": amount.description,
-                "invoice": invoice
-            ]
-            
             let invoiceRegisteredEvent = InvoiceRegisteredEvent(
                 swapId: swapId.hexString,
                 secretHash: secretHash.hexString,
@@ -516,15 +497,10 @@ extension Portal {
                 "transactionHash": log.transactionHash?.hex() ?? "?",
                 "status": "succeeded",
             ]
-            
-            let mergedReceipt = receipt.merging(logEvent) { (current, _) in current }
-            info("invoice.registered.receipt", mergedReceipt)
-            
+                        
             let status = "lp.invoice.created"
-            
-            self.info(status, [
-                "event": invoiceRegisteredEvent
-            ])
+            info(status, [invoiceRegisteredEvent])
+            info("invoice.registered.receipt", receipt)
             
             return self.emit(event: status, args: [invoiceRegisteredEvent])
         }
@@ -533,7 +509,7 @@ extension Portal {
     }
         
     private func retriveNativeAddresses(order: SwapOrder) -> Promise<(String, String)> {
-        retry(attempts: 3, delay: 2) {
+        retry(attempts: 3, delay: 1) {
             all(
                 self.retrieveAssetByNativeProps(
                     blockchainName: order.sellNetwork,
