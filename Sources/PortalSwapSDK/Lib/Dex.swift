@@ -113,9 +113,6 @@ extension Dex {
                 }
                 onLpInvoiceCreated(event: invoiceRegistered)
             case "swap.matched":
-                //This pervents lp server to crash
-                Thread.sleep(forTimeInterval: 3)
-                
                 guard let swapMatched = args.first as? SwapMatchedEvent else {
                     return error("swap matched event is missing", [args])
                 }
