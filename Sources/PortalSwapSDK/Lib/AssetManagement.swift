@@ -15,10 +15,7 @@ final class AssetManagement: BaseClass {
     init(props: SwapSdkConfig.Blockchains.Portal) {
         self.props = props
         
-        if let websocketProvider = try? Web3WebSocketProvider(wsUrl: props.url) {
-            web3 = Web3(provider: websocketProvider)
-            self.websocketProvider = websocketProvider
-        }
+        web3 = Web3(rpcURL: "http://node.playnet.portaldefi.zone:9545")
         
         if
             let amAbi = props.contracts["AssetManagement"] as? [String: Any],
