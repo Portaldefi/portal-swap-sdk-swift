@@ -318,7 +318,6 @@ extension Portal {
     private func subscribeToLogs(address: EthereumAddress) throws {
         let topics: [EthereumData] = [
             try EthereumData(ethereumValue: ADMMContract.SwapCreated.signature.sha3(.keccak256)),
-//            try EthereumData(ethereumValue: ADMMContract.SwapValidated.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.SwapMatched.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.InvoiceRegistered.signature.sha3(.keccak256))
         ]
@@ -326,17 +325,17 @@ extension Portal {
         try web3WebSocketClient.eth.subscribeToLogs(addresses: [address], topics: [topics]) { [unowned self] subscription in
             if let subscriptionId = subscription.result {
                 logsSubscriptionId = subscriptionId
-            } else if let error = subscription.error {
-                self.error("event logs subscription error", [error])
+            } else if let subscriptionError = subscription.error {
+                error("event logs subscription error", [subscriptionError])
             } else {
                 warn("invalid subscription response", [subscription])
             }
         } onEvent: { [unowned self] log in
             if let log = log.result {
                 onEvent(log: log)
-            } else if let error = log.error {
+            } else if let logError = log.error {
                 guard connected else { return }
-                self.error("log error", [error])
+                error("log error", [logError])
             } else {
                 warn("event log invalid", [log])
             }
@@ -356,7 +355,7 @@ extension Portal {
                 return error("invoice created logs error", ["unwrapping data failed"])
             }
             
-            guard self.sdk.dex.swapId == swapId else {
+            guard sdk.dex.swapId == swapId else {
                 return warn("received swap matched, current swapId not matches swapId")
             }
             
@@ -393,7 +392,7 @@ extension Portal {
                 return error("swap validated logs error", ["unwrapping data failed"])
             }
             
-            guard self.sdk.dex.swapId == swapId else {
+            guard sdk.dex.swapId == swapId else {
                 return warn("received swap validated, current swapId not matches swapId")
             }
             
@@ -481,7 +480,7 @@ extension Portal {
                 return error("invoice registered logs error", ["unwrapping data failed"])
             }
             
-            guard self.sdk.dex.swapId == swapId else {
+            guard sdk.dex.swapId == swapId else {
                 return warn("received invoice registered, current swapId not matches swapId")
             }
             
@@ -502,7 +501,7 @@ extension Portal {
             info(status, [invoiceRegisteredEvent])
             info("invoice.registered.receipt", receipt)
             
-            return self.emit(event: status, args: [invoiceRegisteredEvent])
+            return emit(event: status, args: [invoiceRegisteredEvent])
         }
         
         warn("Unknown log event", log)

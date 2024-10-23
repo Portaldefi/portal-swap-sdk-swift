@@ -301,10 +301,10 @@ final class Ethereum: BaseClass, IBlockchain {
                 throw SwapSDKError.msg("settle invoice receipt has no logs")
             }
             
-            let publicAddress = try? self.publicAddress()
+            let publicAddress = try? publicAddress()
             
-            guard self.sdk.dex.swapId == swapId || publicAddress == counterParty  else {
-                return self.warn("received lp InvoiceSettled event, current swapId not matches swapId")
+            guard sdk.dex.swapId == swapId || publicAddress == counterParty  else {
+                return warn("received lp InvoiceSettled event, current swapId not matches swapId")
             }
             
             let logEvent = [
@@ -324,12 +324,12 @@ final class Ethereum: BaseClass, IBlockchain {
             ]
             
             let mergedReceipt = receiptJson.merging(logEvent) { (current, _) in current }
-            self.info("settle event tx receipt", mergedReceipt, logEvent)
+            info("settle event tx receipt", mergedReceipt, logEvent)
             
             if let mainId = invoice["mainId"] {
-                self.emit(event: "invoice.settled", args: [swapIdHex, mainId])
+                emit(event: "invoice.settled", args: [swapIdHex, mainId])
             } else {
-                self.emit(event: "invoice.settled", args: [swapIdHex])
+                emit(event: "invoice.settled", args: [swapIdHex])
             }
             
             resolve(mergedReceipt)
