@@ -55,17 +55,17 @@ final class Portal: BaseClass {
             connected = false
             
             if let logsSubscriptionId {
-                websocketProvider.unsubscribe(subscriptionId: logsSubscriptionId) { success in
+                websocketProvider.unsubscribe(subscriptionId: logsSubscriptionId) { [weak self] success in
                     if !success {
-                        self.warn("Unable unsubscribe from logs", logsSubscriptionId)
+                        self?.warn("Unable unsubscribe from logs", logsSubscriptionId)
                     } else {
-                        self.info("Unsubscribed from event subscription: \(logsSubscriptionId)")
+                        self?.info("Unsubscribed from event subscription: \(logsSubscriptionId)")
                     }
 
-                    self.websocketProvider = nil
-                    self.web3WebSocketClient = nil
-                    self.admm = nil
-                    self.logsSubscriptionId = nil
+                    self?.websocketProvider = nil
+                    self?.web3WebSocketClient = nil
+                    self?.admm = nil
+                    self?.logsSubscriptionId = nil
                     
                     resolve(())
                 }
