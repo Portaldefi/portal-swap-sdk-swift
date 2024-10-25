@@ -318,6 +318,7 @@ extension Portal {
     private func subscribeToLogs(address: EthereumAddress) throws {
         let topics: [EthereumData] = [
             try EthereumData(ethereumValue: ADMMContract.SwapCreated.signature.sha3(.keccak256)),
+            try EthereumData(ethereumValue: ADMMContract.SwapValidated.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.SwapMatched.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.InvoiceRegistered.signature.sha3(.keccak256))
         ]
