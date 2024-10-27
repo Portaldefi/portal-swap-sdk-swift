@@ -19,8 +19,20 @@ final class Dex: BaseClass {
         
     private(set) var order: SwapOrder?
     
-    var swapId: Data? = nil
-    var secretHash: Data? = nil
+    var swapId: Data? = nil {
+        willSet {
+            if let newValue {
+                debug("swapId set", newValue.hexString)
+            }
+        }
+    }
+    var secretHash: Data? = nil {
+        willSet {
+            if let newValue {
+                debug("secret hash set", newValue.hexString)
+            }
+        }
+    }
     
     init(sdk: Sdk) {
         self.sdk = sdk
@@ -42,6 +54,7 @@ final class Dex: BaseClass {
     
     func close() -> Promise<Void> {
         Promise {
+            self.order = nil
             self.secretHash = nil
             self.swapId = nil
         }
