@@ -10,36 +10,37 @@ final class AssetManagement: BaseClass {
     
     private var assetManagement: IAssetManagementContract?
     private var liquidityPool: ILiquidityPoolContract?
+    
     var assets: [Pool.Asset] = []
+    var assetManagementContractAddress: String?
+    var liquidityPoolContractAddress: String?
     
     init(props: SwapSdkConfig.Blockchains.Portal) {
         self.props = props
         
         web3 = Web3(rpcURL: "http://node.playnet.portaldefi.zone:9545")
         
-        if
-            let amAbi = props.contracts["AssetManagement"] as? [String: Any],
-            let amContractAddressHex = amAbi["address"] as? String,
-            let amContractAddress = try? EthereumAddress(
-                hex: amContractAddressHex,
-                eip55: Utils.isEIP55Compliant(address: amContractAddressHex)
-            ),
-            let poolAbi = props.contracts["LiquidityPool"] as? [String: Any],
-            let poolContractAddressHex = poolAbi["address"] as? String,
-            let poolContractAddress = try? EthereumAddress(
-                hex: poolContractAddressHex,
-                eip55: Utils.isEIP55Compliant(address: poolContractAddressHex)
-            )
-        {
-            assetManagement = web3.eth.Contract(type: AssetManagementContract.self, address: amContractAddress)
-            liquidityPool = web3.eth.Contract(type: LiquidityPoolContract.self, address: poolContractAddress)
-        }
-        
         super.init(id: "asset.manager")
     }
     
     func listPools() -> Promise<[Pool]> {
         Promise { [unowned self] resolve, reject in
+            if
+                let amContractAddressHex = assetManagementContractAddress,
+                let amContractAddress = try? EthereumAddress(
+                    hex: amContractAddressHex,
+                    eip55: Utils.isEIP55Compliant(address: amContractAddressHex)
+                ),
+                let poolContractAddressHex = liquidityPoolContractAddress,
+                let poolContractAddress = try? EthereumAddress(
+                    hex: poolContractAddressHex,
+                    eip55: Utils.isEIP55Compliant(address: poolContractAddressHex)
+                )
+            {
+                assetManagement = web3.eth.Contract(type: AssetManagementContract.self, address: amContractAddress)
+                liquidityPool = web3.eth.Contract(type: LiquidityPoolContract.self, address: poolContractAddress)
+            }
+            
             listAssets().then { [weak self] assets in
                 guard let self else {
                     return reject(SwapSDKError.msg("AssetManagement is nil"))
