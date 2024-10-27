@@ -8,16 +8,11 @@ final class Sdk: BaseClass {
     private(set) var dex: Dex!
     private(set) var store: Store!
     private(set) var blockchains: Blockchains!
-    private(set) var assetManagement: AssetManagement!
     
-    // Creates a new instance of Portal SDK
     init(config: SwapSdkConfig) {
         accountId = config.id
         
         super.init(id: "sdk")
-        
-        // Interface to the underlying network
-        assetManagement = .init(props: config.blockchains.portal)
         
         // Interface to all the blockchain networks
         blockchains = .init(sdk: self, props: config.blockchains)
@@ -39,30 +34,25 @@ final class Sdk: BaseClass {
         subscribe(store.on("log", forwardLog()))
         subscribe(dex.on("log", forwardLog()))
         subscribe(blockchains.on("log", forwardLog()))
-        subscribe(assetManagement.on("log", forwardLog()))
         
         // Bubble up the info events
         subscribe(store.on("info", forwardLog()))
         subscribe(dex.on("info", forwardLog()))
         subscribe(blockchains.on("info", forwardLog()))
-        subscribe(assetManagement.on("info", forwardLog()))
         
         // Bubble up the warn events
         subscribe(store.on("warn", forwardLog()))
         subscribe(dex.on("warn", forwardLog()))
         subscribe(blockchains.on("warn", forwardLog()))
-        subscribe(assetManagement.on("warn", forwardLog()))
         
         // Bubble up the debug events
         subscribe(store.on("debug", forwardLog()))
         subscribe(dex.on("debug", forwardLog()))
         subscribe(blockchains.on("debug", forwardLog()))
-        subscribe(assetManagement.on("debug", forwardLog()))
         
         // Handling errors
         subscribe(blockchains.on("error", forwardError()))
         subscribe(store.on("error", forwardError()))
-        subscribe(assetManagement.on("error", forwardError()))
         subscribe(dex.on("error", forwardError()))
     }
 
@@ -90,7 +80,7 @@ final class Sdk: BaseClass {
     }
     
     func listPools() -> Promise<[Pool]> {
-        assetManagement.listPools()
+        blockchains.listPools()
     }
     
     func submit(_ order: SwapOrder) -> Promise<Void> {
