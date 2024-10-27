@@ -15,6 +15,9 @@ final class Ethereum: BaseClass, IBlockchain {
     private var subscriptionsIds = [String]()
     private var connected = false
     
+    var dexContractAddress: String?
+    var liquidityProviderContractAddress: String?
+    
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Ethereum) {
         self.sdk = sdk
         self.props = props
@@ -26,11 +29,8 @@ final class Ethereum: BaseClass, IBlockchain {
             web3 = Web3(rpcURL: props.url)
             
             //dex contract
-            
-            guard
-                let contract = props.contracts["Dex"] as? [String: Any],
-                let contractAddressHex = contract["address"] as? String
-            else {
+                        
+            guard let contractAddressHex = dexContractAddress else {
                 throw SwapSDKError.msg("Ethereum cannot prepare contract")
             }
             
@@ -41,10 +41,7 @@ final class Ethereum: BaseClass, IBlockchain {
             
             //liquidity provider contract
             
-            guard
-                let contract = props.contracts["LiquidityProvider"] as? [String: Any],
-                let contractAddressHex = contract["address"] as? String
-            else {
+            guard let contractAddressHex = liquidityProviderContractAddress else {
                 throw SwapSDKError.msg("Ethereum cannot prepare contract")
             }
             
@@ -126,7 +123,7 @@ final class Ethereum: BaseClass, IBlockchain {
             guard
                 let log = receipt.logs.first,
                 let orderCreatedEventFromLog = try? ABI.decodeLog(event: DexContract.OrderCreated, from: log),
-                let _secretHash = orderCreatedEventFromLog["secretHash"] as? Data,
+                let secretHash = orderCreatedEventFromLog["secretHash"] as? Data,
                 let sellAsset = orderCreatedEventFromLog["sellAsset"] as? EthereumAddress,
                 let sellAmount = orderCreatedEventFromLog["sellAmount"] as? BigUInt,
                 let swapOwner = orderCreatedEventFromLog["swapOwner"] as? EthereumAddress,
@@ -136,14 +133,8 @@ final class Ethereum: BaseClass, IBlockchain {
                 throw SwapSDKError.msg("create swap order unable decode logs")
             }
             
-            guard sdk.dex.secretHash == _secretHash else {
-                return warn("received order created from differrent swap")
-            }
-            
-            sdk.dex.swapId = swapId
-            
             let orderCreatedEvent = OrderCreatedEvent(
-                secretHash: _secretHash.hexString,
+                secretHash: secretHash.hexString,
                 sellAsset: sellAsset.hex(eip55: true),
                 sellAmount: sellAmount,
                 swapOwner: swapOwner.hex(eip55: true),
@@ -220,11 +211,7 @@ final class Ethereum: BaseClass, IBlockchain {
             else {
                 throw SwapSDKError.msg("authorize event receipt has no logs")
             }
-            
-            guard sdk.dex.swapId == swapId else {
-                return warn("received lp Authorized event, current swapId not matches swapId")
-            }
-            
+
             let logEvent = [
                 "swapId": "0x\(swapId.hexString)"
             ]
@@ -301,12 +288,6 @@ final class Ethereum: BaseClass, IBlockchain {
                 throw SwapSDKError.msg("settle invoice receipt has no logs")
             }
             
-            let publicAddress = try? publicAddress()
-            
-            guard sdk.dex.swapId == swapId || publicAddress == counterParty  else {
-                return warn("received lp InvoiceSettled event, current swapId not matches swapId")
-            }
-            
             let logEvent = [
                 "swapId": "0x\(swapId.hexString)",
                 "secret": "0x\(secret.hexString)",
@@ -372,9 +353,7 @@ final class Ethereum: BaseClass, IBlockchain {
     }
     
     func create(invoice: Invoice) -> Promise<Response> {
-        Promise { resolve, reject in
-            
-        }
+        Promise {}
     }
 }
 
@@ -397,7 +376,7 @@ extension Ethereum {
             .resume()
         }
     }
-        
+    
     private func sign(transaction: EthereumTransaction) throws -> EthereumSignedTransaction {
         let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
         return try transaction.sign(with: privKey, chainId: EthereumQuantity.string(props.chainId))
