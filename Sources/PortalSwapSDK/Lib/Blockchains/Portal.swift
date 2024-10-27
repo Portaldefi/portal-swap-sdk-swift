@@ -19,6 +19,8 @@ final class Portal: BaseClass {
     private var logsSubscriptionId: String? = nil
     private var connected = false
     
+    var admmContractAddress: String?
+    
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Portal) {
         self.sdk = sdk
         self.props = props
@@ -31,10 +33,7 @@ final class Portal: BaseClass {
             web3WebSocketClient = Web3(provider: websocketProvider)
             web3RpcClient = Web3(rpcURL: "http://node.playnet.portaldefi.zone:9545")
                             
-            guard
-                let contract = props.contracts["NotaryADMM"] as? [String: Any],
-                let contractAddressHex = contract["address"] as? String
-            else {
+            guard let contractAddressHex = admmContractAddress else {
                 throw SwapSDKError.msg("ADMM contract data is missing")
             }
             
@@ -74,7 +73,7 @@ final class Portal: BaseClass {
     }
     
     func createSwap(swapId: String, liquidityPoolId: String, secretHash: String, sellAsset: String, sellAmount: BigUInt, buyAsset: String, buyAmount: BigUInt, slippage: BigUInt) -> Promise<[String : String]> {
-        Promise { [unowned self] in
+        Promise { [unowned self] resolve, _ in
             guard let order = sdk.dex.order else {
                 throw SwapSDKError.msg("order is missing")
             }
@@ -155,16 +154,63 @@ final class Portal: BaseClass {
             let txId = try awaitPromise(retry(attempts: 3, delay: 3) { self.web3RpcClient.eth.publish(transaction: signedCreateSwapTx) })
             
             debug("create swap tx hash: \(txId)")
-            
-            let receipt = [
-                "from": createSwapTx.from?.hex(eip55: true) ?? "?",
-                "to": createSwapTx.to?.hex(eip55: true) ?? "?",
-                "transactionHash": txId
-            ]
+                        
+            let txIdData = try EthereumData(ethereumValue: txId)
+            let receipt = try awaitPromise(retry(attempts: 6, delay: 2) { self.web3RpcClient.eth.fetchReceipt(txHash: txIdData) })
             
             try subscribeToLogs(address: admmContractAddress)
             
-            return receipt
+            guard
+                let log = receipt.logs.first,
+                let swapCreatedEvent = try? ABI.decodeLog(event: ADMMContract.SwapCreated, from: log),
+                let swap = swapCreatedEvent["swap"] as? [Any],
+                let swapId = swap[0] as? Data,
+                let liquidityPoolId = swap[1] as? Data,
+                let secretHash = swap[2] as? Data,
+                let sellAsset = swap[3] as? EthereumAddress,
+                let sellAmount = swap[4] as? BigUInt,
+                let buyAsset = swap[5] as? EthereumAddress,
+                let buyAmount = swap[6] as? BigUInt,
+                let slippage = swap[7] as? BigUInt,
+                let swapCreation = swap[8] as? BigUInt,
+                let swapOwner = swap[9] as? EthereumAddress,
+                let buyId = swap[10] as? String
+            else {
+                guard connected else { return }
+                return error("swap created logs error", ["unwrapping data failed"])
+            }
+                                    
+            sdk.dex.swapId = swapId
+            
+            let invoiceRegisteredEvent = SwapCreatedEvent(
+                swapId: swapId.hexString,
+                liquidityPoolId: liquidityPoolId.hexString,
+                secretHash: secretHash.hexString,
+                sellAsset: sellAsset.hex(eip55: true),
+                sellAmount: sellAmount,
+                buyAsset: buyAsset.hex(eip55: true),
+                buyAmount: buyAmount,
+                slippage: slippage,
+                swapCreation: swapCreation,
+                swapOwner: swapOwner.hex(eip55: true),
+                buyId: buyId,
+                status: "inactive"
+            )
+            
+            let receiptJson = [
+                "from": createSwapTx.from?.hex(eip55: true) ?? "?",
+                "to": createSwapTx.to?.hex(eip55: true) ?? "?",
+                "blockHash": log.blockHash?.hex() ?? "?",
+                "transactionHash": log.transactionHash?.hex() ?? "?",
+                "status": "succeeded",
+            ]
+                        
+            info("swap.created.event", [invoiceRegisteredEvent])
+            info("swap.created.receipt", receiptJson)
+            
+            emit(event: "swap.created", args: [invoiceRegisteredEvent])
+                        
+            resolve(receiptJson)
         }
     }
     
@@ -248,8 +294,8 @@ final class Portal: BaseClass {
                     }
                     
                     guard
-                        let sellAssetSymbol = self.sdk.assetManagement.assets.first(where: {$0.id == sellAsset })?.symbol,
-                        let buyAssetSymbol = self.sdk.assetManagement.assets.first(where: {$0.id == buyAsset })?.symbol
+                        let sellAssetSymbol = self.sdk.blockchains.assetManagement.assets.first(where: {$0.id == sellAsset })?.symbol,
+                        let buyAssetSymbol = self.sdk.blockchains.assetManagement.assets.first(where: {$0.id == buyAsset })?.symbol
                     else {
                         return reject(SwapSDKError.msg("Unknown assets"))
                     }
@@ -317,7 +363,7 @@ final class Portal: BaseClass {
 extension Portal {
     private func subscribeToLogs(address: EthereumAddress) throws {
         let topics: [EthereumData] = [
-            try EthereumData(ethereumValue: ADMMContract.SwapCreated.signature.sha3(.keccak256)),
+//            try EthereumData(ethereumValue: ADMMContract.SwapCreated.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.SwapValidated.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.SwapMatched.signature.sha3(.keccak256)),
             try EthereumData(ethereumValue: ADMMContract.InvoiceRegistered.signature.sha3(.keccak256))
@@ -357,7 +403,7 @@ extension Portal {
             }
             
             guard sdk.dex.swapId == swapId else {
-                return warn("received swap matched, current swapId not matches swapId")
+                return warn("received swap matched for swap with id \(swapId.hexString), current swapId \(sdk.dex.swapId?.hexString ?? "not set")")
             }
             
             let event = SwapMatchedEvent(
@@ -394,7 +440,7 @@ extension Portal {
             }
             
             guard sdk.dex.swapId == swapId else {
-                return warn("received swap validated, current swapId not matches swapId")
+                return warn("received swap validated for swap with id \(swapId.hexString), current swapId \(sdk.dex.swapId?.hexString ?? "not set")")
             }
             
             let event = SwapValidatedEvent(
@@ -415,60 +461,58 @@ extension Portal {
             return emit(event: "swap.validated", args: [event])
         }
         
-        if let swapCreatedEvent = try? ABI.decodeLog(event: ADMMContract.SwapCreated, from: log) {
-            guard
-                let swap = swapCreatedEvent["swap"] as? [Any],
-                let swapId = swap[0] as? Data,
-                let liquidityPoolId = swap[1] as? Data,
-                let _secretHash = swap[2] as? Data,
-                let sellAsset = swap[3] as? EthereumAddress,
-                let sellAmount = swap[4] as? BigUInt,
-                let buyAsset = swap[5] as? EthereumAddress,
-                let buyAmount = swap[6] as? BigUInt,
-                let slippage = swap[7] as? BigUInt,
-                let swapCreation = swap[8] as? BigUInt,
-                let swapOwner = swap[9] as? EthereumAddress,
-                let buyId = swap[10] as? String
-            else {
-                guard connected else { return }
-                return error("swap created logs error", ["unwrapping data failed"])
-            }
-            
-            guard sdk.dex.secretHash == _secretHash else {
-                return info("Received swap created event with unknown swapId")
-            }
-            
-            debug("swapId set", swapId.hexString)
-            
-            sdk.dex.swapId = swapId
-            
-            let invoiceRegisteredEvent = SwapCreatedEvent(
-                swapId: swapId.hexString,
-                liquidityPoolId: liquidityPoolId.hexString,
-                secretHash: _secretHash.hexString,
-                sellAsset: sellAsset.hex(eip55: true),
-                sellAmount: sellAmount,
-                buyAsset: buyAsset.hex(eip55: true),
-                buyAmount: buyAmount,
-                slippage: slippage,
-                swapCreation: swapCreation,
-                swapOwner: swapOwner.hex(eip55: true),
-                buyId: buyId,
-                status: "inactive"
-            )
-            
-            let receipt = [
-                "blockHash": log.blockHash?.hex() ?? "?",
-                "transactionHash": log.transactionHash?.hex() ?? "?",
-                "status": "succeeded",
-            ]
-                        
-            info("swap.created.event", [invoiceRegisteredEvent])
-            info("swap.created.receipt", receipt)
-            
-            return emit(event: "swap.created", args: [invoiceRegisteredEvent])
-        }
-        
+//        if let swapCreatedEvent = try? ABI.decodeLog(event: ADMMContract.SwapCreated, from: log) {
+//            guard
+//                let swap = swapCreatedEvent["swap"] as? [Any],
+//                let swapId = swap[0] as? Data,
+//                let liquidityPoolId = swap[1] as? Data,
+//                let secretHash = swap[2] as? Data,
+//                let sellAsset = swap[3] as? EthereumAddress,
+//                let sellAmount = swap[4] as? BigUInt,
+//                let buyAsset = swap[5] as? EthereumAddress,
+//                let buyAmount = swap[6] as? BigUInt,
+//                let slippage = swap[7] as? BigUInt,
+//                let swapCreation = swap[8] as? BigUInt,
+//                let swapOwner = swap[9] as? EthereumAddress,
+//                let buyId = swap[10] as? String
+//            else {
+//                guard connected else { return }
+//                return error("swap created logs error", ["unwrapping data failed"])
+//            }
+//            
+//            guard sdk.dex.secretHash == secretHash else {
+//                return warn("received swap created for swap with id \(swapId.hexString), current swapId \(sdk.dex.swapId?.hexString ?? "not set")")
+//            }
+//                        
+//            sdk.dex.swapId = swapId
+//            
+//            let invoiceRegisteredEvent = SwapCreatedEvent(
+//                swapId: swapId.hexString,
+//                liquidityPoolId: liquidityPoolId.hexString,
+//                secretHash: secretHash.hexString,
+//                sellAsset: sellAsset.hex(eip55: true),
+//                sellAmount: sellAmount,
+//                buyAsset: buyAsset.hex(eip55: true),
+//                buyAmount: buyAmount,
+//                slippage: slippage,
+//                swapCreation: swapCreation,
+//                swapOwner: swapOwner.hex(eip55: true),
+//                buyId: buyId,
+//                status: "inactive"
+//            )
+//            
+//            let receipt = [
+//                "blockHash": log.blockHash?.hex() ?? "?",
+//                "transactionHash": log.transactionHash?.hex() ?? "?",
+//                "status": "succeeded",
+//            ]
+//                        
+//            info("swap.created.event", [invoiceRegisteredEvent])
+//            info("swap.created.receipt", receipt)
+//            
+//            return emit(event: "swap.created", args: [invoiceRegisteredEvent])
+//        }
+//        
         if let invoiceRegisteredEvent = try? ABI.decodeLog(event: ADMMContract.InvoiceRegistered, from: log) {
             guard
                let invoice = invoiceRegisteredEvent["invoice"] as? [Any],
@@ -482,7 +526,7 @@ extension Portal {
             }
             
             guard sdk.dex.swapId == swapId else {
-                return warn("received invoice registered, current swapId not matches swapId")
+                return warn("received invoice registered for swap with id \(swapId.hexString), current swapId \(sdk.dex.swapId?.hexString ?? "not set")")
             }
             
             let invoiceRegisteredEvent = InvoiceRegisteredEvent(
@@ -525,7 +569,7 @@ extension Portal {
     }
     
     private func retrieveAssetByNativeProps(blockchainName: String, blockchainAddress: String) -> Promise<String> {
-        sdk.assetManagement.retrieveAssetByNativeProps(blockchainName: blockchainName, blockchainAddress: blockchainAddress).then { asset in
+        sdk.blockchains.assetManagement.retrieveAssetByNativeProps(blockchainName: blockchainName, blockchainAddress: blockchainAddress).then { asset in
             guard let asset else {
                 throw SwapSDKError.msg("Unknown asset: \(blockchainName), address: \(blockchainAddress)")
             }
