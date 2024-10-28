@@ -40,12 +40,12 @@ open class BaseClass {
 
         var onceCancellable: AnyCancellable? = nil
         
-        onceCancellable = subjects[event]!.sink(receiveValue: { args in
+        onceCancellable = subjects[event]!.sink(receiveValue: { [weak self] args in
             action(args)
             onceCancellable?.cancel()
             
             if let cancellable = onceCancellable {
-                self.subscriptions.remove(cancellable)
+                self?.subscriptions.remove(cancellable)
             }
         })
         
@@ -97,51 +97,51 @@ extension BaseClass {
     }
     
     func forwardSwap() -> ([Any]) -> Void {
-        { [unowned self] args in
+        { [weak self] args in
             if let data = args as? [AmmSwap], let swap = data.first {
-                emit(event: "swap.\(swap.status)", args: [swap])
+                self?.emit(event: "swap.\(swap.status)", args: [swap])
             } else {
-                debug("Unexpected arguments on forwardSwap: \(args) [Sdk]")
+                self?.debug("Unexpected arguments on forwardSwap: \(args) [Sdk]")
             }
         }
     }
     
     func forwardEvent(_ event: String) -> ([Any]) -> Void {
-        { [unowned self] args in
-            emit(event: event, args: args)
+        { [weak self] args in
+            self?.emit(event: event, args: args)
         }
     }
     
     func forwardLog() -> ([Any]) -> Void {
-        { [unowned self] args in
+        { [weak self] args in
             if let level = args.first as? String
             {
                 let argsArray = Array(args.dropFirst())
-                let loggingFunction = getLoggingFunction(for: LogLevel.level(level))
-                loggingFunction(argsArray)
-                
-                switch LogLevel.level(level) {
-                case .debug:
-                    emit(event: "debug", args: [argsArray])
-                case .info:
-                    emit(event: "info", args: [argsArray])
-                case .warn:
-                    emit(event: "warn", args: [argsArray])
-                case .error:
-                    emit(event: "error", args: [argsArray])
-                case .unknown:
-                    break
+                if let loggingFunction = self?.getLoggingFunction(for: LogLevel.level(level)) {
+                    loggingFunction(argsArray)
+                    
+                    switch LogLevel.level(level) {
+                    case .debug:
+                        self?.emit(event: "debug", args: [argsArray])
+                    case .info:
+                        self?.emit(event: "info", args: [argsArray])
+                    case .warn:
+                        self?.emit(event: "warn", args: [argsArray])
+                    case .error:
+                        self?.emit(event: "error", args: [argsArray])
+                    case .unknown:
+                        break
+                    }
                 }
-                
             } else {
-                emit(event: "log", args: args)
+                self?.emit(event: "log", args: args)
             }
         }
     }
     
     func forwardError() -> ([Any]) -> Void {
-        { [unowned self] args in
-            emit(event: "error", args: args)
+        { [weak self] args in
+            self?.emit(event: "error", args: args)
         }
     }
     
