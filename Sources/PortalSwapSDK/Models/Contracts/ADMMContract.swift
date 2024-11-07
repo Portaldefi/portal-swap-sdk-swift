@@ -12,7 +12,7 @@ protocol IAdmmContract: EthereumContract {
     func createSwap(id: Data, liquidityPoolId: Data, secretHash: Data, sellAsset: EthereumAddress, sellAmount: BigUInt, buyAsset: EthereumAddress, buyAmount: BigUInt, slippage: BigUInt, swapCreation: BigUInt, swapOwner: EthereumAddress, buyId: String, status: String) -> SolidityInvocation
     func getSwap(id: Data) -> SolidityInvocation
     func eventOutputs(id: Data) -> SolidityInvocation
-    
+    func priceBtcToEth() -> SolidityInvocation
 }
 
 open class ADMMContract: StaticContract {
@@ -210,5 +210,11 @@ extension ADMMContract: IAdmmContract {
         )
         
         return method.invoke(swapTuple)
+    }
+    
+    func priceBtcToEth() -> SolidityInvocation {
+        let outputs = [SolidityFunctionParameter(name: "", type: .uint256)]
+        let method = SolidityConstantFunction(name: "priceBTCtoETH", inputs: [], outputs: outputs, handler: self)
+        return method.invoke()
     }
 }
