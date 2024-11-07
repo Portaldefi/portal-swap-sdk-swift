@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import Promises
+import BigInt
 
 final class Blockchains: BaseClass {
     private let sdk: Sdk
@@ -60,6 +61,10 @@ final class Blockchains: BaseClass {
     
     func listPools() -> Promise<[Pool]> {
         assetManagement.listPools()
+    }
+    
+    func priceBtcToEth() -> Promise<BigUInt> {
+        portal.priceBtcToEth()
     }
     
     func blockchain(id: String) -> IBlockchain? {

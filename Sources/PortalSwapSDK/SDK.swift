@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Promises
+import BigInt
 
 public final class SDK: BaseClass {
     private let sdk: Sdk
@@ -49,4 +50,7 @@ public final class SDK: BaseClass {
         try sdk.secret(id: id)
     }
 
+    public func priceBtcToEth() -> Promise<BigUInt> {
+        sdk.priceBtcToEth()
+    }
 }

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import Promises
+import BigInt
 
 final class Sdk: BaseClass {
     let accountId: String
@@ -81,6 +82,10 @@ final class Sdk: BaseClass {
     
     func listPools() -> Promise<[Pool]> {
         blockchains.listPools()
+    }
+    
+    func priceBtcToEth() -> Promise<BigUInt> {
+        blockchains.priceBtcToEth()
     }
     
     func submit(_ order: SwapOrder) -> Promise<Void> {
