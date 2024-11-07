@@ -24,6 +24,9 @@ final class Portal: BaseClass {
     init(sdk: Sdk, props: SwapSdkConfig.Blockchains.Portal) {
         self.sdk = sdk
         self.props = props
+        
+        web3RpcClient = Web3(rpcURL: "http://node.playnet.portaldefi.zone:9545")
+        
         super.init(id: "portal")
     }
         
@@ -31,10 +34,9 @@ final class Portal: BaseClass {
         Promise { [unowned self] in
             websocketProvider = try Web3WebSocketProvider(wsUrl: props.url, timeout: .seconds(10*60))
             web3WebSocketClient = Web3(provider: websocketProvider)
-            web3RpcClient = Web3(rpcURL: "http://node.playnet.portaldefi.zone:9545")
-                            
+                
             guard let contractAddressHex = admmContractAddress else {
-                throw SwapSDKError.msg("ADMM contract data is missing")
+                throw SwapSDKError.msg("ADMM contract address is missing")
             }
             
             let admmContractAddresIsEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)
@@ -61,15 +63,9 @@ final class Portal: BaseClass {
                         self?.info("Unsubscribed from event subscription: \(logsSubscriptionId)")
                     }
 
-                    let isClosed = self?.websocketProvider.webSocket.isClosed ?? true
-                    
-                    if !isClosed {
-                        _ = self?.websocketProvider.webSocket.close(code: .goingAway)
-                    }
-                    
-                    self?.websocketProvider = nil
                     self?.web3WebSocketClient = nil
                     self?.admm = nil
+                    self?.websocketProvider = nil
                     self?.logsSubscriptionId = nil
                     
                     resolve(())
@@ -188,7 +184,7 @@ final class Portal: BaseClass {
                                     
             sdk.dex.swapId = swapId
             
-            let invoiceRegisteredEvent = SwapCreatedEvent(
+            let event = SwapCreatedEvent(
                 swapId: swapId.hexString,
                 liquidityPoolId: liquidityPoolId.hexString,
                 secretHash: secretHash.hexString,
@@ -211,12 +207,42 @@ final class Portal: BaseClass {
                 "status": "succeeded",
             ]
                         
-            info("swap.created.event", [invoiceRegisteredEvent])
+            info("swap.created.event", [event])
             info("swap.created.receipt", receiptJson)
             
-            emit(event: "swap.created", args: [invoiceRegisteredEvent])
+            emit(event: "swap.created", args: [event])
                         
             resolve(receiptJson)
+        }
+    }
+    
+    func priceBtcToEth() -> Promise<BigUInt> {
+        Promise { [unowned self] resolve, reject in
+            if let contractAddressHex = admmContractAddress {
+                let admmContractAddresIsEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)
+                let admmContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: admmContractAddresIsEipp55)
+                
+                admm = web3RpcClient.eth.Contract(type: ADMMContract.self, address: admmContractAddress)
+                
+                guard let admm else {
+                    throw SwapSDKError.msg("admm contract is missing")
+                }
+                
+                admm.priceBtcToEth().call { response, error in
+                    if let response {
+                        guard let ratio = response[""] as? BigUInt else {
+                            return reject(SwapSDKError.msg("fetching btc to eth unexpected response"))
+                        }
+                        resolve(ratio)
+                    } else if let error {
+                        reject(error)
+                    } else {
+                        reject(SwapSDKError.msg("fetching btc to eth price ratio"))
+                    }
+                }
+            } else {
+                reject(SwapSDKError.msg("fetching btc to eth price error: addmm contract address isn't valid"))
+            }
         }
     }
     
