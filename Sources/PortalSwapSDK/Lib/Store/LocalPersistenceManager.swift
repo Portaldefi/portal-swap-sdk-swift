@@ -44,10 +44,13 @@ public final class LocalPersistenceManager {
     }
     
     public func fetchSwaps() throws -> [AmmSwap] {
-        try DBAmmSwap.entities(context: viewContext)
-            .filter{ $0.accountId == configuration.accountId }
-            .map{ AmmSwap(record: $0) }
+        let swaps = try DBAmmSwap.entities(context: viewContext)
+            .filter { $0.accountId == configuration.accountId }
+            .map { AmmSwap(record: $0) }
+
+        return Array(Set(swaps))
     }
+    
     public func fetchSecret(key: String) throws -> Data? {
         (try DBSecret.entity(key: key, context: viewContext)).data
     }
