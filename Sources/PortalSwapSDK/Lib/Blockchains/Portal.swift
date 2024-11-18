@@ -74,7 +74,7 @@ final class Portal: BaseClass {
         }
     }
     
-    func createSwap(swapId: String, liquidityPoolId: String, secretHash: String, sellAsset: String, sellAmount: BigUInt, buyAsset: String, buyAmount: BigUInt, slippage: BigUInt) -> Promise<[String : String]> {
+    func createSwap(swapId: String, liquidityPoolId: String, secretHash: String, sellAsset: String, sellAmount: BigUInt, buyAsset: String, buyAmount: BigUInt, slippage: BigUInt) -> Promise<AmmSwap> {
         Promise { [unowned self] resolve, _ in
             guard let order = sdk.dex.order else {
                 throw SwapSDKError.msg("order is missing")
@@ -93,11 +93,11 @@ final class Portal: BaseClass {
             
             let (sellAsset, buyAsset) = try awaitPromise(retry(attempts: 3, delay: 3) { self.retriveNativeAddresses(order: order) })
             
-            guard let sellAsset = EthereumAddress(hexString: sellAsset) else {
+            guard let sellAssetAddress = EthereumAddress(hexString: sellAsset.id.hex(eip55: true)) else {
                 throw SwapSDKError.msg("sell asset address isn't valid")
             }
             
-            guard let buyAsset = EthereumAddress(hexString: buyAsset) else {
+            guard let buyAssetAddress = EthereumAddress(hexString: buyAsset.id.hex(eip55: true)) else {
                 throw SwapSDKError.msg("buy asset address isn't valid")
             }
             
@@ -113,9 +113,9 @@ final class Portal: BaseClass {
                 "id": "0x\(id.hexString)",
                 "liquidityPoolId": "0x\(liquidityPoolId.hexString)",
                 "secretHash": "0x\(secretHash.hexString)",
-                "sellAsset": sellAsset.hex(eip55: true),
+                "sellAsset": sellAssetAddress.hex(eip55: true),
                 "sellAmount": sellAmount.description,
-                "buyAsset": buyAsset.hex(eip55: true),
+                "buyAsset": buyAssetAddress.hex(eip55: true),
                 "buyAmount": buyAmount.description,
                 "swapOwner": swapOwner.hex(eip55: true),
                 "buyId": buyId,
@@ -129,9 +129,9 @@ final class Portal: BaseClass {
                 id: id,
                 liquidityPoolId: liquidityPoolId,
                 secretHash: secretHash,
-                sellAsset: sellAsset,
+                sellAsset: sellAssetAddress,
                 sellAmount: sellAmount,
-                buyAsset: buyAsset,
+                buyAsset: buyAssetAddress,
                 buyAmount: buyAmount,
                 slippage: slippage,
                 swapCreation: swapCreation,
@@ -169,13 +169,13 @@ final class Portal: BaseClass {
                 let swapId = swap[0] as? Data,
                 let liquidityPoolId = swap[1] as? Data,
                 let secretHash = swap[2] as? Data,
-                let sellAsset = swap[3] as? EthereumAddress,
+                let sellAssetAddress = swap[3] as? EthereumAddress,
                 let sellAmount = swap[4] as? BigUInt,
-                let buyAsset = swap[5] as? EthereumAddress,
+                let buyAssetAddress = swap[5] as? EthereumAddress,
                 let buyAmount = swap[6] as? BigUInt,
                 let slippage = swap[7] as? BigUInt,
                 let swapCreation = swap[8] as? BigUInt,
-                let swapOwner = swap[9] as? EthereumAddress,
+                let swapOwnerAddress = swap[9] as? EthereumAddress,
                 let buyId = swap[10] as? String
             else {
                 guard connected else { return }
@@ -188,18 +188,19 @@ final class Portal: BaseClass {
                 swapId: swapId.hexString,
                 liquidityPoolId: liquidityPoolId.hexString,
                 secretHash: secretHash.hexString,
-                sellAsset: sellAsset.hex(eip55: true),
+                sellAsset: sellAssetAddress.hex(eip55: true),
                 sellAmount: sellAmount,
-                buyAsset: buyAsset.hex(eip55: true),
+                buyAsset: buyAssetAddress.hex(eip55: true),
                 buyAmount: buyAmount,
                 slippage: slippage,
                 swapCreation: swapCreation,
-                swapOwner: swapOwner.hex(eip55: true),
+                swapOwner: swapOwnerAddress.hex(eip55: true),
                 buyId: buyId,
                 status: "inactive"
             )
             
             let receiptJson = [
+                "swapTxHash": txIdData.hex(),
                 "from": createSwapTx.from?.hex(eip55: true) ?? "?",
                 "to": createSwapTx.to?.hex(eip55: true) ?? "?",
                 "blockHash": log.blockHash?.hex() ?? "?",
@@ -211,8 +212,26 @@ final class Portal: BaseClass {
             info("swap.created.receipt", receiptJson)
             
             emit(event: "swap.created", args: [event])
+            
+            let ammSwap = AmmSwap(
+                swapId: swapId,
+                swapTxHash: txIdData.hex(),
+                secretHash: secretHash,
+                liquidityPoolId: liquidityPoolId,
+                sellAssetSymbol: sellAsset.symbol,
+                sellAsset: sellAssetAddress,
+                sellAmount: sellAmount,
+                buyAssetSymbol: buyAsset.symbol,
+                buyAsset: buyAssetAddress,
+                buyAmount: buyAmount,
+                slippage: slippage,
+                swapCreation: swapCreation,
+                swapOwner: swapOwnerAddress,
+                buyId: buyId,
+                status: status
+            )
                         
-            resolve(receiptJson)
+            resolve(ammSwap)
         }
     }
     
@@ -533,7 +552,7 @@ extension Portal {
         warn("Unknown log event", log)
     }
         
-    private func retriveNativeAddresses(order: SwapOrder) -> Promise<(String, String)> {
+    private func retriveNativeAddresses(order: SwapOrder) -> Promise<(Pool.Asset, Pool.Asset)> {
         retry(attempts: 3, delay: 1) {
             all(
                 self.retrieveAssetByNativeProps(
@@ -549,13 +568,13 @@ extension Portal {
         }
     }
     
-    private func retrieveAssetByNativeProps(blockchainName: String, blockchainAddress: String) -> Promise<String> {
+    private func retrieveAssetByNativeProps(blockchainName: String, blockchainAddress: String) -> Promise<Pool.Asset> {
         sdk.blockchains.assetManagement.retrieveAssetByNativeProps(blockchainName: blockchainName, blockchainAddress: blockchainAddress).then { asset in
             guard let asset else {
                 throw SwapSDKError.msg("Unknown asset: \(blockchainName), address: \(blockchainAddress)")
             }
             
-            return asset.id.hex(eip55: true)
+            return asset//.id.hex(eip55: true)
         }
     }
 }
