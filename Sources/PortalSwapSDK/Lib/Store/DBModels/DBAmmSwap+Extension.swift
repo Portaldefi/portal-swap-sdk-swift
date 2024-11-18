@@ -15,32 +15,44 @@ extension DBAmmSwap {
         }
         
         context.performAndWait {
-            self.swapId = swap.swapId.hexString
-            self.liquidityPoolId = swap.liquidityPoolId.hexString
-            self.secretHash = swap.secretHash.hexString
-            self.sellAssetSymbol = swap.sellAssetSymbol
-            self.sellAsset = swap.sellAsset.hex(eip55: true)
-            self.sellAmount = swap.sellAmount.description
-            self.buyAssetSymbol = swap.buyAssetSymbol
-            self.buyAsset = swap.buyAsset.hex(eip55: true)
-            self.buyAmount = swap.buyAmount.description
-            self.slippage = swap.slippage.description
-            self.swapCreation = swap.swapCreation.description
-            self.swapOwner = swap.swapOwner.hex(eip55: true)
-            self.status = swap.status
-            self.buyId = swap.buyId
+            swapId = swap.swapId.hexString
+            
+            swapTxHash = swap.swapTxHash
+            
+            liquidityPoolId = swap.liquidityPoolId.hexString
+            secretHash = swap.secretHash.hexString
+            sellAssetSymbol = swap.sellAssetSymbol
+            sellAsset = swap.sellAsset.hex(eip55: true)
+            sellAmount = swap.sellAmount.description
+            
+            sellAssetTx = swap.sellAssetTx
+            
+            buyAssetSymbol = swap.buyAssetSymbol
+            buyAsset = swap.buyAsset.hex(eip55: true)
+            buyAmount = swap.buyAmount.description
+            
+            buyAssetTx = swap.buyAssetTx
+            
+            slippage = swap.slippage.description
+            swapCreation = swap.swapCreation.description
+            swapOwner = swap.swapOwner.hex(eip55: true)
+            status = swap.status
+            buyId = swap.buyId
         }
     }
     
     func toJSON() -> [String: Any] {
         return [
             "swapId": swapId as Any,
+            "swapTxHash": swapTxHash as Any,
             "liquidityPoolId": liquidityPoolId as Any,
             "secretHash": secretHash as Any,
             "sellAsset": sellAsset as Any,
             "sellAmount": BigUInt(stringLiteral: sellAmount!) as Any,
+            "sellAssetTx": sellAssetTx as Any,
             "buyAsset": buyAsset as Any,
             "buyAmount": BigUInt(stringLiteral: buyAmount!) as Any,
+            "buyAssetTx": buyAssetTx as Any,
             "slippage": BigUInt(stringLiteral: slippage!) as Any,
             "swapOwner": swapOwner as Any,
             "swapCreation": swapCreation as Any,
