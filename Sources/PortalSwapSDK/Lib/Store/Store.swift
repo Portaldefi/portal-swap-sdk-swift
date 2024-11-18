@@ -82,22 +82,30 @@ final class Store: BaseClass {
         try manager.saveContext()
     }
     
-    func update(_ namespace: StoreNamespace, _ key: String, _ obj: [String: Any]) throws {
+    func create(swap: AmmSwap) throws {
         guard let manager = persistenceManager else {
             throw SwapSDKError.msg("Cannot obtain persistenceManager")
         }
-                
-        switch namespace {
-        case .swaps:
-            let swap = try AmmSwap.from(json: obj)
-            let dbSwap = try manager.swap(key: key)
-            try dbSwap.update(swap: swap)
-            
-            debug("Updating db swap with status: \(dbSwap.status ?? "Unknown")")
-        default:
-            break
-        }
         
+        let newEntity = manager.swapEntity()
+        try newEntity.update(swap: swap)
+    }
+    
+    func updateBuyAssetTx(id: String, data: String) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: id)
+        dbSwap.buyAssetTx = data
+        try manager.saveContext()
+    }
+    
+    func updateSellAssetTx(id: String, data: String) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: id)
+        dbSwap.sellAssetTx = data
         try manager.saveContext()
     }
     
