@@ -18,6 +18,7 @@ final class Dex: BaseClass {
     }()
         
     private(set) var order: SwapOrder?
+    private var ethTxHash: String?
     
     var swapId: Data? = nil {
         willSet {
@@ -57,11 +58,12 @@ final class Dex: BaseClass {
             self.order = nil
             self.secretHash = nil
             self.swapId = nil
+            self.ethTxHash = nil
         }
     }
     
     func submit(_ order: SwapOrder) -> Promise<Void> {
-        Promise { [unowned self] in
+        Promise { [unowned self] resolve, reject in
             save(order: order)
             
             let (secret, secretHash) = Utils.createSecret()
@@ -77,7 +79,11 @@ final class Dex: BaseClass {
                     secretHash: secretHash,
                     order: order
                 ).then { [unowned self] response in
-                    return info("order submitted", ["order": order, "response": response])
+                    info("order submitted", ["order": order, "response": response])
+                    ethTxHash = response["transactionHash"]
+                    resolve(())
+                }.catch { swapOrderError in
+                    reject(swapOrderError)
                 }
             case "lightning":
                 //Secret seeker
@@ -90,11 +96,15 @@ final class Dex: BaseClass {
                     buyAsset: order.buyAddress,
                     buyAmount: order.buyAmount,
                     slippage: 1000
-                ).then { [unowned self] response in
-                    return info("notary.createSwap", ["order": order, "response": response])
+                ).then { [unowned self] swap in
+                    info("order submitted", ["order": order, "swap": swap.toJSON()])
+                    try sdk.store.create(swap: swap)
+                    resolve(())
+                }.catch { createSwapError in
+                    reject(createSwapError)
                 }
             default:
-                throw SwapSDKError.msg("Unsupported network: \(order.sellNetwork)")
+                reject(SwapSDKError.msg("Unsupported network: \(order.sellNetwork)"))
             }
         }
     }
@@ -179,6 +189,8 @@ extension Dex {
                     guard let invoice = invoice["request"] else {
                         throw SwapSDKError.msg("Cannot unwrap invoice")
                     }
+                    
+                    try self.sdk.store.updateBuyAssetTx(id: event.swapId, data: invoice)
                                         
                     return portal.registerInvoice(
                         swapId: swap.swapId,
@@ -227,7 +239,13 @@ extension Dex {
             buyAsset: order.buyAsset,
             buyAmount: order.buyAmount,
             slippage: 100
-        ).catch { error in
+        ).then { [unowned self] swap in
+            try sdk.store.create(swap: swap)
+            
+            if let ethTxHash {
+                try sdk.store.updateSellAssetTx(id: swap.swapId.hexString, data: ethTxHash)
+            }
+        }.catch { [unowned self]  error in
             self.error("[Portal] Swap creation error", [error])
         }
     }
@@ -254,6 +272,8 @@ extension Dex {
                 ]
                 
                 debug("LP invoice", request)
+                
+                try sdk.store.updateBuyAssetTx(id: event.swapId, data: event.invoice)
                 
                 return lightning.pay(invoice: request)
             }.catch { error in
