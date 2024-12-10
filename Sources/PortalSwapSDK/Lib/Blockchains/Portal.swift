@@ -43,6 +43,10 @@ final class Portal: BaseClass {
             let admmContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: admmContractAddresIsEipp55)
             
             admm = web3RpcClient.eth.Contract(type: ADMMContract.self, address: admmContractAddress)
+                        
+            guard try awaitPromise(getBalance()).quantity > 0 else {
+                throw SwapSDKError.msg("Not enough gas tokens")
+            }
             
             info("connect")
             emit(event: "connect")
@@ -564,6 +568,23 @@ extension Portal {
                 )
             )
             .then { ($0, $1) }
+        }
+    }
+    
+    private func getBalance() -> Promise<EthereumQuantity> {
+        Promise { [unowned self] resolve, reject in
+            if let privKey = try? EthereumPrivateKey(hexPrivateKey: "\(props.privKey)") {
+                web3RpcClient.eth.getBalance(address: privKey.address, block: .latest) { resp in
+                    switch resp.status {
+                    case .success(let balance):
+                        resolve(balance)
+                    case .failure(let error):
+                        reject(error)
+                    }
+                }
+            } else {
+                reject(SwapSDKError.msg("privKey is missing"))
+            }
         }
     }
     
