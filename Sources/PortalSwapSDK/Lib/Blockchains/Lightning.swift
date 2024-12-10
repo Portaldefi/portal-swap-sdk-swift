@@ -88,10 +88,11 @@ final class Lightning: BaseClass, IBlockchain {
                             subscription.off("invoice.updated")
                             self.info("invoice.settled", invoice)
                             self.emit(event: "invoice.settled", args: [swapId])
-                        case .paymentCanceled:
+                        case .paymentFailed(let reason):
                             subscription.off("invoice.updated")
                             self.info("invoice.cancelled", invoice)
                             self.emit(event: "invoice.cancelled", args: [invoice])
+                            self.error("Ln payment failed", reason ?? "unknown")
                         case .awaitsPayment:
                             break
                         }
@@ -169,10 +170,11 @@ final class Lightning: BaseClass, IBlockchain {
                                 } else {
                                     self.emit(event: "invoice.paid", args: [swapId])
                                 }
-                            case .paymentCanceled:
+                            case .paymentFailed(let reason):
                                 subscription.off("invoice.updated")
                                 self.info("invoice.cancelled", invoice)
                                 self.emit(event: "invoice.cancelled", args: [invoice])
+                                self.error("Ln payment failed", reason ?? "unknown")
                             case .paymentHeld, .awaitsPayment:
                                 break
                             }

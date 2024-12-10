@@ -2,7 +2,7 @@ import Foundation
 
 public class InvoiceSubscription {
     public enum Status {
-        case awaitsPayment, paymentHeld, paymentConfirmed(String?), paymentCanceled
+        case awaitsPayment, paymentHeld, paymentConfirmed(String?), paymentFailed(String?)
     }
     
     public var status: Status = .awaitsPayment
