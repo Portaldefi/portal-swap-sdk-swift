@@ -66,7 +66,7 @@ final class Ethereum: BaseClass, IBlockchain {
     }
     
     func swapOrder(secretHash: Data, order: SwapOrder) -> Promise<Response> {
-        Promise { [unowned self] resolve, _ in
+        Promise { [unowned self] resolve, reject in
             guard let dex else {
                 throw SwapSDKError.msg("Dex contract is nil")
             }
@@ -130,7 +130,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 let swapId = orderCreatedEventFromLog["swapId"] as? Data,
                 let swapCreation = orderCreatedEventFromLog["swapCreation"] as? BigUInt
             else {
-                throw SwapSDKError.msg("create swap order unable decode logs")
+                return reject(SwapSDKError.msg("create swap tx failed"))
             }
             
             let orderCreatedEvent = OrderCreatedEvent(
@@ -209,7 +209,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 let authorizedEvent = try? ABI.decodeLog(event: DexContract.Authorized, from: log),
                 let swapId = authorizedEvent["swapId"] as? Data
             else {
-                throw SwapSDKError.msg("authorize event receipt has no logs")
+                return reject(SwapSDKError.msg("authorize tx failed"))
             }
 
             let logEvent = [
@@ -265,7 +265,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 accessList: [:],
                 transactionType: .eip1559
             ) else {
-                throw SwapSDKError.msg("failed to build settle invoice tx")
+                return reject(SwapSDKError.msg("failed to build settle invoice tx"))
             }
             
             let signedSettleTx = try sign(transaction: settleTx)
@@ -285,7 +285,7 @@ final class Ethereum: BaseClass, IBlockchain {
                 let sellAsset = settleEvent["sellAsset"] as? EthereumAddress,
                 let sellAmount = settleEvent["sellAmount"] as? BigUInt
             else {
-                throw SwapSDKError.msg("settle invoice receipt has no logs")
+                return reject(SwapSDKError.msg("settle invoice tx failed"))
             }
             
             let logEvent = [
