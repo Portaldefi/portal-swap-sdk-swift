@@ -1,4 +1,5 @@
 import Foundation
+import Web3
 import BigInt
 import Promises
 
@@ -62,6 +63,14 @@ final class Dex: BaseClass {
         }
     }
     
+    func timeoutSwap() {        
+        guard let swapId, let swap = try? sdk.store.getAmmSwap(key: swapId.hexString), swap.status != "completed" else {
+            return
+        }
+        
+        try? sdk.store.updateSwapStatus(id: swap.swapId.hexString, data: "failed:\(swap.status) timeout")
+    }
+    
     func submit(_ order: SwapOrder) -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             save(order: order)
@@ -97,7 +106,7 @@ final class Dex: BaseClass {
                     buyAmount: order.buyAmount,
                     slippage: 1000
                 ).then { [unowned self] swap in
-                    info("order submitted", ["order": order, "swap": swap.toJSON()])
+                    info("swap created", ["order": order, "swap": swap.toJSON()])
                     try sdk.store.create(swap: swap)
                     resolve(())
                 }.catch { createSwapError in
@@ -127,24 +136,24 @@ extension Dex {
             switch event {
             case "order.created":
                 guard let orderCreated = args.first as? OrderCreatedEvent else {
-                    return error("order created event is missing", [args])
+                    return throwError("order created event is missing", [args])
                 }
                 onOrderCreated(event: orderCreated)
             case "lp.invoice.created":
                 guard let invoiceRegistered = args.first as? InvoiceRegisteredEvent else {
-                    return error("invoice registered event is missing", [args])
+                    return throwError("invoice registered event is missing", [args])
                 }
                 onLpInvoiceCreated(event: invoiceRegistered)
             case "swap.matched":
                 guard let swapMatched = args.first as? SwapMatchedEvent else {
-                    return error("swap matched event is missing", [args])
+                    return throwError("swap matched event is missing", [args])
                 }
                 onSwapMatched(event: swapMatched)
             case "invoice.paid":
                 onInvoicePaid(args: args)
             case "invoice.settled":
                 guard let swapId = args.first as? String else {
-                    return error("onInvoiceSettled swapId is missing error", [args])
+                    return throwError("invoice.settled swapId is missing", [args])
                 }
                 if let mainId = args.last as? String {
                     onInvoiceSettled(swapId: mainId)
@@ -159,75 +168,89 @@ extension Dex {
     
     private func onSwapMatched(event: SwapMatchedEvent) {
         guard let order else {
-            return error("onSwapMatched", [event])
+            return throwError("swap.matched order is missing", [event])
         }
-        guard let traderBlockchain = sdk.blockchains.blockchain(id: order.buyNetwork) else {
-            return error("blockchain with id: \(order.buyNetwork) not found", [event])
-        }
-        guard let swapOwner = try? ethereum.publicAddress() else {
-            return error("swap owner is unknown", [event])
-        }
-
-        portal.getSwap(id: event.swapId).then { swap in
+        
+        switch order.sellNetwork {
+        case "ethereum":
+            guard let swapOwner = try? ethereum.publicAddress() else {
+                return throwError("invalid swap owner address", [event])
+            }
+            
+            guard let swap = try? awaitPromise(portal.getSwap(id: event.swapId)) else {
+                return throwError("create.invoice error", [error])
+            }
+            
             guard swap.swapOwner == swapOwner else {
-                return self.warn("On swap matched event received not owner")
+                return info("On swap matched event received not owner")
             }
-                        
-            switch order.sellNetwork {
-            case "ethereum":
-                let invoice = [
-                    "swapId": "0x" + swap.swapId.hexString,
-                    "secretHash": swap.secretHash.hexString,
-                    "quantity": event.matchedBuyAmount.description,
-                ]
+            
+            let invoice = [
+                "swapId": "0x" + swap.swapId.hexString,
+                "secretHash": swap.secretHash.hexString,
+                "quantity": event.matchedBuyAmount.description,
+            ]
+            
+            debug("invoice", invoice)
+            
+            guard let traderBlockchain = sdk.blockchains.blockchain(id: order.buyNetwork) else {
+                return throwError("\(order.buyNetwork) blockchain not found", [event])
+            }
+            
+            traderBlockchain.create(invoice: invoice).then { [unowned self] invoice in
+                info("trader.invoice.created", ["invoice": invoice])
                 
-                self.debug("invoice", invoice)
-
-                traderBlockchain.create(invoice: invoice).then { [unowned self] invoice in
-                    info("trader.invoice.created", ["invoice": invoice])
-                    
-                    guard let invoice = invoice["request"] else {
-                        throw SwapSDKError.msg("Cannot unwrap invoice")
-                    }
-                    
-                    try self.sdk.store.updateBuyAssetTx(id: event.swapId, data: invoice)
-                                        
-                    return portal.registerInvoice(
-                        swapId: swap.swapId,
-                        secretHash: swap.secretHash,
-                        amount: event.matchedBuyAmount,
-                        invoice: invoice
-                    )
-                }.then { [unowned self] result in
-                    ethereum.feePercentage()
-                }.then { [unowned self] fee in
-                    let feeAmount = (swap.sellAmount * fee) / BigUInt(10000)
-                    let amount = swap.sellAmount - feeAmount
-                    let publicAddress = try ethereum.publicAddress()
-                    
-                    let authorizedWithdrawal = AuthorizedWithdrawal(
-                        addr: publicAddress,
-                        amount: amount
-                    )
-                    
-                    return ethereum.authorize(
-                        swapId: swap.swapId,
-                        withdrawals: [authorizedWithdrawal]
-                    )
-                }.then { [unowned self] response in
-                    info("authorize call", ["response": response])
-                }.catch { [unowned self] error in
-                    self.error("createInvoice", [error])
+                guard let invoice = invoice["request"] else {
+                    throw SwapSDKError.msg("Cannot unwrap invoice")
                 }
-            default:
-                break
+                
+                try? self.sdk.store.updateBuyAssetTx(id: swap.swapId.hexString, data: invoice)
+                
+                return portal.registerInvoice(
+                    swapId: swap.swapId,
+                    secretHash: swap.secretHash,
+                    amount: event.matchedBuyAmount,
+                    invoice: invoice
+                )
+            }.then { [unowned self] result in
+                all(
+                    portal.getOutput(id: swap.secretHash.hexString),
+                    ethereum.feePercentage()
+                )
+            }.then { [unowned self] output, fee in
+                let feeAmount = (swap.sellAmount * fee) / BigUInt(10000)
+                let amount = swap.sellAmount - feeAmount
+                
+                guard let matchedLpAddressHex = output["matchedLpAddress"] else {
+                    throw SwapSDKError.msg("matchedLpAddressHex is invalid")
+                }
+                
+                guard let matchedLpAddress = EthereumAddress(hexString: matchedLpAddressHex) else {
+                    throw SwapSDKError.msg("matchedLpAddress is invalid")
+                }
+                
+                let authorizedWithdrawal = AuthorizedWithdrawal(
+                    addr: matchedLpAddress,
+                    amount: amount
+                )
+                
+                return ethereum.authorize(
+                    swapId: swap.swapId,
+                    withdrawals: [authorizedWithdrawal]
+                )
+            }.then { [unowned self] response in
+                info("authorize call", ["response": response])
+            }.catch { [unowned self] error in
+                throwError("createInvoice", [error])
             }
+        default:
+            break
         }
     }
     
     private func onOrderCreated(event: OrderCreatedEvent) {
         guard let order else {
-            return error("onSwap order is missing error", [event])
+            return throwError("onSwap order is missing error", [event])
         }
         
         portal.createSwap(
@@ -240,31 +263,40 @@ extension Dex {
             buyAmount: order.buyAmount,
             slippage: 100
         ).then { [unowned self] swap in
-            try sdk.store.create(swap: swap)
-            
-            if let ethTxHash {
-                try sdk.store.updateSellAssetTx(id: swap.swapId.hexString, data: ethTxHash)
+            guard let ethTxHash else {
+                return try sdk.store.create(swap: swap)
             }
+            
+            var swapToUpdate = swap
+            swapToUpdate.sellAssetTx = ethTxHash
+            
+            try sdk.store.create(swap: swapToUpdate)
         }.catch { [unowned self]  error in
-            self.error("[Portal] Swap creation error", [error])
+            throwError("[Portal] Swap creation error", [error])
         }
     }
     
     private func onLpInvoiceCreated(event: InvoiceRegisteredEvent) {
         guard let order else {
-            return error("onSwap order is missing error", [event])
+            return throwError("onSwap order is missing error", [event])
         }
         
         switch order.sellNetwork {
         case "lightning":
-            portal.getOutput(id: event.swapId).then { [unowned self] response in
+            guard let swap = try? awaitPromise(portal.getSwap(id: event.swapId)) else {
+                return throwError("paying ln invoice error", "unknown swap")
+            }
+            
+            do {
+                let response = try awaitPromise(portal.getOutput(id: event.secretHash))
+                
                 guard
                     let matcheedBuyAmount = response["matchedBuyAmount"],
                     let invoice = response["invoice"]
                 else {
-                    throw SwapSDKError.msg("getOutput: Unexpected response")
+                    throw SwapSDKError.msg("getOutput unexpected response")
                 }
-
+                
                 let request = [
                     "swapId": event.swapId,
                     "quantity": matcheedBuyAmount.description,
@@ -273,11 +305,12 @@ extension Dex {
                 
                 debug("LP invoice", request)
                 
-                try sdk.store.updateBuyAssetTx(id: event.swapId, data: event.invoice)
+                try? sdk.store.updateBuyAssetTx(id: swap.swapId.hexString, data: event.invoice)
                 
-                return lightning.pay(invoice: request)
-            }.catch { error in
-                self.error("paying ln invoice error", [error])
+                let result = try awaitPromise(lightning.pay(invoice: request))
+                debug("LP invoice paid", result)
+            } catch {
+                throwError("paying ln invoice error", [error])
             }
         default:
             break
@@ -286,13 +319,7 @@ extension Dex {
     
     private func onInvoicePaid(args: [Any]) {
         guard let order else {
-            return error("onSwap order is missing error", [args])
-        }
-        guard let traderBlockchain = sdk.blockchains.blockchain(id: order.buyNetwork) else {
-            return error("traderBlockchain (\(order.buyNetwork) is missing", [order])
-        }
-        guard let swapOwner = try? ethereum.publicAddress() else {
-            return error("swap owner is unknown", [order])
+            return throwError("onSwap order is missing error", [args])
         }
         
         let _swapId: String
@@ -301,70 +328,91 @@ extension Dex {
         switch order.sellNetwork {
         case "lightning":
             guard let swapId = args[2] as? String else {
-                return error("swapId not passed with", [args])
+                return throwError("swapId not passed with", [args])
             }
             _swapId = swapId
             
             if let secretHex = args[1] as? String {
                 _secret = Data(hex: secretHex)
             } else {
-                return error("Secret is unknown")
+                return throwError("Secret is unknown")
             }
         default:
             guard let swapId = args.first as? String else {
-                return error("swapId is missing", [args])
+                return throwError("swapId is missing", [args])
             }
             _swapId = swapId
         }
         
-        portal.getSwap(id: _swapId).then { [unowned self] swap in
-            guard swap.swapOwner == swapOwner else {
-                return self.warn("On invoice paid received not owner")
+        guard let swap = try? awaitPromise(portal.getSwap(id: _swapId)) else {
+            return throwError("settle invoice error", "unknown swap")
+        }
+        
+        guard let swapOwner = try? ethereum.publicAddress() else {
+            return throwError("swap owner is unknown", [order])
+        }
+        
+        guard swap.swapOwner == swapOwner else {
+            return debug("On invoice paid received not owner")
+        }
+        
+        let secret: Data
+        let swapId: String
+        
+        var json = [String: String]()
+        
+        if let _secret {
+            secret = _secret
+            swapId = swap.secretHash.hexString
+            json["mainId"] = _swapId
+        } else {
+            guard
+                let _secret = try? sdk.store.get(.secrets, swap.secretHash.hexString)["secret"] as? Data
+            else {
+                return throwError("OnInvoicePaid secret is missing", [swap])
             }
-            
-            let secret: Data
-            let swapId: String
-            
-            var json = [String: String]()
-            
-            if let _secret {
-                secret = _secret
-                swapId = swap.secretHash.hexString
-                json["mainId"] = _swapId
-            } else {
-                guard 
-                    let _secret = try? sdk.store.get(.secrets, swap.secretHash.hexString)["secret"] as? Data
-                else {
-                    return error("OnInvoicePaid secret is missing", [swap])
-                }
-                secret = _secret
-                swapId = _swapId
-            }
-            
-            json["swapId"] = swapId
-                        
-            return traderBlockchain.settle(invoice: json, secret: secret)
-        }.then { [unowned self] response in
-            info("invoice.settled", response)
+            secret = _secret
+            swapId = _swapId
+        }
+        
+        json["swapId"] = swapId
+        
+        guard let traderBlockchain = sdk.blockchains.blockchain(id: order.buyNetwork) else {
+            return throwError("(\(order.buyNetwork) blockchain is missing", [order])
+        }
+        
+        traderBlockchain.settle(invoice: json, secret: secret).then { response in
+            self.info("invoice.settled", response)
         }.catch { error in
-            self.debug("settleInvoice(party: party, secret: secret)", error)
-            self.error("error", [error])
+            self.throwError("settle invoice error", [error])
         }
     }
     
     private func onInvoiceSettled(swapId: String) {
         guard let swapOwner = try? ethereum.publicAddress() else {
-            return error("OnInvoiceSettled", ["swap owner is unknown"])
+            return throwError("OnInvoiceSettled", ["swap owner is unknown"])
         }
         
-        portal.getSwap(id: swapId).then { [unowned self] swap in
-            guard swap.swapOwner == swapOwner else {
-                return self.warn("onInvoiceSettled event received not owner")
-            }
-            emit(event: "swap.completed", args: [swapId])
-            try sdk.store.put(.swaps, swapId, swap.toJSON())
-        }.catch { [unowned self] error in
-            self.error("cannot fetch swap with id: \(swapId)")
+        guard let swap = try? awaitPromise(portal.getSwap(id: swapId)) else {
+            return throwError("onInvoiceSettled error - unknown swap")
         }
+        
+        guard swap.swapOwner == swapOwner else {
+            return debug("onInvoiceSettled event received not owner")
+        }
+        
+        emit(event: "swap.completed", args: [swapId])
+        
+        try? sdk.store.updateSwapStatus(id: swap.swapId.hexString, data: "completed")
+    }
+    
+    func throwError(_ event: String, _ arguments: Any...) {
+        guard let swapId, let swap = try? awaitPromise(portal.getSwap(id: swapId.hexString)) else {
+            return error(event, arguments)
+        }
+
+        try? sdk.store.updateSwapStatus(id: swap.swapId.hexString, data: "failed:\(event)")
+        
+        error(event, arguments)
     }
 }
