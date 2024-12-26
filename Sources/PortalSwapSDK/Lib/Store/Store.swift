@@ -89,6 +89,16 @@ final class Store: BaseClass {
         
         let newEntity = manager.swapEntity()
         try newEntity.update(swap: swap)
+        try manager.saveContext()
+    }
+    
+    func update(ammSwap: AmmSwap) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: ammSwap.swapId.hexString)
+        try dbSwap.update(swap: ammSwap)
+        try manager.saveContext()
     }
     
     func updateBuyAssetTx(id: String, data: String) throws {
@@ -97,6 +107,15 @@ final class Store: BaseClass {
         }
         let dbSwap = try manager.swap(key: id)
         dbSwap.buyAssetTx = data
+        try manager.saveContext()
+    }
+    
+    func updateSwapStatus(id: String, data: String) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: id)
+        dbSwap.status = data
         try manager.saveContext()
     }
     
