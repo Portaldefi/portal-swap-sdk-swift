@@ -1,17 +1,17 @@
 import BigInt
 
-struct SwapMatchedEvent: Codable {
+public struct SwapMatchedEvent: Codable {
     private enum CodingKeys: String, CodingKey {
         case address, topics, data, blockNumber, transactionHash, transactionIndex, blockHash, logIndex, removed
     }
 
-    let swapId: String
+    public let swapId: String
     let liquidityOwner: String
     let sellAsset: String
     let matchedSellAmount: BigUInt
     let matchedBuyAmount: BigUInt
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let topics = try container.decode([String].self, forKey: .topics)
         let dataString = try container.decode(String.self, forKey: .data)
@@ -52,7 +52,7 @@ struct SwapMatchedEvent: Codable {
         matchedBuyAmount = decodeBigUInt(from: matchedBuyAmountHex)
     }
     
-    init(swapId: String, liquidityOwner: String, sellAsset: String, matchedSellAmount: BigUInt, matchedBuyAmount: BigUInt) {
+    public init(swapId: String, liquidityOwner: String, sellAsset: String, matchedSellAmount: BigUInt, matchedBuyAmount: BigUInt) {
         self.swapId = swapId
         self.liquidityOwner = liquidityOwner
         self.sellAsset = sellAsset

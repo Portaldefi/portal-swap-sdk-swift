@@ -1,12 +1,12 @@
 import BigInt
 import Foundation
 
-struct SwapCreatedEvent: Codable {
+public struct SwapCreatedEvent: Codable {
     private enum CodingKeys: String, CodingKey {
         case address, topics, data, blockNumber, transactionHash, transactionIndex, blockHash, logIndex, removed
     }
     
-    let id: String
+    public let id: String
     let liquidityPoolId: String
     let secretHash: String
     let sellAsset: String
@@ -19,7 +19,7 @@ struct SwapCreatedEvent: Codable {
     let buyId: String
     let status: String
     
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let dataString = try container.decode(String.self, forKey: .data)
         
@@ -86,7 +86,7 @@ struct SwapCreatedEvent: Codable {
         status = decodeBytes32(from: statusHex)
     }
     
-    init(swapId: String, liquidityPoolId: String, secretHash: String, sellAsset: String, sellAmount: BigUInt, buyAsset: String, buyAmount: BigUInt, slippage: BigUInt, swapCreation: BigUInt, swapOwner: String, buyId: String, status: String) {
+    public init(swapId: String, liquidityPoolId: String, secretHash: String, sellAsset: String, sellAmount: BigUInt, buyAsset: String, buyAmount: BigUInt, slippage: BigUInt, swapCreation: BigUInt, swapOwner: String, buyId: String, status: String) {
         self.id = swapId
         self.liquidityPoolId = liquidityPoolId
         self.secretHash = secretHash
