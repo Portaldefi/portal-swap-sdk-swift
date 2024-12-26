@@ -79,7 +79,7 @@ final class Portal: BaseClass {
     }
     
     func createSwap(swapId: String, liquidityPoolId: String, secretHash: String, sellAsset: String, sellAmount: BigUInt, buyAsset: String, buyAmount: BigUInt, slippage: BigUInt) -> Promise<AmmSwap> {
-        Promise { [unowned self] resolve, _ in
+        Promise { [unowned self] resolve, reject in
             guard let order = sdk.dex.order else {
                 throw SwapSDKError.msg("order is missing")
             }
@@ -153,7 +153,7 @@ final class Portal: BaseClass {
                 accessList: [:],
                 transactionType: .legacy
             ) else {
-                throw SwapSDKError.msg("failed to create swap transaction")
+                return reject(SwapSDKError.msg("failed to create swap transaction"))
             }
                         
             let signedCreateSwapTx = try createSwapTx.sign(with: privKey, chainId: portalChainId)
@@ -200,7 +200,7 @@ final class Portal: BaseClass {
                 swapCreation: swapCreation,
                 swapOwner: swapOwnerAddress.hex(eip55: true),
                 buyId: buyId,
-                status: "inactive"
+                status: status
             )
             
             let receiptJson = [
@@ -232,7 +232,7 @@ final class Portal: BaseClass {
                 swapCreation: swapCreation,
                 swapOwner: swapOwnerAddress,
                 buyId: buyId,
-                status: status
+                status: "matching"
             )
                         
             resolve(ammSwap)
@@ -394,7 +394,8 @@ final class Portal: BaseClass {
                 if let response {
                     guard
                         let matchedBuyAmount = (response["matchedBuyAmount"] as? BigUInt)?.description,
-                        let invoice = response["invoice"] as? String
+                        let invoice = response["invoice"] as? String,
+                        let matchedLpAddress = response["matchedLp"] as? EthereumAddress
                     else {
                         return reject(SwapSDKError.msg("eventOutputs corupt"))
                     }
@@ -402,7 +403,8 @@ final class Portal: BaseClass {
                     resolve(
                         [
                             "matchedBuyAmount": matchedBuyAmount,
-                            "invoice": invoice
+                            "invoice": invoice,
+                            "matchedLpAddress": matchedLpAddress.hex(eip55: true)
                         ]
                     )
                 } else if let error {
