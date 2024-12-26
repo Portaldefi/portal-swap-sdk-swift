@@ -25,7 +25,7 @@ public final class SDK: BaseClass {
         subscribe(sdk.on("log", forwardLog()))
         subscribe(sdk.on("info", forwardLog()))
         subscribe(sdk.on("debug", forwardLog()))
-        subscribe(sdk.on("error", forwardError()))
+        subscribe(sdk.on("error", throwError()))
         
         debug("SWAP SDK init \(config.id)")
     }
@@ -52,5 +52,17 @@ public final class SDK: BaseClass {
 
     public func priceBtcToEth() -> Promise<BigUInt> {
         sdk.priceBtcToEth()
+    }
+    
+    public func timeoutSwap() {
+        sdk.timeoutSwap()
+    }
+}
+
+extension SDK {
+    func throwError() -> ([Any]) -> Void {
+        { [weak self] args in
+            self?.emit(event: "error", args: args)
+        }
     }
 }
