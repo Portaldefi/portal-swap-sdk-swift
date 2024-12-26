@@ -92,6 +92,10 @@ final class Sdk: BaseClass {
         dex.submit(order)
     }
     
+    func timeoutSwap() {
+        dex.timeoutSwap()
+    }
+    
     func secret(id: String) throws -> String? {
         let secret = try store.get(.secrets, id)
         if let hash = secret["secretHash"] as? String {
