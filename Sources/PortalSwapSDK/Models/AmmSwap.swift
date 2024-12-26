@@ -9,7 +9,7 @@ public struct AmmSwap: Codable {
     public let liquidityPoolId: Data
     public let sellAssetSymbol: String
     public let sellAsset: EthereumAddress
-    public let sellAssetTx: String?
+    public var sellAssetTx: String?
     public let sellAmount: BigUInt
     public let buyAssetSymbol: String
     public let buyAsset: EthereumAddress
