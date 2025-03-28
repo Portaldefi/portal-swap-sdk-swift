@@ -25,36 +25,36 @@ final class Sdk: BaseClass {
         store = .init(accountId: accountId, sdk: self)
         
         // Subscribe for order state changes
-        subscribe(dex.on("swap.completed", forwardEvent("swap.completed")))
-        subscribe(blockchains.on("order.created", forwardEvent("order.created")))
-        subscribe(blockchains.on("swap.created", forwardEvent("swap.created")))
-        subscribe(blockchains.on("swap.validated", forwardEvent("swap.validated")))
-        subscribe(blockchains.on("swap.matched", forwardEvent("swap.matched")))
+        dex.on("swap.completed", forwardEvent("swap.completed"))
+        blockchains.on("order.created", forwardEvent("order.created"))
+        blockchains.on("swap.created", forwardEvent("swap.created"))
+        blockchains.on("swap.validated", forwardEvent("swap.validated"))
+        blockchains.on("swap.matched", forwardEvent("swap.matched"))
         
         // Bubble up the log events
-        subscribe(store.on("log", forwardLog()))
-        subscribe(dex.on("log", forwardLog()))
-        subscribe(blockchains.on("log", forwardLog()))
+        store.on("log", forwardLog())
+        dex.on("log", forwardLog())
+        blockchains.on("log", forwardLog())
         
         // Bubble up the info events
-        subscribe(store.on("info", forwardLog()))
-        subscribe(dex.on("info", forwardLog()))
-        subscribe(blockchains.on("info", forwardLog()))
+        store.on("info", forwardLog())
+        dex.on("info", forwardLog())
+        blockchains.on("info", forwardLog())
         
         // Bubble up the warn events
-        subscribe(store.on("warn", forwardLog()))
-        subscribe(dex.on("warn", forwardLog()))
-        subscribe(blockchains.on("warn", forwardLog()))
+        store.on("warn", forwardLog())
+        dex.on("warn", forwardLog())
+        blockchains.on("warn", forwardLog())
         
         // Bubble up the debug events
-        subscribe(store.on("debug", forwardLog()))
-        subscribe(dex.on("debug", forwardLog()))
-        subscribe(blockchains.on("debug", forwardLog()))
+        store.on("debug", forwardLog())
+        dex.on("debug", forwardLog())
+        blockchains.on("debug", forwardLog())
         
         // Handling errors
-        subscribe(blockchains.on("error", forwardError()))
-        subscribe(store.on("error", forwardError()))
-        subscribe(dex.on("error", forwardError()))
+        blockchains.on("error", forwardError())
+        store.on("error", forwardError())
+        dex.on("error", forwardError())
     }
 
     func start() -> Promise<Void> {

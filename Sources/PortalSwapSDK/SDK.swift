@@ -13,19 +13,19 @@ public final class SDK: BaseClass {
         
         super.init(id: "SDK")
         
-        subscribe(sdk.on("order.created", forwardEvent("order.created")))
-        subscribe(sdk.on("order.opened", forwardEvent("order.opened")))
-        subscribe(sdk.on("order.closed", forwardEvent("order.closed")))
+        sdk.on("order.created", forwardEvent("order.created"))
+        sdk.on("order.opened", forwardEvent("order.opened"))
+        sdk.on("order.closed", forwardEvent("order.closed"))
         
-        subscribe(sdk.on("swap.created", forwardEvent("swap.created")))
-        subscribe(sdk.on("swap.validated", forwardEvent("swap.validated")))
-        subscribe(sdk.on("swap.matched", forwardEvent("swap.matched")))
-        subscribe(sdk.on("swap.completed", forwardEvent("swap.completed")))
+        sdk.on("swap.created", forwardEvent("swap.created"))
+        sdk.on("swap.validated", forwardEvent("swap.validated"))
+        sdk.on("swap.matched", forwardEvent("swap.matched"))
+        sdk.on("swap.completed", forwardEvent("swap.completed"))
         
-        subscribe(sdk.on("log", forwardLog()))
-        subscribe(sdk.on("info", forwardLog()))
-        subscribe(sdk.on("debug", forwardLog()))
-        subscribe(sdk.on("error", throwError()))
+        sdk.on("log", forwardLog())
+        sdk.on("info", forwardLog())
+        sdk.on("debug", forwardLog())
+        sdk.on("error", throwError())
         
         debug("SWAP SDK init \(config.id)")
     }

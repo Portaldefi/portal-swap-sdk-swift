@@ -40,14 +40,14 @@ final class Dex: BaseClass {
         self.sdk = sdk
         super.init(id: "dex")
         
-        subscribe(sdk.blockchains.on("error", forwardError()))
-        subscribe(sdk.blockchains.on("order.created", onSwap("order.created")))
-        subscribe(sdk.blockchains.on("swap.created", onSwap("swap.created")))
-        subscribe(sdk.blockchains.on("swap.validated", onSwap("swap.validated")))
-        subscribe(sdk.blockchains.on("swap.matched", onSwap("swap.matched")))
-        subscribe(sdk.blockchains.on("invoice.paid", onSwap("invoice.paid")))
-        subscribe(sdk.blockchains.on("lp.invoice.created", onSwap("lp.invoice.created")))
-        subscribe(sdk.blockchains.on("invoice.settled", onSwap("invoice.settled")))
+        sdk.blockchains.on("error", forwardError())
+        sdk.blockchains.on("order.created", onSwap("order.created"))
+        sdk.blockchains.on("swap.created", onSwap("swap.created"))
+        sdk.blockchains.on("swap.validated", onSwap("swap.validated"))
+        sdk.blockchains.on("swap.matched", onSwap("swap.matched"))
+        sdk.blockchains.on("invoice.paid", onSwap("invoice.paid"))
+        sdk.blockchains.on("lp.invoice.created", onSwap("lp.invoice.created"))
+        sdk.blockchains.on("invoice.settled", onSwap("invoice.settled"))
     }
     
     func open() -> Promise<Void> {

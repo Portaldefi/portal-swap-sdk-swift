@@ -473,7 +473,7 @@ extension Portal {
             
             info("swap.matched.event", [event])
             
-            return emit(event: "swap.matched", args: [event])
+            emit(event: "swap.matched", args: [event])
         }
         
         if let swapValidatedEvent = try? ABI.decodeLog(event: ADMMContract.SwapValidated, from: log) {
@@ -515,7 +515,7 @@ extension Portal {
                 status: status
             )
             
-            return emit(event: "swap.validated", args: [event])
+            emit(event: "swap.validated", args: [event])
         }
         
         if let invoiceRegisteredEvent = try? ABI.decodeLog(event: ADMMContract.InvoiceRegistered, from: log) {
@@ -551,7 +551,7 @@ extension Portal {
             info(status, [invoiceRegisteredEvent])
             info("invoice.registered.receipt", receipt)
             
-            return emit(event: status, args: [invoiceRegisteredEvent])
+            emit(event: status, args: [invoiceRegisteredEvent])
         }
         
         warn("Unknown log event", log)
