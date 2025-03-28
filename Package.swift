@@ -18,8 +18,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/google/promises.git", .upToNextMajor(from: "2.3.0")),
-        .package(url: "https://github.com/cuhte3/Web3.swift.git", from: "0.8.5"),
-        .package(url: "https://github.com/cuhte3/SwiftBTC", from: "1.0.0")
+        .package(url: "https://github.com/cuhte3/Web3.swift.git", from: "0.8.9"),
+        .package(url: "https://github.com/cuhte3/SwiftBTC", .upToNextMajor(from: "1.0.0"))
     ],
     targets: [
         .target(
@@ -27,6 +27,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Promises", package: "promises"),
                 .product(name: "Web3", package: "Web3.swift"),
+                .product(name: "Web3PromiseKit", package: "Web3.swift"),
                 .product(name: "Web3ContractABI", package: "Web3.swift"),
                 .product(name: "SwiftBTC", package: "SwiftBTC")
             ]
@@ -37,6 +38,7 @@ let package = Package(
                 "PortalSwapSDK",
                 .product(name: "Promises", package: "promises"),
                 .product(name: "Web3", package: "Web3.swift"),
+                .product(name: "Web3PromiseKit", package: "Web3.swift"),
                 .product(name: "Web3ContractABI", package: "Web3.swift"),
                 .product(name: "SwiftBTC", package: "SwiftBTC")
             ]

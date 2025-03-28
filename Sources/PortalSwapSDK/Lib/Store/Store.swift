@@ -3,6 +3,7 @@ import CoreData
 import Promises
 
 final class Store: BaseClass {
+    private let accountId: String
     private let sdk: Sdk
     private var persistenceManager: LocalPersistenceManager?
     
@@ -10,7 +11,8 @@ final class Store: BaseClass {
         persistenceManager != nil
     }
     
-    init(sdk: Sdk) {
+    init(accountId: String, sdk: Sdk) {
+        self.accountId = accountId
         self.sdk = sdk
         
         super.init(id: "Store")
@@ -19,13 +21,7 @@ final class Store: BaseClass {
     func open() -> Promise<Void> {
         Promise { [unowned self] resolve, reject in
             do {
-                persistenceManager = try LocalPersistenceManager.manager(
-                    configuration: .init(
-                        modelName: "DBModel",
-                        cloudIdentifier: String(),
-                        configuration: "Local"
-                    )
-                )
+                persistenceManager = try LocalPersistenceManager.manager(accountId: accountId)
                 
                 emit(event: "open", args: [])
                 
@@ -55,6 +51,14 @@ final class Store: BaseClass {
         }
     }
     
+    func getAmmSwap(key: String) throws -> AmmSwap {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        
+        return AmmSwap(record: try manager.swap(key: key))
+    }
+    
     func put(_ namespace: StoreNamespace, _ key: String, _ obj: [String: Any]) throws {
         guard let manager = persistenceManager else {
             throw SwapSDKError.msg("Cannot obtain persistenceManager")
@@ -65,35 +69,62 @@ final class Store: BaseClass {
             let newEntity = manager.secretEntity()
             try newEntity.update(json: obj, key: key)
             
-            debug("Put secret with ID: \(newEntity.swapID ?? "Unknown")")
+            debug("Put secret with ID: \(key)")
         case .swaps:
-            let swap = try Swap.from(json: obj).update(sdk: sdk)
+            let swap = try AmmSwap.from(json: obj)
             
             let newEntity = manager.swapEntity()
             try newEntity.update(swap: swap)
             
-            debug("Put swap with ID: \(newEntity.swapID ?? "Unknown")")
+            debug("Put swap with ID: \(newEntity.swapId ?? "Unknown")")
         }
         
         try manager.saveContext()
     }
     
-    func update(_ namespace: StoreNamespace, _ key: String, _ obj: [String: Any]) throws {
+    func create(swap: AmmSwap) throws {
         guard let manager = persistenceManager else {
             throw SwapSDKError.msg("Cannot obtain persistenceManager")
         }
-                
-        switch namespace {
-        case .swaps:
-            let swap = try Swap.from(json: obj).update(sdk: sdk)
-            let dbSwap = try manager.swap(key: key)
-            try dbSwap.update(swap: swap)
-            
-            debug("Updating db swap with status: \(dbSwap.status ?? "Unknown")")
-        default:
-            break
-        }
         
+        let newEntity = manager.swapEntity()
+        try newEntity.update(swap: swap)
+        try manager.saveContext()
+    }
+    
+    func update(ammSwap: AmmSwap) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: ammSwap.swapId.hexString)
+        try dbSwap.update(swap: ammSwap)
+        try manager.saveContext()
+    }
+    
+    func updateBuyAssetTx(id: String, data: String) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: id)
+        dbSwap.buyAssetTx = data
+        try manager.saveContext()
+    }
+    
+    func updateSwapStatus(id: String, data: String) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: id)
+        dbSwap.status = data
+        try manager.saveContext()
+    }
+    
+    func updateSellAssetTx(id: String, data: String) throws {
+        guard let manager = persistenceManager else {
+            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+        }
+        let dbSwap = try manager.swap(key: id)
+        dbSwap.sellAssetTx = data
         try manager.saveContext()
     }
     
