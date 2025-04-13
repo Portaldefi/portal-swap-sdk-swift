@@ -2,6 +2,7 @@ import Foundation
 import CoreData
 
 public final class LocalPersistenceManager {
+    private let configuration: PersistenceConfiguration
     private var viewContext: NSManagedObjectContext { container.viewContext }
     private var container: PersistentContainer
     
@@ -16,6 +17,8 @@ public final class LocalPersistenceManager {
             }
             print("Loaded LOCAL STORE successfully")
         })
+        
+        self.configuration = configuration
     }
     
     internal func saveContext() throws {
@@ -30,22 +33,33 @@ public final class LocalPersistenceManager {
         try DBSecret.entity(key: key, context: viewContext)
     }
     
-    internal func swapEntity() -> DBSwap {
-        DBSwap(context: viewContext)
+    internal func swapEntity() -> DBAmmSwap {
+        let swap = DBAmmSwap(context: viewContext)
+        swap.accountId = configuration.accountId
+        return swap
     }
     
-    internal func swap(key: String) throws -> DBSwap {
-        try DBSwap.entity(key: key, context: viewContext)
+    internal func swap(key: String) throws -> DBAmmSwap {
+        try DBAmmSwap.entity(key: key, context: viewContext)
     }
     
-    public func fetchSwaps() throws -> [SwapModel] {
-        try DBSwap.entities(context: viewContext).compactMap{ try? SwapModel(record: $0) }
+    public func fetchSwaps() throws -> [AmmSwap] {
+        let swaps = try DBAmmSwap.entities(context: viewContext)
+            .filter { $0.accountId == configuration.accountId }
+            .map { AmmSwap(record: $0) }
+
+        return Array(Set(swaps))
+    }
+    
+    public func fetchSecret(key: String) throws -> Data? {
+        (try DBSecret.entity(key: key, context: viewContext)).data
     }
 }
 
 extension LocalPersistenceManager {
-    static public func manager() throws -> LocalPersistenceManager {
+    static public func manager(accountId: String) throws -> LocalPersistenceManager {
         let config: PersistenceConfiguration = .init(
+            accountId: accountId,
             modelName: "DBModel",
             cloudIdentifier: String(),
             configuration: "Local"
@@ -53,9 +67,9 @@ extension LocalPersistenceManager {
         return try LocalPersistenceManager(configuration: config)
     }
     
-    static func manager(configuration: PersistenceConfiguration) throws -> LocalPersistenceManager {
-        return try LocalPersistenceManager(configuration: configuration)
-    }
+//    static func manager(configuration: PersistenceConfiguration) throws -> LocalPersistenceManager {
+//        return try LocalPersistenceManager(configuration: configuration)
+//    }
     
     static func model(for name: String) throws -> NSManagedObjectModel {
         guard let url = Bundle.module.url(forResource: name, withExtension: "momd") else {

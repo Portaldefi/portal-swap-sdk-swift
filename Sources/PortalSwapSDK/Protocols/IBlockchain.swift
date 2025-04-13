@@ -1,10 +1,11 @@
 import Foundation
 import Promises
+import Web3
+
+typealias Invoice = [String: String]
+typealias Response = [String: String]
 
 protocol IBlockchain: BaseClass {
-    func connect() -> Promise<Void>
-    func disconnect() -> Promise<Void>
-    func createInvoice(party: Party) -> Promise<[String: String]>
-    func payInvoice(party: Party) -> Promise<[String: Any]>
-    func settleInvoice(party: Party, secret: Data) -> Promise<[String: String]>
+    func create(invoice: Invoice) -> Promise<Response>
+    func settle(invoice: Invoice, secret: Data) -> Promise<Response>
 }
