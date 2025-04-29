@@ -27,6 +27,12 @@ class Utils {
         data.sha256()
     }
     
+    static func sha256(_ data: [String]) -> String {
+        let joined = data.joined()
+        let hash = SHA256.hash(data: Data(joined.utf8))
+        return "0x" + hash.map { String(format: "%02x", $0) }.joined()
+    }
+    
     static func isEIP55Compliant(address: String) -> Bool {
         let trimmedAddress = address.lowercased().replacingOccurrences(of: "0x", with: "")
         let hash = trimmedAddress.data(using: .utf8)!.sha3(.keccak256).toHexString()
