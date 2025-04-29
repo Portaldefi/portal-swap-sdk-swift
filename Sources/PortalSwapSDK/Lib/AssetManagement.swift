@@ -6,9 +6,8 @@ import Web3ContractABI
 final class AssetManagement: BaseClass {
     private let props: SwapSdkConfig.Blockchains.Portal
     private var web3: Web3!
-    private var websocketProvider: Web3WebSocketProvider!
     
-    private var assetManagement: IAssetManagementContract?
+    private var assetManagement: IAssetManagerContract?
     private var liquidityPool: ILiquidityPoolContract?
     
     var assets: [Pool.Asset] = []
@@ -18,7 +17,7 @@ final class AssetManagement: BaseClass {
     init(props: SwapSdkConfig.Blockchains.Portal) {
         self.props = props
         
-        web3 = Web3(rpcURL: "http://node.playnet.portaldefi.zone:9545")
+        web3 = Web3(rpcURL: props.url)
         
         super.init(id: "asset.manager")
     }
@@ -37,7 +36,7 @@ final class AssetManagement: BaseClass {
                     eip55: Utils.isEIP55Compliant(address: poolContractAddressHex)
                 )
             {
-                assetManagement = web3.eth.Contract(type: AssetManagementContract.self, address: amContractAddress)
+                assetManagement = web3.eth.Contract(type: AssetManagerContract.self, address: amContractAddress)
                 liquidityPool = web3.eth.Contract(type: LiquidityPoolContract.self, address: poolContractAddress)
             }
             
@@ -45,13 +44,13 @@ final class AssetManagement: BaseClass {
                 guard let self else {
                     return reject(SwapSDKError.msg("AssetManagement is nil"))
                 }
-                                                
+                
                 listPools().then { poolModels in
                     resolve(
                         poolModels.compactMap { model in
                             let baseAsset = assets.first(where: { $0.id.hex(eip55: true) == model.baseAsset.hex(eip55: true) })
                             let quoteAsset = assets.first(where: { $0.id.hex(eip55: true) == model.quoteAsset.hex(eip55: true) })
-                           
+                            
                             guard let baseAsset, let quoteAsset else { return nil }
                             
                             return Pool(
@@ -76,12 +75,12 @@ final class AssetManagement: BaseClass {
                 return reject(SwapSDKError.msg("AssetManagement contract is not set"))
             }
             
-            assetManagement.listAssets().call { response, error in
+            assetManagement.retrieveAssets().call { response, error in
                 if let response {
                     guard let assetsArray = response[""] as? [Any] else {
                         return reject(SwapSDKError.msg("Failed to parse assets array"))
                     }
-
+                    
                     self.assets = assetsArray.compactMap { dataArray in
                         guard let asset = dataArray as? [Any],
                               let id = asset[0] as? EthereumAddress,
@@ -167,77 +166,10 @@ final class AssetManagement: BaseClass {
     }
     
     func retrieveAssetByNativeProps(blockchainName: String, blockchainAddress: String) -> Promise<Pool.Asset?> {
-        Promise { [unowned self] resolve, reject in
-            listAssets().then { assets in
-                self.assets = assets
-                
-                resolve(
-                    assets.first(where: { $0.blockchainName == blockchainName })
-                )
-            }.catch { listAssetsError in
-                reject(listAssetsError)
-            }
-//            guard let assetManagement else {
-//                return reject(SwapSDKError.msg("Asset Management contract is not set"))
-//            }
-//            
-//            assetManagement
-//                .retrieveAssetByNativeProps(
-//                    blockchainName: blockchainName,
-//                    blockchainAddress: blockchainAddress
-//                )
-//                .call { response, error in
-//                    if let response {
-//                        guard let asset = response[""] else {
-//                            return reject(SwapSDKError.msg("Failed to parse assets array"))
-//                        }
-//                        
-//                        resolve(
-//                            Pool.Asset(id: EthereumAddress(hexString: "")!, name: "", symbol: "", logo: "", blockchainId: 0, blockchainName: "", blockchainAddress: "", blockchainDecimals: 0)
-//                        )
-//                    } else if let error {
-//                        reject(error)
-//                    } else {
-//                        resolve(nil)
-//                    }
-//                }
-//            
-//            guard let amAbi = props.contracts["AssetManagement"] as? [String: Any],
-//                  let abiArray = amAbi["abi"] as? [[String: Any]],
-//                  let amContractAddressHex = amAbi["address"] as? String,
-//                  let amContractAddress = try? EthereumAddress(
-//                    hex: amContractAddressHex,
-//                    eip55: Utils.isEIP55Compliant(address: amContractAddressHex)
-//                  ) 
-//            else {
-//                return reject(SwapSDKError.msg("Asset Management contract is not set"))
-//            }
-//            
-//            let dexContractData = try JSONSerialization.data(withJSONObject: abiArray, options: [])
-//            
-//            let contract = try web3.eth.Contract(json: dexContractData, abiKey: nil, address: amContractAddress)
-//            
-//            let params = SolidityTuple([
-//                SolidityWrappedValue(value: blockchainName, type: .string),
-//                SolidityWrappedValue(value: blockchainAddress, type: .string)
-//            ])
-//
-//            
-//            contract["retrieveAssetByNativeProps"]?(params).call(completion: { response, error in
-//                if let response {
-//                    guard let assetsArray = response[""] as? [Any] else {
-//                        return reject(SwapSDKError.msg("Failed to parse assets array"))
-//                    }
-//                    
-//                    resolve(
-//                        Pool.Asset(id: EthereumAddress(hexString: "")!, name: "", symbol: "", logo: "", blockchainId: 0, blockchainName: "", blockchainAddress: "", blockchainDecimals: 0)
-//                    )
-//                } else if let error {
-//                    reject(error)
-//                } else {
-//                    resolve(nil)
-//                }
-//            })
+        Promise { [weak self] in
+            guard let self else { throw SwapSDKError.msg("AssetManagement is nil") }
+            self.assets = try awaitPromise(listAssets())
+            return assets.first(where: { $0.blockchainName == blockchainName })
         }
     }
 }
