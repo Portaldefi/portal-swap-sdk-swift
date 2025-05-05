@@ -1,34 +1,20 @@
 import Promises
 
 public struct SwapSdkConfig {
-//    public struct Network {
-//        public enum NetworkProtocol {
-//            case unencrypted
-//            case encrypted
-//        }
-//        public let networkProtocol: NetworkProtocol
-//        public let hostname: String
-//        public let port: Int
-//        
-//        public init(networkProtocol: NetworkProtocol, hostname: String, port: Int) {
-//            self.networkProtocol = networkProtocol
-//            self.hostname = hostname
-//            self.port = port
-//        }
-//    }
-    
     public struct Blockchains {
         public struct Portal {
             public let url: String
             public let chainId: String
             public let contracts: [String: Any]
             public let privKey: String
+            public let address: String
             
-            public init(url: String, chainId: String, contracts: [String: Any], privKey: String) {
+            public init(url: String, chainId: String, contracts: [String: Any], privKey: String, address: String) {
                 self.url = url
                 self.chainId = chainId
                 self.contracts = contracts
                 self.privKey = privKey
+                self.address = address
             }
         }
         
@@ -37,20 +23,24 @@ public struct SwapSdkConfig {
             public let chainId: String
             public let contracts: [String: Any]
             public let privKey: String
+            public let address: String
             
-            public init(url: String, chainId: String, contracts: [String: Any], privKey: String) {
+            public init(url: String, chainId: String, contracts: [String: Any], privKey: String, address: String) {
                 self.url = url
                 self.chainId = chainId
                 self.contracts = contracts
                 self.privKey = privKey
+                self.address = address
             }
         }
         
         public struct Lightning {
             public let client: ILightningClient
+            public let hubId: String
             
-            public init(client: ILightningClient) {
+            public init(client: ILightningClient, hubId: String) {
                 self.client = client
+                self.hubId = hubId
             }
         }
         
@@ -66,12 +56,10 @@ public struct SwapSdkConfig {
     }
     
     public let id: String
-//    public let network: Network
     public let blockchains: Blockchains
     
     public init(id: String, blockchains: Blockchains) {
         self.id = id
-//        self.network = network
         self.blockchains = blockchains
     }
 }
