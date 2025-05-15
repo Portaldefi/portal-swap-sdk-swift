@@ -51,7 +51,7 @@ public final class Sdk: BaseClass {
         guard let nativeChain = nativeChains[chain] else {
             throw SdkError.invalidChain(chain: chain)
         }
-        return nativeChain.address.lowercased()
+        return nativeChain.address
     }
     
     func start() async throws {
@@ -112,56 +112,76 @@ public final class Sdk: BaseClass {
     private func onSwapEvent() -> ([Any]) -> Void {
         return { [weak self] args in
             guard let self = self else { return }
-            guard let swapDiff = args.first as? Swap else {
-                return error("Invalid swap event", args)
-            }
             
-            debug("onSwapEvent", swapDiff)
+            var swap: Swap
             
-            let swap: Swap
-            if swapDiff.state == .matched {
-                // When the swap is matched, we ensure that the swap is not already in the
-                // store. If it is, we throw an error. This is a defensive workaround to
-                // prevent any potential collisions.
-                guard ((try? store.get(swapId: swapDiff.id)) == nil) else {
-                    self.error("onSwapEvent", "Swap already exists in store", swapDiff)
-                    self.emit(event: "error", args: ["error: Swap already exists in store \(swapDiff)"])
-                    return
+            switch args.first {
+            case let swapObject as Swap:
+                // Some chains return full Swap object
+                debug("onSwapEvent.swap", swapObject.toJSON())
+                
+                if swapObject.state == .matched {
+                    // New matched swap - check for collision
+                    do {
+                        swap = try store.get(swapId: swapObject.id)
+                        self.error("onSwapEvent", "Swap already exists in store", swapObject)
+                        self.emit(event: "error", args: ["error: Swap already exists in store \(swapObject)"])
+                        return
+                    } catch let error as StoreError where error.code == "ENotFound" {
+                        // Swap doesn't exist, proceed
+                        swap = swapObject
+                    } catch {
+                        self.error("onSwapEvent", error, swapObject)
+                        self.emit(event: "error", args: [error, swapObject])
+                        return
+                    }
+                    
+                    // Ensure the swap pertains to the current user
+                    if !swapObject.hasParty(portalChain.address) {
+                        let err = SwapSDKError.msg("unknown swap for this party!")
+                        self.warn("onSwapEvent", err, swapObject)
+                        self.emit(event: "error", args: [err, swapObject])
+                        return
+                    }
+                    
+                    // Save new swap
+                    do {
+                        try store.put(swap: swap)
+                    } catch {
+                        self.error("onSwapEvent", "Failed to save swap to store", swap.toJSON(), error)
+                        self.emit(event: "error", args: ["Failed to save swap to store \(swap.toJSON())", error])
+                        return
+                    }
+                } else {
+                    // Non-matched state - update existing swap
+                    do {
+                        swap = try store.get(swapId: swapObject.id)
+                        try swap.updateFromSwap(swapObject)
+                        try store.update(swap: swap)
+                    } catch {
+                        self.error("onSwapEvent", "Failed to update swap", swapObject, error)
+                        self.emit(event: "error", args: ["Failed to update swap", error])
+                        return
+                    }
                 }
                 
-                swap = swapDiff
+            case let swapDiff as SwapDiff:
+                debug("onSwapEvent.diff", swapDiff)
                 
-                // Ensure the swap pertains to the current user
-                guard swapDiff.hasParty(portalChain.address) else {
-                    let err = SdkError.invalidReceipt(party: swapDiff.secretHolder)
-                    self.warn("onSwapEvent", err, { swapDiff })
-                    self.emit(event: "error", args: [err, swapDiff])
-                    return
-                }
-                
-                // The swap is new, so we need to save it to the store. If it fails,
-                // we throw an error.
-                
-                do {
-                    try store.put(swap: swap)
-                    print("Store swap in storage: \(swap.toJSON())")
-                } catch {
-                    self.error("onSwapEvent", "Failed to save swap to store", swap)
-                    self.emit(event: "error", args: ["Failed to save swap to store \(swap)"])
-                    return
-                }
-            } else {
                 do {
                     swap = try store.get(swapId: swapDiff.id)
                     try swap.update(swapDiff)
                     try store.update(swap: swap)
                 } catch {
-                    self.error("onSwapEvent", "Failed to retrieve swap from store", swapDiff)
-                    self.emit(event: "error", args: ["Failed to retriever swap from store \(swapDiff)"])
+                    self.error("onSwapEvent", "Failed to retrieve/update swap from store", swapDiff, error)
+                    self.emit(event: "error", args: ["Failed to retrieve/update swap from store \(swapDiff)", error])
                     return
                 }
+                
+            default:
+                error("Invalid swap event", args)
+                return
             }
-
             
             switch swap.state {
             case .matched:
@@ -177,21 +197,18 @@ public final class Sdk: BaseClass {
             case .holderSettled:
                 swapHolderSettled(swap: swap)
             case .seekerSettled:
-                swapHolderSettled(swap: swap)
+                swapSeekerSettled(swap: swap)
             }
         }
     }
         
     private func onSwapMatched(swap: Swap) {
-        // ensure the swap is in the correct state
         guard swap.state == .matched else {
             emit(event: "error", args: ["Invalid swap state", swap.toJSON()])
             return
         }
         
-        // The SecretSeeker does not have anything to do at this point. Simply log
-        // and emit the event.
-        guard !swap.isSecretSeeker(portalChain.address) else {
+        if swap.isSecretSeeker(portalChain.address) {
             info("onSwapMatched", { swap })
             emit(event: "swapMatched", args: [swap])
             return
@@ -204,19 +221,20 @@ public final class Sdk: BaseClass {
         
         info("onSwapMatched", swap.toJSON())
         emit(event: "swapMatched", args: [swap])
-                
-        guard let nativeChain = nativeChains[swap.secretSeeker.chain] else {
-            emit(event: "error", args: [SdkError.invalidChain(chain: swap.secretSeeker.chain)])
-            return
-        }
         
         do {
-            let secretHash = try store.createSecret()
-            try swap.setSecretHash(secretHash)
+            let secretHashString = try store.createSecret()
+            swap.secretHash = "0x" + secretHashString
+            
+            guard let nativeChain = nativeChains[swap.secretSeeker.chain] else {
+                emit(event: "error", args: [SdkError.invalidChain(chain: swap.secretSeeker.chain)])
+                return
+            }
                         
             swap.secretSeeker.invoice = try awaitPromise(nativeChain.createInvoice(swap.secretSeeker))
             try? awaitPromise(portalChain.registerInvoice(swap))
         } catch {
+            self.error("onSwapMatched", "Failed to create or register invoice", error)
             emit(event: "error", args: ["Failed to create or register invoice", error])
         }
     }
@@ -228,11 +246,13 @@ public final class Sdk: BaseClass {
         }
         
         guard swap.secretSeeker.invoice != nil else {
-            emit(event: "error", args: ["missing secret seeker invoice!", swap.toJSON()])
+            emit(event: "error", args: ["missing secret holder invoice!", swap.toJSON()])
             return
         }
         
-        guard !swap.isSecretHolder(portalChain.address) else {
+        if swap.isSecretHolder(portalChain.address) {
+            info("onSwapHolderInvoiced", { swap })
+            emit(event: "swapHolderInvoiced", args: [swap])
             return
         }
         
@@ -252,7 +272,7 @@ public final class Sdk: BaseClass {
         }
         
         do {
-            swap.secretHolder.invoice = try awaitPromise(nativeChain.createInvoice(secretHolder))
+            secretHolder.invoice = try awaitPromise(nativeChain.createInvoice(secretHolder))
             try awaitPromise(portalChain.registerInvoice(swap))
         } catch {
             emit(event: "error", args: ["Failed to create or register invoice", error])
@@ -266,11 +286,13 @@ public final class Sdk: BaseClass {
         }
         
         guard swap.secretHolder.invoice != nil else {
-            emit(event: "error", args: ["missing secret holder's invoice!", swap.toJSON()])
+            emit(event: "error", args: ["missing secret seeker invoice!", swap.toJSON()])
             return
         }
         
         if swap.isSecretSeeker(portalChain.address) {
+            info("onSwapSeekerInvoiced", { swap })
+            emit(event: "swapSeekerInvoiced", args: [swap])
             return
         }
         
@@ -310,7 +332,7 @@ public final class Sdk: BaseClass {
             return
         }
         
-        if !swap.isSecretHolder(portalChain.address) {
+        if !swap.isSecretSeeker(portalChain.address) {
             emit(event: "error", args: ["Unknown swap for this party!", swap.toJSON()])
             return
         }
@@ -323,7 +345,6 @@ public final class Sdk: BaseClass {
             return
         }
         
-        
         do {
             try awaitPromise(nativeChain.payInvoice(swap.secretSeeker))
         } catch {
@@ -334,17 +355,26 @@ public final class Sdk: BaseClass {
     
     private func swapSeekerPaid(swap: Swap) {
         guard swap.state == .seekerPaid else {
-            emit(event: "error", args: ["Invalid swap state", swap.toJSON()])
+            let err = SwapSDKError.msg("invalid swap state: \(swap.state)")
+            self.error("onSwapSeekerPaid", { err })
             return
         }
         
         if swap.secretSeeker.receipt == nil {
-            emit(event: "error", args: ["missing secret seeker receipt!", swap.toJSON()])
+            let err = SwapSDKError.msg("missing secret seeker's receipt!")
+            self.error("onSwapSeekerPaid", { err })
+            return
+        }
+        
+        if swap.isSecretSeeker(portalChain.address) {
+            info("onSwapSeekerPaid", { swap })
+            emit(event: "swapSeekerPaid", args: [swap])
             return
         }
         
         if !swap.isSecretHolder(portalChain.address) {
-            emit(event: "error", args: ["unknown swap for this party!", swap.toJSON()])
+            let err = SwapSDKError.msg("Unknown swap for this party!")
+            self.error("onSwapSeekerPaid", { err })
             return
         }
         
@@ -394,8 +424,13 @@ public final class Sdk: BaseClass {
             return
         }
         
+        guard let secret = swap.secret else {
+            emit(event: "error", args: [SdkError.init(message: "Secret is missing", code: "EInvalidSecret")])
+            return
+        }
+        
         do {
-            let party = try awaitPromise(nativeChain.settleInvoice(for: swap.secretHolder, with: swap.secret!))
+            let party = try awaitPromise(nativeChain.settleInvoice(for: swap.secretHolder, with: secret))
             print("party: \(party)")
         } catch {
             emit(event: "error", args: ["Failed to settle invoice", error])
@@ -441,7 +476,7 @@ public final class Sdk: BaseClass {
             liquidity = try awaitPromise(nativeChain.deposit(liquidity))
             
             let timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
-            timeoutTimer.schedule(deadline: .now() + 320, repeating: .never)
+            timeoutTimer.schedule(deadline: .now() + 60, repeating: .never)
             timeoutTimer.setEventHandler {
                 timeoutTimer.cancel()
                 reject(SdkError.timedOut(context: ["liquidity": liquidity]))
@@ -467,7 +502,6 @@ public final class Sdk: BaseClass {
     
     func withdraw(chain: String, symbol: String, amount: BigInt) -> Promise<Liquidity> {
         Promise { [weak self] resolve, reject in
-            // Ensure self is available and native chain exists.
             guard let self else { throw SdkError.instanceUnavailable() }
             guard let nativeChain = nativeChains[chain] else { throw SdkError.invalidChain(chain: chain) }
             
@@ -514,7 +548,6 @@ public final class Sdk: BaseClass {
 }
 
 final class SdkError: BaseError {
-    
     static func instanceUnavailable() -> SdkError {
         let message = "InstanceUnavailable!"
         let code = "EInvalidInstance"
@@ -565,9 +598,7 @@ final class SdkError: BaseError {
         let code = "ETimedOut"
         return SdkError(message: message, code: code, context: context)
     }
-    
-    // MARK: - Initializer
-    
+        
     override init(message: String, code: String, context: [String: Any]? = nil, cause: Error? = nil) {
         super.init(message: message, code: code, context: context, cause: cause)
     }
