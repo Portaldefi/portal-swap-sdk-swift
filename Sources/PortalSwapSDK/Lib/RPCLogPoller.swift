@@ -57,22 +57,17 @@ class RPCLogPoller {
     @objc private func pollLogs() {
         queue.async {
             guard !self.isPolling else {
-                print("\(self.pollerId) polling in progress, waiting to finish")
                 return
             }
             self.isPolling = true
-            
-            print("\(self.pollerId) polling in progress...")
-            
+                        
             self.eth.blockNumber { [weak self] response in
                 guard let self = self else { return }
                 
                 switch response.status {
                 case .success(let latest):
                     let latestBlock = latest.quantity
-                    
-                    print("\(self.pollerId) latest block: \(latestBlock)")
-                    
+                                        
                     // compute fromBlock under the queue
                     let fromBlock: BigUInt = {
                         if let last = self.lastProcessedBlock {
@@ -83,7 +78,6 @@ class RPCLogPoller {
                     }()
                     
                     guard latestBlock >= fromBlock else {
-                        print("\(self.pollerId) finished polling, no new blocks")
                         self.isPolling = false
                         return
                     }
@@ -98,7 +92,6 @@ class RPCLogPoller {
                         self.queue.async {
                             defer {
                                 self.isPolling = false
-                                print("\(self.pollerId) finished polling")
                             }
                             
                             switch logsResponse.status {
