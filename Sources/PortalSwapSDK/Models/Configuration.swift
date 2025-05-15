@@ -1,4 +1,5 @@
 import Promises
+import SolanaSwift
 
 public struct SwapSdkConfig {
     public struct Blockchains {
@@ -44,13 +45,27 @@ public struct SwapSdkConfig {
             }
         }
         
+        public struct Solana {
+            public let keyPair: KeyPair
+            public let url: String
+            public let provider: BlockchainClient?
+            
+            public init(keyPair: KeyPair, url: String, provider: BlockchainClient? = nil) {
+                self.keyPair = keyPair
+                self.url = url
+                self.provider = provider
+            }
+        }
+        
         public let ethereum: Ethereum
         public let lightning: Lightning
         public let portal: Portal
+        public let solana: Solana
         
-        public init(ethereum: Ethereum, lightning: Lightning, portal: Portal) {
+        public init(ethereum: Ethereum, lightning: Lightning, solana: Solana, portal: Portal) {
             self.ethereum = ethereum
             self.lightning = lightning
+            self.solana = solana
             self.portal = portal
         }
     }
