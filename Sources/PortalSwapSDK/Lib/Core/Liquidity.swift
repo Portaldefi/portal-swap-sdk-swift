@@ -63,14 +63,24 @@ public final class Liquidity: Codable {
     }
 
     func toJSON() throws -> String {
-        do {
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(self)
-            return String(data: data, encoding: .utf8)!
-        } catch {
-            print("Encoding error: \(error)")
-            throw error
-        }
+        let json: [String: String] = [
+            "id": "0x" + id!,
+            "ts": ts!.description,
+            "chain": chain,
+            "symbol": symbol,
+            "contractAddress": contractAddress,
+            "nativeAmount": nativeAmount.description,
+            "portalAmount": portalAmount.description,
+            "nativeAddress": nativeAddress,
+            "portalAddress": portalAddress,
+            "nativeReceipt": nativeReceipt ?? "",
+            "portalReceipt": portalReceipt ?? ""
+        ]
+        
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(json)
+        
+        return String(data: data, encoding: .utf8)!
     }
 
     static func fromJSON(_ json: String) throws -> Liquidity {
