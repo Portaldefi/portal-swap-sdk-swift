@@ -19,12 +19,13 @@ enum AssetError: Error, LocalizedError {
 struct Asset: CustomDebugStringConvertible {
     let id: String
     let name: String
+    let isEnabled: Bool
     let chain: String
     let symbol: String
     let contractAddress: String
     let decimals: Int
 
-    init(id: String, name: String, chain: String, symbol: String, contractAddress: String, decimals: Int) throws {
+    init(id: String, name: String, chain: String, symbol: String, contractAddress: String, decimals: Int, isEnabled: Bool) throws {
         let hasedId = Utils.sha256([chain, symbol, contractAddress])
         
         if hasedId.dropFirst(2) != id {
@@ -37,6 +38,7 @@ struct Asset: CustomDebugStringConvertible {
         self.symbol = symbol
         self.contractAddress = contractAddress
         self.decimals = decimals
+        self.isEnabled = isEnabled
     }
 
     var nativeAddress: String {
@@ -51,7 +53,8 @@ struct Asset: CustomDebugStringConvertible {
           chain: \(chain),
           symbol: \(symbol),
           contractAddress: \(contractAddress),
-          decimals: \(decimals)
+          decimals: \(decimals),
+          isEnabled: \(isEnabled)
         )
         """
     }
@@ -77,10 +80,11 @@ extension Asset {
             let values = response[""] as? [Any],
             let id = values[0] as? Data,
             let decimals = values[1] as? UInt8,
-            let name = values[2] as? String,
-            let chain = values[3] as? String,
-            let symbol = values[4] as? String,
-            let contractAddress = values[5] as? String
+            let isEnabled = values[2] as? Bool,
+            let name = values[3] as? String,
+            let chain = values[4] as? String,
+            let symbol = values[5] as? String,
+            let contractAddress = values[6] as? String
         else {
             throw AssetError.decodingError("Invalid asset response format")
         }
@@ -93,7 +97,8 @@ extension Asset {
             chain: chain,
             symbol: symbol,
             contractAddress: contractAddress,
-            decimals: Int(decimals)
+            decimals: Int(decimals),
+            isEnabled: isEnabled
         )
     }
 }
