@@ -1,6 +1,8 @@
 import Foundation
+import Web3
+import Web3ContractABI
+import CryptoKit
 
-// MARK: - SwapState enum
 enum SwapState: Int16, Codable {
     case matched = 0
     case holderInvoiced
@@ -14,7 +16,6 @@ enum SwapState: Int16, Codable {
 typealias Invoice = String
 typealias Receipt = String
 
-// Base protocol for all swap diff types
 protocol SwapDiff {
     var id: String { get }
     var state: SwapState { get }
@@ -30,10 +31,6 @@ struct PartyBase {
 
 struct InvoiceHolder {
     let invoice: Invoice
-}
-
-struct ReceiptHolder {
-    let receipt: Receipt
 }
 
 struct MatchedSwap: SwapDiff {
@@ -60,13 +57,13 @@ struct SeekerInvoicedSwap: SwapDiff {
 struct HolderPaidSwap: SwapDiff {
     let id: String
     let state: SwapState = .holderPaid
-    let secretHolder: ReceiptHolder
+    let secretHolder: Receipt
 }
 
 struct SeekerPaidSwap: SwapDiff {
     let id: String
     let state: SwapState = .seekerPaid
-    let secretSeeker: ReceiptHolder
+    let secretSeeker: Receipt
 }
 
 struct HolderSettledSwap: SwapDiff {
@@ -80,11 +77,6 @@ struct SeekerSettledSwap: SwapDiff {
     let state: SwapState = .seekerSettled
 }
 
-import Web3
-import Web3ContractABI
-import CryptoKit
-
-// MARK: - Swap Class
 final class Swap {
     let NULL_HASH: String = "0x" + String(repeating: "0", count: 64)
     
@@ -107,7 +99,7 @@ final class Swap {
     let id: String
     
     private(set) var state: SwapState
-    private(set) var secretHash: String
+    var secretHash: String
     
     var secretHolder: Party
     var secretSeeker: Party
@@ -230,8 +222,11 @@ final class Swap {
     }
 
     func hasParty(_ portalAddress: String) -> Bool {
-        [secretHolder.portalAddress.hex(eip55: false).lowercased(), secretSeeker.portalAddress.hex(eip55: false).lowercased()]
-            .contains(portalAddress.lowercased())
+        [
+            secretHolder.portalAddress.hex(eip55: false).lowercased(),
+            secretSeeker.portalAddress.hex(eip55: false).lowercased()
+        ]
+        .contains(portalAddress.lowercased())
     }
 
     func isSecretHolder(_ portalAddress: String) -> Bool {
@@ -242,38 +237,79 @@ final class Swap {
         secretSeeker.portalAddress.hex(eip55: false).lowercased() == portalAddress.lowercased()
     }
     
-    func update(_ diff: Swap) throws {
-        // Verify the transition is valid
-        
+    func update(_ diff: SwapDiff) throws {
         state = diff.state
         
-        // Update secretHash if HolderInvoiced
-        if diff.state == .holderInvoiced {
-            self.secretHash = diff.secretHash
-        }
-        
-        // Update respective properties based on state
-        switch diff.state {
-        case .holderInvoiced:
-            self.secretSeeker.invoice = diff.secretSeeker.invoice
-        case .seekerInvoiced:
-            self.secretHolder.invoice = diff.secretHolder.invoice
-        case .holderPaid:
-            self.secretHolder.receipt = diff.secretHolder.receipt
-        case .seekerPaid:
-            self.secretSeeker.receipt = diff.secretSeeker.receipt
-        case .holderSettled:
-            guard let secret = diff.secret else {
-                throw SdkError(message: "Secret is nil", code: String())
-            }
+        switch diff {
+        case let holderInvoicedSwap as HolderInvoicedSwap:
+            self.secretHash = holderInvoicedSwap.secretHash
+            self.secretSeeker.invoice = holderInvoicedSwap.secretSeeker.invoice
             
+        case let seekerInvoicedSwap as SeekerInvoicedSwap:
+            self.secretHolder.invoice = seekerInvoicedSwap.secretHolder.invoice
+            
+        case let holderPaidSwap as HolderPaidSwap:
+            self.secretHolder.receipt = holderPaidSwap.secretHolder
+            
+        case let seekerPaidSwap as SeekerPaidSwap:
+            self.secretSeeker.receipt = seekerPaidSwap.secretSeeker
+            
+        case let holderSettledSwap as HolderSettledSwap:
+            let secret = holderSettledSwap.secret
             let secretHash = secret.sha256()
             
             if Data(hex: self.secretHash) != secretHash {
                 throw SdkError(message: "secretHash mismatch: \(self.secretHash) vs \(secretHash)", code: String())
             }
             
-            self.secret = diff.secret
+            self.secret = secret
+            
+        case _ as SeekerSettledSwap:
+            break
+            
+        default:
+            throw SdkError(message: "Invalid SwapDiff type for update", code: String())
+        }
+    }
+    
+    func updateFromSwap(_ swap: Swap) throws {
+        state = swap.state
+        
+        switch swap.state {
+        case .holderInvoiced:
+            if swap.secretHash != self.secretHash {
+                self.secretHash = swap.secretHash
+            }
+            if let invoice = swap.secretSeeker.invoice {
+                self.secretSeeker.invoice = invoice
+            }
+            
+        case .seekerInvoiced:
+            if let invoice = swap.secretHolder.invoice {
+                self.secretHolder.invoice = invoice
+            }
+            
+        case .holderPaid:
+            if let receipt = swap.secretHolder.receipt {
+                self.secretHolder.receipt = receipt
+            }
+            
+        case .seekerPaid:
+            if let receipt = swap.secretSeeker.receipt {
+                self.secretSeeker.receipt = receipt
+            }
+            
+        case .holderSettled:
+            if let secret = swap.secret {
+                let secretHash = secret.sha256()
+                
+                if Data(hex: self.secretHash) != secretHash {
+                    throw SdkError(message: "secretHash mismatch: \(self.secretHash) vs \(secretHash)", code: String())
+                }
+                
+                self.secret = secret
+            }
+            
         default:
             break
         }
@@ -288,7 +324,7 @@ final class Swap {
     }
     
     func toJSON() -> [String: Any] {
-        var json: [String: Any] = [
+        let json: [String: Any] = [
             "id": id,
             "state": state.rawValue,
             "secretHash": secretHash,
