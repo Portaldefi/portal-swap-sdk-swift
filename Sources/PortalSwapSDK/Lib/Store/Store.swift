@@ -12,7 +12,7 @@ final class Store: BaseClass {
     
     init(accountId: String) {
         self.accountId = accountId
-
+        
         super.init(id: "Store")
     }
     
@@ -20,38 +20,17 @@ final class Store: BaseClass {
         persistenceManager = try LocalPersistenceManager.manager(accountId: accountId)
         emit(event: "open", args: [])
     }
-
+    
     func stop() async throws {
         persistenceManager = nil
         emit(event: "close", args: [])
     }
     
-    func get(_ namespace: StoreNamespace, _ key: String) throws -> [String: Any] {
-        guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
-        }
-        
-        switch namespace {
-        case .secrets:
-            return try manager.secret(key: key).toJSON()
-        case .swaps:
-            return try manager.swap(key: key).toJSON()
-        }
-    }
-    
-    func getAmmSwap(key: String) throws -> AmmSwap {
-        guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
-        }
-        
-        return AmmSwap(record: try manager.swap(key: key))
-    }
-    
     func put(swap: Swap) throws {
         guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+            throw StoreError.managerNotFound()
         }
-                
+        
         let newEntity = manager.swapEntity()
         try newEntity.update(swap: swap)
         
@@ -62,7 +41,7 @@ final class Store: BaseClass {
     
     func get(swapId: String) throws -> Swap {
         guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+            throw StoreError.managerNotFound()
         }
         
         let dbSwap = try manager.swap(swapId: swapId)
@@ -71,7 +50,7 @@ final class Store: BaseClass {
     
     func createSecret() throws -> String {
         guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+            throw StoreError.managerNotFound()
         }
         
         let (secret, secretHash) = Utils.createSecret()
@@ -84,76 +63,45 @@ final class Store: BaseClass {
         return secretHash.hexString
     }
     
-    func put(_ namespace: StoreNamespace, _ key: String, _ obj: [String: Any]) throws {
-//        guard let manager = persistenceManager else {
-//            throw SwapSDKError.msg("Cannot obtain persistenceManager")
-//        }
-//
-//        switch namespace {
-//        case .secrets:
-//            let newEntity = manager.secretEntity()
-//            try newEntity.update(json: obj, key: key)
-//            
-//            debug("Put secret with ID: \(key)")
-//        case .swaps:
-//            let swap = try AmmSwap.from(json: obj)
-//            
-//            let newEntity = manager.swapEntity()
-//            try newEntity.update(swap: swap)
-//            
-//            debug("Put swap with ID: \(newEntity.swapId ?? "Unknown")")
-//        }
-//        
-//        try manager.saveContext()
-    }
-    
-    func create(swap: AmmSwap) throws {
-//        guard let manager = persistenceManager else {
-//            throw SwapSDKError.msg("Cannot obtain persistenceManager")
-//        }
-//        
-//        let newEntity = manager.swapEntity()
-//        try newEntity.update(swap: swap)
-//        try manager.saveContext()
+    func getSecret(key: String) throws -> Data {
+        guard let manager = persistenceManager else {
+            throw StoreError.managerNotFound()
+        }
+        
+        let dbSecret = try manager.secret(key: key)
+        
+        guard let secretData = dbSecret.data else {
+            throw StoreError.entityNotFound()
+        }
+        
+        return secretData
     }
     
     func update(swap: Swap) throws {
         guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
+            throw StoreError.managerNotFound()
         }
         let dbSwap = try manager.swap(swapId: swap.id)
         try dbSwap.update(swap: swap)
         try manager.saveContext()
     }
-    
-    func updateBuyAssetTx(id: String, data: String) throws {
-        guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
-        }
-        let dbSwap = try manager.swap(key: id)
-        dbSwap.buyAssetTx = data
-        try manager.saveContext()
+}
+
+final class StoreError: BaseError {
+    static func entityNotFound() -> StoreError {
+        let message = "InstanceUnavailable!"
+        let code = "ENotFound"
+        return StoreError(message: message, code: code, context: [:])
     }
     
-    func updateSwapStatus(id: String, data: String) throws {
-        guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
-        }
-        let dbSwap = try manager.swap(key: id)
-        dbSwap.status = data
-        try manager.saveContext()
+    static func managerNotFound() -> StoreError {
+        let message = "Cannot obtain persistenceManager!"
+        let code = "EManagerNotFound"
+        return StoreError(message: message, code: code, context: [:])
     }
+    // MARK: - Initializer
     
-    func updateSellAssetTx(id: String, data: String) throws {
-        guard let manager = persistenceManager else {
-            throw SwapSDKError.msg("Cannot obtain persistenceManager")
-        }
-        let dbSwap = try manager.swap(key: id)
-        dbSwap.sellAssetTx = data
-        try manager.saveContext()
-    }
-    
-    func del(id: String) throws {
-        
+    override init(message: String, code: String, context: [String: Any]? = nil, cause: Error? = nil) {
+        super.init(message: message, code: code, context: context, cause: cause)
     }
 }
