@@ -24,7 +24,7 @@ class Utils {
     }
     
     static func sha256(data: Data) -> Data {
-        data.sha256()
+        data.sha256
     }
     
     static func sha256(_ data: [String]) -> String {
