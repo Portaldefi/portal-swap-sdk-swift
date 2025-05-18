@@ -9,6 +9,6 @@ public protocol ILightningClient {
     func subscribeToInvoice(id: String) -> Promise<InvoiceSubscription>
     func subscribeToPayment(id: String) -> Promise<InvoiceSubscription>
     func payViaPaymentRequest(swapId: String, request: String) -> Promise<PaymentResult>
-    func payViaDetails(amountSat: BigInt, toNode: String, message: String) -> Promise<PaymentResult>
+    func payViaDetails(amountSat: BigInt, toNode: String, message: String) -> Promise<String>
     func settleHodlInvoice(secret: Data) -> Promise<Response>
 }
