@@ -102,6 +102,7 @@ extension DBSwap {
             let secretSeeker = swap.secretSeeker
 
             self.secretSeeker = DBSwapParty(context: context)
+            
             self.secretSeeker!.amount = secretSeeker.amount.description
             self.secretSeeker!.chain = secretSeeker.chain
             self.secretSeeker!.symbol = secretSeeker.symbol
@@ -136,7 +137,7 @@ extension DBSwap {
             if let dbSwap = dbSwaps.first(where: { $0.swapId!.hexString == key }) {
                 return dbSwap
             } else {
-                throw SwapSDKError.msg("Swap with id: \(key) is not exist in DB")
+                throw StoreError.entityNotFound()
             }
         }
     }
