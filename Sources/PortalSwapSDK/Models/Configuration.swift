@@ -4,18 +4,24 @@ import SolanaSwift
 public struct SwapSdkConfig {
     public struct Blockchains {
         public struct Portal {
-            public let url: String
+            public let rpcUrl: String
             public let chainId: String
-            public let contracts: [String: Any]
             public let privKey: String
-            public let address: String
+            public let userAddress: String
             
-            public init(url: String, chainId: String, contracts: [String: Any], privKey: String, address: String) {
-                self.url = url
+            public let liquidityManagerContractAddress: String
+            public let assetManagerContractAddress: String
+            public let swapManagerContractAddress: String
+            
+            public init(rpcUrl: String, chainId: String, privKey: String, userAddress: String, liquidityManagerContractAddress: String, assetManagerContractAddress: String, swapManagerContractAddress: String) {
+                self.rpcUrl = rpcUrl
                 self.chainId = chainId
-                self.contracts = contracts
                 self.privKey = privKey
-                self.address = address
+                self.userAddress = userAddress
+                
+                self.liquidityManagerContractAddress = liquidityManagerContractAddress
+                self.assetManagerContractAddress = assetManagerContractAddress
+                self.swapManagerContractAddress = swapManagerContractAddress
             }
         }
         
