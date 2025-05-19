@@ -53,12 +53,14 @@ public struct SwapSdkConfig {
         
         public struct Solana {
             public let keyPair: KeyPair
-            public let url: String
+            public let rpcUrl: String
+            public let programId: String
             public let provider: BlockchainClient?
             
-            public init(keyPair: KeyPair, url: String, provider: BlockchainClient? = nil) {
+            public init(keyPair: KeyPair, rpcUrl: String, programId: String, provider: BlockchainClient? = nil) {
                 self.keyPair = keyPair
-                self.url = url
+                self.rpcUrl = rpcUrl
+                self.programId = programId
                 self.provider = provider
             }
         }
