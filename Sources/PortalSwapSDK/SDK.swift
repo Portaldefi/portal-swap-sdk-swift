@@ -381,7 +381,7 @@ public final class Sdk: BaseClass {
         info("onSwapSeekerPaid", swap.toJSON())
         emit(event: "swapSeekerPaid", args: [swap])
         
-        guard let secretData = try? store.get(.secrets, swap.secretHash), let secret = secretData["secret"] as? Data else {
+        guard let secret = try? store.getSecret(key: swap.secretHash) else {
             emit(event: "error", args: ["missing secret!", swap.toJSON()])
             return
         }
