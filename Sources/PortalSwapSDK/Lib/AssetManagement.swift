@@ -17,7 +17,7 @@ final class AssetManagement: BaseClass {
     init(props: SwapSdkConfig.Blockchains.Portal) {
         self.props = props
         
-        web3 = Web3(rpcURL: props.url)
+        web3 = Web3(rpcURL: props.rpcUrl)
         
         super.init(id: "asset.manager")
     }
