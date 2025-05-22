@@ -77,7 +77,7 @@ struct SeekerSettledSwap: SwapDiff {
     let state: SwapState = .seekerSettled
 }
 
-final class Swap {
+public final class Swap {
     let NULL_HASH: String = "0x" + String(repeating: "0", count: 64)
     
     private(set) var secret: Data?
@@ -96,7 +96,7 @@ final class Swap {
         .seekerSettled: []
     ]
 
-    let id: String
+    public let id: String
     
     private(set) var state: SwapState
     var secretHash: String
