@@ -5,6 +5,7 @@ public final class LocalPersistenceManager {
     private let configuration: PersistenceConfiguration
     private var viewContext: NSManagedObjectContext { container.viewContext }
     private var container: PersistentContainer
+    private var isSaving = false
     
     fileprivate init(configuration: PersistenceConfiguration) throws {
         let model = try LocalPersistenceManager.model(for: configuration.modelName)
@@ -22,7 +23,14 @@ public final class LocalPersistenceManager {
     }
     
     internal func saveContext() throws {
-        try viewContext.save()
+        guard !isSaving && viewContext.hasChanges else { return }
+        
+        isSaving = true
+        defer { isSaving = false }
+        
+        try viewContext.performAndWait {
+            try viewContext.save()
+        }
     }
     
     internal func secretEntity() -> DBSecret {
