@@ -5,17 +5,25 @@ import Promises
 protocol NativeChain: BaseClass {
     var address: String { get }
 
-    func start() async throws
-    func stop() async throws
+    func start() -> Promise<Void>
+    func stop() -> Promise<Void>
 
     func deposit(_ liquidity: Liquidity) -> Promise<Liquidity>
-    func withdraw(_ liquidity: Liquidity) -> Promise<Liquidity>
 
     func createInvoice(_ party: Party) -> Promise<Invoice>
     func payInvoice(_ party: Party) -> Promise<Void>
     func settleInvoice(for party: Party, with secret: Data) -> Promise<Party>
 }
 
+extension NativeChain {
+    func emitWithDelay(event: String, args: [Any]) {
+        DispatchQueue.sdk.asyncAfter(deadline: .now() + 3) {
+            let capitalizedEvent = "on\(event.prefix(1).uppercased())\(event.dropFirst())"
+            self.info(capitalizedEvent, args)
+            self.emit(event: event, args: args)
+        }
+    }
+}
 
 final class NativeChainError: BaseError {
     static func invalidChain(expected: String, actual: String, context: [String: Any]? = nil) -> NativeChainError {
