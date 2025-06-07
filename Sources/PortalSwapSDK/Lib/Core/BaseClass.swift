@@ -19,11 +19,9 @@ open class BaseClass: CustomDebugStringConvertible {
     
     // MARK: - Event Management
     
-    @discardableResult
-    public func emit(event: EventName, args: [Any]? = []) -> Bool {
-        guard let subject = subjects[event] else { return false }
+    public func emit(event: EventName, args: [Any]? = []) {
+        guard let subject = subjects[event] else { return }
         subject.send(args ?? [])
-        return true
     }
     
     @discardableResult
@@ -133,43 +131,6 @@ open class BaseClass: CustomDebugStringConvertible {
     
     private func subscribe(_ subscription: AnyCancellable) {
         subscription.store(in: &subscriptions)
-    }
-    
-    func forwardSwap() -> ([Any]) -> Void {
-        { [weak self] args in
-            if let data = args as? [AmmSwap], let swap = data.first {
-                self?.emit(event: "swap.\(swap.status)", args: [swap])
-            } else {
-                self?.debug("Unexpected arguments on forwardSwap: \(args) [Sdk]")
-            }
-        }
-    }
-    
-    func forwardEvent(_ event: String) -> ([Any]) -> Void {
-        { [weak self] args in
-            self?.emit(event: event, args: args)
-        }
-    }
-    
-    func forwardLog() -> ([Any]) -> Void {
-        { [weak self] args in
-            if let level = args.first as? String {
-                let argsArray = Array(args.dropFirst())
-                self?.logFunction(level, "forwardedLog", argsArray)
-                
-                if self?.logLevels.contains(level) == true {
-                    self?.emit(event: level, args: argsArray)
-                }
-            } else {
-                self?.emit(event: "log", args: args)
-            }
-        }
-    }
-    
-    func forwardError() -> ([Any]) -> Void {
-        { [weak self] args in
-            self?.emit(event: "error", args: args)
-        }
     }
 
     private enum LogLevel: String {
