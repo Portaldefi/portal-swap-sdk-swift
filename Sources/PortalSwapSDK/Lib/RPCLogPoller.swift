@@ -11,7 +11,7 @@ class RPCLogPoller {
     private let topics: [[EthereumData]]?
     private let onLogs: ([EthereumLogObject]) -> Void
     private let onError: (Error) -> Void
-    private var timer: Timer?
+    private var timer: DispatchSourceTimer?
     private var lastProcessedBlock: BigUInt?
     private var isPolling: Bool = false
     
@@ -34,84 +34,88 @@ class RPCLogPoller {
         self.onError = onError
     }
     
-    /// Starts polling for logs using a fixed interval (default is 15 seconds).
+    deinit {
+        stopPolling()
+    }
+    
     func startPolling(interval: TimeInterval = 1.0) {
-        DispatchQueue.main.async {
-            self.timer = Timer.scheduledTimer(timeInterval: interval,
-                                              target: self,
-                                              selector: #selector(self.pollLogs),
-                                              userInfo: nil,
-                                              repeats: true)
+        stopPolling()
+        
+        // Create dispatch timer that works on any queue without requiring a run loop
+        let newTimer = DispatchSource.makeTimerSource(queue: queue)
+        newTimer.schedule(deadline: .now() + interval, repeating: interval)
+        
+        newTimer.setEventHandler { [weak self] in
+            self?.pollLogs()
         }
+        
+        self.timer = newTimer
+        newTimer.resume()
     }
     
     /// Stops the polling process.
     func stopPolling() {
-        timer?.invalidate()
+        timer?.cancel()
         timer = nil
     }
     
     /// Polls for new logs.
     /// This method first gets the latest block number, determines the range to query,
     /// and then calls `eth.getLogs` to retrieve logs in that range.
-    @objc private func pollLogs() {
-        queue.async {
-            guard !self.isPolling else {
-                return
-            }
-            self.isPolling = true
+    private func pollLogs() {
+        guard !self.isPolling else { return }
+        
+        self.isPolling = true
+        
+        self.eth.blockNumber { [weak self] response in
+            guard let self = self else { return }
                         
-            self.eth.blockNumber { [weak self] response in
-                guard let self = self else { return }
+            switch response.status {
+            case .success(let latest):
+                let latestBlock = latest.quantity
                 
-                switch response.status {
-                case .success(let latest):
-                    let latestBlock = latest.quantity
-                                        
-                    // compute fromBlock under the queue
-                    let fromBlock: BigUInt = {
-                        if let last = self.lastProcessedBlock {
-                            return last + 1
-                        } else {
-                            return latestBlock
-                        }
-                    }()
-                    
-                    guard latestBlock >= fromBlock else {
-                        self.isPolling = false
-                        return
-                    }
-                    
-                    let fromTag = EthereumQuantityTag(tagType: .block(fromBlock))
-                    let toTag = EthereumQuantityTag(tagType: .block(latestBlock))
-                    
-                    self.eth.getLogs(addresses: self.addresses,
-                                     topics: self.topics,
-                                     fromBlock: fromTag,
-                                     toBlock: toTag) { logsResponse in
-                        self.queue.async {
-                            defer {
-                                self.isPolling = false
-                            }
-                            
-                            switch logsResponse.status {
-                            case .success(let newLogs) where !newLogs.isEmpty:
-                                self.onLogs(newLogs)
-                                self.lastProcessedBlock = latestBlock
-                            case .failure(let err):
-                                self.onError(err)
-                            default:
-                                break
-                            }
-                        }
-                    }
-                    
-                case .failure(let err):
+                // compute fromBlock under the queue
+                let fromBlock: BigUInt
+                if let last = self.lastProcessedBlock {
+                    fromBlock = last + 1
+                } else {
+                    // On first run, start from current block to avoid processing old events
+                    fromBlock = latestBlock
+                }
+                
+                guard latestBlock >= fromBlock else {
+                    self.isPolling = false
+                    return
+                }
+                
+                let fromTag = EthereumQuantityTag(tagType: .block(fromBlock))
+                let toTag = EthereumQuantityTag(tagType: .block(latestBlock))
+                                
+                self.eth.getLogs(addresses: self.addresses,
+                               topics: self.topics,
+                               fromBlock: fromTag,
+                               toBlock: toTag) { logsResponse in
                     self.queue.async {
-                        self.isPolling = false
-                        self.onError(err)
-                        print("\(self.pollerId) finished polling with error: \(err)")
+                        defer {
+                            self.isPolling = false
+                        }
+                                                
+                        switch logsResponse.status {
+                        case .success(let newLogs) where !newLogs.isEmpty:
+                            self.onLogs(newLogs)
+                            self.lastProcessedBlock = latestBlock
+                        case .success(let newLogs):
+                            self.lastProcessedBlock = latestBlock
+                        case .failure(let err):
+                            self.onError(err)
+                        }
                     }
+                }
+                
+            case .failure(let err):
+                self.queue.async {
+                    self.isPolling = false
+                    self.onError(err)
                 }
             }
         }
