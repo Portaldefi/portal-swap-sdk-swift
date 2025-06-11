@@ -21,12 +21,20 @@ final class Lightning: BaseClass, NativeChain {
         super.init(id: "lightning")
     }
     
-    func start() async throws {
-        emit(event: "start")
+    func start() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
+            emit(event: "start")
+        }
     }
     
-    func stop() async throws {
-        emit(event: "stop")
+    func stop() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
+            emit(event: "stop")
+        }
     }
     
     func deposit(_ liquidity: Liquidity) -> Promise<Liquidity> {
