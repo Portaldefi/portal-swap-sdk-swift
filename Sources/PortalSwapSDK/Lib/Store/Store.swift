@@ -16,14 +16,22 @@ final class Store: BaseClass {
         super.init(id: "Store")
     }
     
-    func start() async throws {
-        persistenceManager = try LocalPersistenceManager.manager(accountId: accountId)
-        emit(event: "open", args: [])
+    func start() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            persistenceManager = try LocalPersistenceManager.manager(accountId: accountId)
+            emit(event: "open", args: [])
+        }
     }
     
-    func stop() async throws {
-        persistenceManager = nil
-        emit(event: "close", args: [])
+    func stop() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            persistenceManager = nil
+            emit(event: "close", args: [])
+        }
     }
     
     func put(swap: Swap) throws {

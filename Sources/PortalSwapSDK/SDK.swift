@@ -54,21 +54,29 @@ public final class Sdk: BaseClass {
         return nativeChain.address
     }
     
-    func start() async throws {
-        try await portalChain.start()
-        try await store.start()
-        
-        for nativeChain in nativeChains.values {
-            try await nativeChain.start()
+    func start() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
+            try awaitPromise(portalChain.start())
+            try awaitPromise(store.start())
+            
+            for nativeChain in nativeChains.values {
+                try awaitPromise(nativeChain.start())
+            }
         }
     }
 
-    func stop() async throws {
-        try await portalChain.stop()
-        try await store.stop()
-        
-        for nativeChain in nativeChains.values {
-            try await nativeChain.stop()
+    func stop() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
+            try awaitPromise(portalChain.stop())
+            try awaitPromise(store.stop())
+
+            for nativeChain in nativeChains.values {
+                try awaitPromise(nativeChain.stop())
+            }
         }
     }
     

@@ -27,41 +27,70 @@ final class Ethereum: BaseClass, IBlockchain {
     func connect() -> Promise<Void> {
         Promise { [unowned self] in
             web3 = Web3(rpcURL: props.url)
+    func start() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
             
-            //dex contract
-                        
-            guard let contractAddressHex = dexContractAddress else {
+            let nativeLiquidityContractAddress = try DynamicContract.contractAddress(address: nativeLiquidityManagerContractAddress)
+            let nativeLiquidityAbiData = try DynamicContract.contractAbiData(abi: nativeLiquidityAbi)
+            nativeLiquidity = try web3.eth.Contract(json: nativeLiquidityAbiData, abiKey: nil, address: nativeLiquidityContractAddress)
+            
+            guard let nativeLiquidity else {
                 throw SwapSDKError.msg("Ethereum cannot prepare contract")
             }
             
-            let dexContractAddresisEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)
-            let dexContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: dexContractAddresisEipp55)
+            print("(ETH) native liquidity address: \(nativeLiquidityContractAddress.hex(eip55: false))")
             
-            dex = web3.eth.Contract(type: DexContract.self, address: dexContractAddress)
+            print("Native liquidity methods")
+            for method in nativeLiquidity.methods {
+                print(method)
+            }
             
-            //liquidity provider contract
+            let invoiceManagerContractAddress = try DynamicContract.contractAddress(address: invoiceManagerContractAddress)
+            let invoiceManagerAbiData = try DynamicContract.contractAbiData(abi: invoiceManagerAbi)
+            invoiceManager = try web3.eth.Contract(json: invoiceManagerAbiData, abiKey: nil, address: invoiceManagerContractAddress)
             
-            guard let contractAddressHex = liquidityProviderContractAddress else {
+            guard let invoiceManager else {
                 throw SwapSDKError.msg("Ethereum cannot prepare contract")
             }
             
-            let lpAddresisEipp55 = Utils.isEIP55Compliant(address: contractAddressHex)
-            let lpContractAddress = try EthereumAddress(hex: contractAddressHex, eip55: lpAddresisEipp55)
+            print("(ETH) invoice manager address: \(invoiceManagerContractAddress.hex(eip55: false))")
             
-            liquidityProvider = web3.eth.Contract(type: LiquidityProvider.self, address: lpContractAddress)
+            print("Invoice manager methods")
+            for method in invoiceManager.methods {
+                print(method)
+            }
             
-            info("connect")
-            emit(event: "connect")
+            let nativeLiquidityTopics = try DynamicContract.topics(contract: nativeLiquidity)
+            let invoiceManagerTopics = try DynamicContract.topics(contract: invoiceManager)
             
-            return connected = true
+            logPoller = RPCLogPoller(
+                id: "Ethereum: Native liquidity & Invoice Manager",
+                eth: web3!.eth,
+                addresses: [nativeLiquidityContractAddress, invoiceManagerContractAddress],
+                topics: [nativeLiquidityTopics + invoiceManagerTopics]
+            ) { [weak self] logs in
+                guard let self else { return }
+                onAccountingLogs(logs)
+            } onError: { error in
+                print("Ethereum: Account manager logs error: \(error)")
+            }
+
+            logPoller?.startPolling(interval: 3)
+            
+            self.info("start")
+            self.emit(event: "start")
+            
+            connected = true
         }
     }
     
-    func disconnect() -> Promise<Void> {
-        Promise { [unowned self] resolve, reject in
+    func stop() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
             connected = false
-            dex = nil
-            liquidityProvider = nil
+            nativeLiquidity = nil
         }
     }
     

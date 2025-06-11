@@ -27,45 +27,56 @@ final class Portal: BaseClass {
         super.init(id: "portal")
     }
     
-    func start() async throws {
-        let assetManagerContractAddress = try DynamicContract.contractAddress(address: props.assetManagerContractAddress)
-        assetManager = web3.eth.Contract(type: AssetManagerContract.self, address: assetManagerContractAddress)
-        
-        let liquidityManagerContractAddress = try DynamicContract.contractAddress(address: props.liquidityManagerContractAddress)
-        liquidityManager = web3.eth.Contract(type: LiquidityManagerContract.self, address: liquidityManagerContractAddress)
-        
-        liquidityManager.watchContractEvents(
-            interval: 1,
-            onLogs: { [weak self] logs in
-                self?.onLiquidityManagerLogs(logs)
-            },
-            onError: { [weak self] error in
-                self?.debug("Liquidity manager logs error", error)
-            })
-        
-        let swapManagerContractAddress = try DynamicContract.contractAddress(address: props.swapManagerContractAddress)
-        swapManager = web3.eth.Contract(type: SwapManagerContract.self, address: swapManagerContractAddress)
+    func start() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
             
-        swapManager.watchContractEvents(
-            interval: 1,
-            onLogs: { [weak self] logs in
-                self?.onSwapManagerLogs(logs)
-            },
-            onError: { [weak self] error in
-                self?.debug("Swap manager logs error", error)
-            })
-        
-        info("start")
-        emit(event: "start")
-        
-        connected = true
+            let assetManagerContractAddress = try DynamicContract.contractAddress(address: props.assetManagerContractAddress)
+            assetManager = web3.eth.Contract(type: AssetManagerContract.self, address: assetManagerContractAddress)
+            
+            let liquidityManagerContractAddress = try DynamicContract.contractAddress(address: props.liquidityManagerContractAddress)
+            liquidityManager = web3.eth.Contract(type: LiquidityManagerContract.self, address: liquidityManagerContractAddress)
+            
+            liquidityManager.watchContractEvents(
+                interval: 1,
+                onLogs: { [weak self] logs in
+                    self?.onLiquidityManagerLogs(logs)
+                },
+                onError: { [weak self] error in
+                    self?.debug("Liquidity manager logs error", error)
+                })
+            
+            let swapManagerContractAddress = try DynamicContract.contractAddress(address: props.swapManagerContractAddress)
+            swapManager = web3.eth.Contract(type: SwapManagerContract.self, address: swapManagerContractAddress)
+                
+            swapManager.watchContractEvents(
+                interval: 1,
+                onLogs: { [weak self] logs in
+                    self?.onSwapManagerLogs(logs)
+                },
+                onError: { [weak self] error in
+                    self?.debug("Swap manager logs error", error)
+                })
+            
+            let orderbookMarketContractAddress = try DynamicContract.contractAddress(address: props.orderbookMarketContractAddress)
+            orderbookMarket = web3.eth.Contract(type: OrderbookMarketContract.self, address: orderbookMarketContractAddress)
+            
+            info("start")
+            emit(event: "start")
+            
+            connected = true
+        }
     }
     
-    func stop() async throws {
-        connected = false
-        
-        liquidityManager.stopWatchingContractEvents()
-        swapManager.stopWatchingContractEvents()
+    func stop() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            connected = false
+            
+            liquidityManager.stopWatchingContractEvents()
+            swapManager.stopWatchingContractEvents()
+        }
     }
     
     func retrieveAsset(chain: String, symbol: String) -> Promise<Asset> {

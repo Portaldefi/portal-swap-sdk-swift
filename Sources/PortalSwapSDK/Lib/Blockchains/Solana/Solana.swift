@@ -81,33 +81,39 @@ final class Solana: BaseClass, NativeChain {
         super.init(id: "solana")
     }
     
-    func start() async throws {
-        logPoller.monitor { [weak self] log in
-            guard let self else { return }
-            
-            switch log.event {
-            case .deposit(let depositEvent):
-                let liquidity = self.liquidityArgs(event: depositEvent, signature: log.signature, slot: log.slot)
-                self.info("deposit", liquidity)
-                self.emit(event: "deposit", args: [liquidity])
-            case .withdraw(let withdrawEvent):
-                let liquidity = self.liquidityArgs(event: withdrawEvent, signature: log.signature, slot: log.slot)
-                self.info("withdraw", liquidity)
-                self.emit(event: "withdraw", args: [liquidity])
-            case .lock(let lockEvent):
-                let (event, swapDiff) = self.swapArgs(event: lockEvent, signature: log.signature, step: .lock)
-                self.info(event, swapDiff)
-                self.emit(event: event, args: [swapDiff])
-            case .unlock(let unlockEvent):
-                let (event, swapDiff) = self.swapArgs(event: unlockEvent, signature: log.signature, step: .unlock)
-                self.info(event, swapDiff)
-                self.emit(event: event, args: [swapDiff])
+    func start() -> Promise<Void> {
+        Promise {
+            self.logPoller.monitor { [weak self] log in
+                guard let self else { return }
+                
+                switch log.event {
+                case .deposit(let depositEvent):
+                    let liquidity = self.liquidityArgs(event: depositEvent, signature: log.signature, slot: log.slot)
+                    self.info("deposit", liquidity)
+                    self.emitWithDelay(event: "deposit", args: [liquidity])
+                case .withdraw(let withdrawEvent):
+                    let liquidity = self.liquidityArgs(event: withdrawEvent, signature: log.signature, slot: log.slot)
+                    self.info("withdraw", liquidity)
+                    self.emitWithDelay(event: "withdraw", args: [liquidity])
+                case .lock(let lockEvent):
+                    let (event, swapDiff) = self.swapArgs(event: lockEvent, signature: log.signature, step: .lock)
+                    self.info(event, swapDiff)
+                    self.emitWithDelay(event: event, args: [swapDiff])
+                case .unlock(let unlockEvent):
+                    let (event, swapDiff) = self.swapArgs(event: unlockEvent, signature: log.signature, step: .unlock)
+                    self.info(event, swapDiff)
+                    self.emitWithDelay(event: event, args: [swapDiff])
+                }
             }
         }
     }
     
-    func stop() async throws {
-        await logPoller.cleanup()
+    func stop() -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
+            logPoller.cleanup()
+        }
     }
     
     func deposit(_ liquidity: Liquidity) -> Promise<Liquidity> {
