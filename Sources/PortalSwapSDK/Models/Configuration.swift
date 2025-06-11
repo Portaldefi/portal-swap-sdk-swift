@@ -12,8 +12,9 @@ public struct SwapSdkConfig {
             public let liquidityManagerContractAddress: String
             public let assetManagerContractAddress: String
             public let swapManagerContractAddress: String
+            public let orderbookMarketContractAddress: String
             
-            public init(rpcUrl: String, chainId: String, privKey: String, userAddress: String, liquidityManagerContractAddress: String, assetManagerContractAddress: String, swapManagerContractAddress: String) {
+            public init(rpcUrl: String, chainId: String, privKey: String, userAddress: String, liquidityManagerContractAddress: String, assetManagerContractAddress: String, swapManagerContractAddress: String, orderbookMarketContractAddress: String) {
                 self.rpcUrl = rpcUrl
                 self.chainId = chainId
                 self.privKey = privKey
@@ -22,6 +23,7 @@ public struct SwapSdkConfig {
                 self.liquidityManagerContractAddress = liquidityManagerContractAddress
                 self.assetManagerContractAddress = assetManagerContractAddress
                 self.swapManagerContractAddress = swapManagerContractAddress
+                self.orderbookMarketContractAddress = orderbookMarketContractAddress
             }
         }
         

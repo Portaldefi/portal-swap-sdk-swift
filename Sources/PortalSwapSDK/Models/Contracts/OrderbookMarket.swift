@@ -6,7 +6,7 @@ import BigInt
 protocol IOrderbookMarketContract: EthereumContract, IRPCLogsPoller {
     static var OrderCreated: SolidityEvent { get }
 
-    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation
+    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation
 }
 
 open class OrderbookMarketContract: StaticContract {
@@ -36,10 +36,18 @@ open class OrderbookMarketContract: StaticContract {
         SolidityEvent.Parameter(name: "isOpen", type: .bool, indexed: false),
         SolidityEvent.Parameter(name: "orderType", type: .uint8, indexed: false)
     ])
+    
+    private func hexStringToBigInt(_ hexString: String) -> BigInt {
+        // Remove "0x" prefix if present
+        let cleanHex = hexString.hasPrefix("0x") ? String(hexString.dropFirst(2)) : hexString
+        
+        // Convert hex string to BigInt
+        return BigInt(cleanHex, radix: 16) ?? BigInt(0)
+    }
 }
 
 extension OrderbookMarketContract: IOrderbookMarketContract {
-    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation {
+    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation {
         let inputs = [
             SolidityFunctionParameter(name: "sellAsset", type: .uint256),
             SolidityFunctionParameter(name: "sellAmount", type: .uint256),
@@ -57,17 +65,9 @@ extension OrderbookMarketContract: IOrderbookMarketContract {
             sellAssetBigInt,
             sellAmount,
             buyAssetBigInt,
-            buyAmmount,
+            buyAmount,
             orderType.rawValue
         )
-    }
-    
-    func hexStringToBigInt(_ hexString: String) -> BigInt {
-        // Remove "0x" prefix if present
-        let cleanHex = hexString.hasPrefix("0x") ? String(hexString.dropFirst(2)) : hexString
-        
-        // Convert hex string to BigInt
-        return BigInt(cleanHex, radix: 16) ?? BigInt(0)
     }
     
     func watchContractEvents(interval: TimeInterval, onLogs: @escaping ([EthereumLogObject]) -> Void, onError: @escaping (Error) -> Void) {
