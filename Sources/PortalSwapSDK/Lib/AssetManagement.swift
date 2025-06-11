@@ -23,7 +23,11 @@ final class AssetManagement: BaseClass {
     }
     
     func listPools() -> Promise<[Pool]> {
-        Promise { [unowned self] resolve, reject in
+        Promise { [weak self] resolve, reject in
+            guard let self else {
+                return reject(SwapSDKError.msg("AssetManagement is nil"))
+            }
+            
             if
                 let amContractAddressHex = assetManagementContractAddress,
                 let amContractAddress = try? EthereumAddress(
@@ -40,32 +44,27 @@ final class AssetManagement: BaseClass {
                 liquidityPool = web3.eth.Contract(type: LiquidityPoolContract.self, address: poolContractAddress)
             }
             
-            listAssets().then { [weak self] assets in
-                guard let self else {
-                    return reject(SwapSDKError.msg("AssetManagement is nil"))
-                }
-                
-                listPools().then { poolModels in
-                    resolve(
-                        poolModels.compactMap { model in
-                            let baseAsset = assets.first(where: { $0.id.hex(eip55: true) == model.baseAsset.hex(eip55: true) })
-                            let quoteAsset = assets.first(where: { $0.id.hex(eip55: true) == model.quoteAsset.hex(eip55: true) })
-                            
-                            guard let baseAsset, let quoteAsset else { return nil }
-                            
-                            return Pool(
-                                model: model,
-                                baseAsset: baseAsset,
-                                quoteAsset: quoteAsset
-                            )
-                        }
+            let assets = try awaitPromise(listAssets())
+            let poolModels = try awaitPromise(listPoolModels())
+            
+            resolve(
+                poolModels.compactMap { model in
+                    guard
+                        let baseAsset = assets.first(where: { $0.id.hex(eip55: true) == model.baseAsset.hex(eip55: true) }),
+                        let quoteAsset = assets.first(where: { $0.id.hex(eip55: true) == model.quoteAsset.hex(eip55: true) })
+                    else {
+                        return nil
+                    }
+                                        
+                    return Pool(
+                        id: model.id.hexString,
+                        baseAsset: baseAsset,
+                        quoteAsset: quoteAsset,
+                        minOrderSize: model.minOrderSize,
+                        maxOrderSize: model.maxOrderSize
                     )
-                }.catch { fetchPoolsError in
-                    reject(fetchPoolsError)
                 }
-            }.catch { fetchAssetsError in
-                reject(fetchAssetsError)
-            }
+            )
         }
     }
     
@@ -117,7 +116,7 @@ final class AssetManagement: BaseClass {
         }
     }
     
-    private func listPools() -> Promise<[PoolModel]> {
+    private func listPoolModels() -> Promise<[PoolModel]> {
         Promise { [unowned self] resolve, reject in
             guard let liquidityPool else {
                 return reject(SwapSDKError.msg("Liquidity Pool contract is not set"))
