@@ -3,7 +3,7 @@ import Web3
 import Web3ContractABI
 import CryptoKit
 
-enum SwapState: Int16, Codable {
+public enum SwapState: Int16, Codable {
     case matched = 0
     case holderInvoiced
     case seekerInvoiced
