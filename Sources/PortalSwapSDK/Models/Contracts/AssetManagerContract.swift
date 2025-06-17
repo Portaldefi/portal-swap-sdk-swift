@@ -25,7 +25,7 @@ open class AssetManagerContract: StaticContract {
 extension AssetManagerContract: IAssetManagerContract {
     func retrieveAssets() -> SolidityInvocation {
         let returnTypes: [SolidityType] = [
-            .bytes(length: 32), .uint8, .string, .string, .string, .string
+            .bytes(length: 32), .uint8, .bool, .string, .string, .string, .string
         ]
         let outputs = [
             SolidityFunctionParameter(name: "", type: .array(type: .tuple(returnTypes), length: nil))

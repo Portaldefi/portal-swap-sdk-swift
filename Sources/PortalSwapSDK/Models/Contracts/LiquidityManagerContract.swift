@@ -96,7 +96,7 @@ extension LiquidityManagerContract: ILiquidityManagerContract {
     func burnAsset(liquidity: Liquidity) -> SolidityInvocation {
         let inputTypes: [SolidityType] = [
             .bytes(length: 32),
-            .int256,
+            .uint256,
             .int256,
             .int256,
             .address,
