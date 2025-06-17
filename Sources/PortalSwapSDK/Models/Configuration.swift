@@ -32,14 +32,18 @@ public struct SwapSdkConfig {
             public let chainId: String
             public let contracts: [String: Any]
             public let privKey: String
-            public let address: String
+            public let traderAddress: String
+            public let nativeLiquidityManagerContractAddress: String
+            public let invoiceManagerContractAddress: String
             
-            public init(url: String, chainId: String, contracts: [String: Any], privKey: String, address: String) {
+            public init(url: String, chainId: String, contracts: [String: Any], privKey: String, traderAddress: String, nativeLiquidityManagerContractAddress: String, invoiceManagerContractAddress: String) {
                 self.url = url
                 self.chainId = chainId
                 self.contracts = contracts
                 self.privKey = privKey
-                self.address = address
+                self.traderAddress = traderAddress
+                self.nativeLiquidityManagerContractAddress = nativeLiquidityManagerContractAddress
+                self.invoiceManagerContractAddress = invoiceManagerContractAddress
             }
         }
         
