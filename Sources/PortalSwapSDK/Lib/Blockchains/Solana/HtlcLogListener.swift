@@ -346,7 +346,7 @@ class HtlcLogListener {
         }
     }
     
-    func cleanup() async {
+    func cleanup() {
         isMonitoring = false
         pollingTask?.cancel()
         pollingTask = nil
