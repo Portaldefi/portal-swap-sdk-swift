@@ -10,6 +10,10 @@ final class Lightning: BaseClass, NativeChain {
 
     private let client: ILightningClient
     
+    private var subscription: InvoiceSubscription?
+    
+    private var activeSubscriptions: [String: Any] = [:]
+    
     var address: String {
         client.publickKey
     }
@@ -71,17 +75,42 @@ final class Lightning: BaseClass, NativeChain {
             
             debug("deposit.started", liquidityString)
             
-            let _ = try awaitPromise(client.payViaDetails(amountSat: amountSat, toNode: hubId, message: liquidityString))
+            let paymentId = try awaitPromise(client.payViaDetails(amountSat: amountSat, toNode: hubId, message: liquidityString))
+            
+            debug("deposited with paymentID", paymentId)
+            
+            print("LIQUIDITY PAYMENT ID: \(liquidity.notifiebleId)")
+            
+            subscribeForWithdrawalPayment(liquidity: liquidity)
+            
             return liquidity
         }
     }
     
-    func withdraw(_ liquidity: Liquidity) -> Promise<Liquidity> {
-        Promise {
-            throw SdkError.init(message: "Lightning withdrawal should be done by validator", code: "MissusedMethod")
+    private func subscribeForWithdrawalPayment(liquidity: Liquidity) {
+        client.subscribeToPayment(id: liquidity.notifiebleId).then { [weak self] subscription in
+            self?.subscription = subscription
+            
+            subscription.onInvoiceUpdated = { [weak self] status in
+                switch status {
+                case .paymentConfirmed:
+                    subscription.off("invoice.updated")
+                    self?.info("withdraw", [liquidity])
+                    self?.emitWithDelay(event: "withdraw", args: [liquidity])
+                case .paymentFailed(let reason):
+                    subscription.off("invoice.updated")
+                    self?.info("deposit paiment failed")
+                    self?.error("deposit payment failed", reason ?? "unknown")
+                default :
+                    break
+                }
+            }
+        }
+        .catch { [weak self] error in
+            self?.error("subscription error", [error])
         }
     }
-    
+        
     func createInvoice(_ party: Party) -> Promise<Invoice> {
         Promise { resolve, reject in
             guard let swap = party.swap else {
@@ -148,7 +177,7 @@ final class Lightning: BaseClass, NativeChain {
                             try? swap.setState(.seekerInvoiced)
                             try? swap.setState(.holderPaid)
                             try? swap.setState(.seekerPaid)
-                            self.emit(event: "swapSeekerPaid", args: [swap])
+                            self.emitWithDelay(event: "swapSeekerPaid", args: [swap])
                         case .paymentFailed(let reason):
                             subscription.off("invoice.updated")
                             self.info("invoice.cancelled", invoice)
@@ -228,7 +257,7 @@ final class Lightning: BaseClass, NativeChain {
                             if let secret {
                                 let holderSettled = HolderSettledSwap(id: swap.id, secret: Data(hex: secret))
                                 self.info("swapHolderSettled", holderSettled)
-                                self.emit(event: "swapHolderSettled", args: [holderSettled])
+                                self.emitWithDelay(event: "swapHolderSettled", args: [holderSettled])
                             } else {
                                 return reject(SwapSDKError.msg("secret is missing"))
                             }
@@ -244,7 +273,7 @@ final class Lightning: BaseClass, NativeChain {
                                         
                     let seekerPaid = SeekerPaidSwap(id: swap.id, secretSeeker: result.id)
                     self.info("swapSeekerPaid", seekerPaid)
-                    self.emit(event: "swapSeekerPaid", args: [seekerPaid])
+                    self.emitWithDelay(event: "swapSeekerPaid", args: [seekerPaid])
                 }
             }.catch { error in
                 reject(error)
@@ -260,7 +289,7 @@ final class Lightning: BaseClass, NativeChain {
             client.settleHodlInvoice(secret: secret).then { response in
                 try party.swap?.setState(.holderSettled)
                 try party.swap?.setSecret(secret)
-                self.emit(event: "swapHolderSettled", args: [party.swap!])
+                self.emitWithDelay(event: "swapHolderSettled", args: [party.swap!])
                 resolve(party)
             }.catch { error in
                 reject(error)
