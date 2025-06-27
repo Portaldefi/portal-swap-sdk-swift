@@ -202,13 +202,7 @@ final class Solana: BaseClass, NativeChain {
             }
         }
     }
-    
-    func withdraw(_ liquidity: Liquidity) -> Promises.Promise<Liquidity> {
-        Promise {
-            
-        }
-    }
-    
+        
     func createInvoice(_ party: Party) -> Promises.Promise<Invoice> {
         Promise { fulfill, reject in
             Task { [weak self] in
@@ -300,6 +294,8 @@ final class Solana: BaseClass, NativeChain {
                 guard let self else {
                     return reject(SdkError.instanceUnavailable())
                 }
+                
+                try await Task.sleep(nanoseconds: 5 * 1_000_000_000)
                 
                 do {
                     guard let invoice = party.invoice else {
