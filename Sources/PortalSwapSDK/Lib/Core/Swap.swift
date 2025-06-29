@@ -169,35 +169,62 @@ public final class Swap {
     }
     
     init(record: DBSwap) throws {
-        self.id = record.swapId!.hexString
+        guard let swapId = record.swapId else {
+            throw SdkError(message: "Unknown swapId (DBRecord)", code: String())
+        }
+        
+        self.id = swapId.hexString
         
         guard let state = SwapState(rawValue: record.state) else {
-            throw SdkError(message: "Unknown state", code: String())
+            throw SdkError(message: "Unknown state (DBRecord)", code: String())
         }
         
         self.state = state
-        self.secretHash = record.secretHash!.hexString
         
-        let secretHolder = record.secretHolder!
+        guard let secretHash = record.secretHash else {
+            throw SdkError(message: "Unknown secret hash (DBRecord)", code: String())
+        }
+        
+        self.secretHash = secretHash.hexString
+        
+        guard
+            let secretHolder = record.secretHolder,
+            let holderAmount = secretHolder.amount,
+            let holderAddress = secretHolder.portalAddress,
+            let holderChain = secretHolder.chain,
+            let holderSymbol = secretHolder.symbol,
+            let holderContractAddress = secretHolder.contractAddress
+        else {
+            throw SdkError(message: "secret holder data is missing (DBRecord)", code: String())
+        }
         
         self.secretHolder = Party(
-            portalAddress: try EthereumAddress(hex: secretHolder.portalAddress!, eip55: false),
-            amount: BigUInt(stringLiteral: secretHolder.amount!),
-            chain: secretHolder.chain!,
-            symbol: secretHolder.symbol!,
-            contractAddress: secretHolder.contractAddress!,
+            portalAddress: try EthereumAddress(hex: holderAddress, eip55: false),
+            amount: BigUInt(stringLiteral: holderAmount),
+            chain: holderChain,
+            symbol: holderSymbol,
+            contractAddress: holderContractAddress,
             invoice: secretHolder.invoice,
             receipt: secretHolder.receipt
         )
         
-        let secretSeeker = record.secretSeeker!
+        guard
+            let secretSeeker = record.secretSeeker,
+            let seekerAmount = secretSeeker.amount,
+            let seekerAddress = secretSeeker.portalAddress,
+            let seekerChain = secretSeeker.chain,
+            let seekerSymbol = secretSeeker.symbol,
+            let seekerContractAddress = secretSeeker.contractAddress
+        else {
+            throw SdkError(message: "secret seeker data is missing (DBRecord)", code: String())
+        }
         
         self.secretSeeker = Party(
-            portalAddress: try EthereumAddress(hex: secretSeeker.portalAddress!, eip55: false),
-            amount: BigUInt(stringLiteral: secretSeeker.amount!),
-            chain: secretSeeker.chain!,
-            symbol: secretSeeker.symbol!,
-            contractAddress: secretSeeker.contractAddress!,
+            portalAddress: try EthereumAddress(hex: seekerAddress, eip55: false),
+            amount: BigUInt(stringLiteral: seekerAmount),
+            chain: seekerChain,
+            symbol: seekerSymbol,
+            contractAddress: seekerContractAddress,
             invoice: secretSeeker.invoice,
             receipt: secretSeeker.receipt
         )
