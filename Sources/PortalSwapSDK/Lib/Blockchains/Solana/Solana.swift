@@ -295,7 +295,7 @@ final class Solana: BaseClass, NativeChain {
                     return reject(SdkError.instanceUnavailable())
                 }
                 
-                try await Task.sleep(nanoseconds: 5 * 1_000_000_000)
+                try await Task.sleep(nanoseconds: 3 * 1_000_000_000)
                 
                 do {
                     guard let invoice = party.invoice else {
