@@ -154,11 +154,11 @@ public final class PortalSwapSDK: BaseClass {
         
         sdk.on("error") { [weak self] args in
             if let self {
-                try? awaitPromise(self.stopSwapSdk())
+                sdk.off("error")
+                timeoutWorkItem?.cancel()
+                try? awaitPromise(stopSwapSdk())
+                emit(event: "error", args: args)
             }
-            self?.timeoutWorkItem?.cancel()
-            self?.emit(event: "error", args: args)
-            self?.sdk.off("error")
         }
         
         // Basic state events
@@ -206,7 +206,7 @@ public final class PortalSwapSDK: BaseClass {
             swapStatus = .initiated
             
             timeoutWorkItem = DispatchWorkItem {
-                reject(SdkError.timedOut(context: nil))
+                reject(SdkError.timedOut(context: [:]))
             }
 
             DispatchQueue.sdk.asyncAfter(deadline: .now() + 300, execute: timeoutWorkItem!)
@@ -278,9 +278,8 @@ public final class PortalSwapSDK: BaseClass {
             let buyAmountInSwap = self.formatUnits(BigInt(buyAmount), decimals: Int(buyAsset.blockchainDecimals))
             self.swapTransaction?.buyAmount = buyAmountInSwap
         }
-        
         // Swap Holder Paid Event
-        sdk.on("swapHolderPaid") { [weak self] arguments in
+        .on("swapHolderPaid") { [weak self] arguments in
             guard let self = self else { return }
             guard let swap = arguments.first as? Swap else { return }
 
@@ -292,9 +291,8 @@ public final class PortalSwapSDK: BaseClass {
                 self.swapTransaction?.buyAssetTxnHash = swap.secretHolder.receipt
             }
         }
-        
         // Swap Seeker Paid Event
-        sdk.on("swapSeekerPaid") { [weak self] arguments in
+        .on("swapSeekerPaid") { [weak self] arguments in
             guard let self = self else { return }
             guard let swap = arguments.first as? Swap else { return }
             
@@ -309,12 +307,9 @@ public final class PortalSwapSDK: BaseClass {
             
             self.swapTransaction?.buyAssetTxnHash = swap.secretSeeker.receipt
         }
-        
         // Swap Seeker Settled Event - Final step
-        sdk.on("swapSeekerSettled") { [weak self] _ in
-            guard let self = self else {
-                return
-            }
+        .on("swapSeekerSettled") { [weak self] _ in
+            guard let self = self else { return }
             
             do {
                 self.swapStatus = .holderSettled
