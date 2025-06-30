@@ -2,25 +2,33 @@ import Foundation
 import Promises
 import BigInt
 
-
-public final class Sdk: BaseClass {
+final class Sdk: BaseClass {
     private let store: Store
     private(set) var portalChain: Portal
     private(set) var nativeChains = [String: NativeChain]()
     
     private var depositTimeoutTimer: Timer?
+    private let depositTimeoutInterval: TimeInterval = 60*5
     
-    public init(config: SwapSdkConfig) {
-        DispatchQueue.promises = .global(qos: .userInitiated)
-
-        store = Store(accountId: "TestAccountId")
+    init(config: SwapSdkConfig) {
+        store = Store(accountId: config.id)
+            
+        let requiredChains = Set([config.sellAsset, config.buyAsset])
+        
+        for chainKey in requiredChains {
+            switch chainKey {
+            case "ethereum":
+                nativeChains[chainKey] = Ethereum(props: config.blockchains.ethereum) as NativeChain
+            case "lightning":
+                nativeChains[chainKey] = Lightning(props: config.blockchains.lightning) as NativeChain
+            case "solana":
+                nativeChains[chainKey] = Solana(props: config.blockchains.solana) as NativeChain
+            default:
+                break
+            }
+        }
         
         portalChain = Portal(props: config.blockchains.portal)
-        nativeChains = [
-            "ethereum": Ethereum(props: config.blockchains.ethereum) as NativeChain,
-            "lightning": Lightning(props: config.blockchains.lightning) as NativeChain,
-            "solana": Solana(props: config.blockchains.solana) as NativeChain
-        ]
         
         super.init(id: "sdk")
         
@@ -84,14 +92,12 @@ public final class Sdk: BaseClass {
         return { [weak self] args in
             guard let self = self else { return }
             
-            // Ensure we have at least the log level and event in the arguments.
             guard args.count >= 2,
                   let level = args[0] as? String,
                   let event = args[1] as? String else {
                 return
             }
             
-            // Any extra arguments after the first two.
             let extraArgs = Array(args.dropFirst(2))
             
             // Switch on the log level string.
@@ -125,22 +131,18 @@ public final class Sdk: BaseClass {
             
             switch args.first {
             case let swapObject as Swap:
-                // Some chains return full Swap object
-                debug("onSwapEvent.swap", swapObject.toJSON())
+                guard swapObject.hasParty(portalChain.address) else { return }
                 
                 if swapObject.state == .matched {
                     // New matched swap - check for collision
                     do {
                         swap = try store.get(swapId: swapObject.id)
-                        self.error("onSwapEvent", "Swap already exists in store", swapObject)
-                        self.emit(event: "error", args: ["error: Swap already exists in store \(swapObject)"])
                         return
                     } catch let error as StoreError where error.code == "ENotFound" {
                         // Swap doesn't exist, proceed
                         swap = swapObject
                     } catch {
                         self.error("onSwapEvent", error, swapObject)
-                        self.emit(event: "error", args: [error, swapObject])
                         return
                     }
                     
@@ -148,7 +150,6 @@ public final class Sdk: BaseClass {
                     if !swapObject.hasParty(portalChain.address) {
                         let err = SwapSDKError.msg("unknown swap for this party!")
                         self.warn("onSwapEvent", err, swapObject)
-                        self.emit(event: "error", args: [err, swapObject])
                         return
                     }
                     
@@ -157,7 +158,6 @@ public final class Sdk: BaseClass {
                         try store.put(swap: swap)
                     } catch {
                         self.error("onSwapEvent", "Failed to save swap to store", swap.toJSON(), error)
-                        self.emit(event: "error", args: ["Failed to save swap to store \(swap.toJSON())", error])
                         return
                     }
                 } else {
@@ -168,7 +168,6 @@ public final class Sdk: BaseClass {
                         try store.update(swap: swap)
                     } catch {
                         self.error("onSwapEvent", "Failed to update swap", swapObject, error)
-                        self.emit(event: "error", args: ["Failed to update swap", error])
                         return
                     }
                 }
@@ -181,15 +180,16 @@ public final class Sdk: BaseClass {
                     try swap.update(swapDiff)
                     try store.update(swap: swap)
                 } catch {
-                    self.error("onSwapEvent", "Failed to retrieve/update swap from store", swapDiff, error)
-                    self.emit(event: "error", args: ["Failed to retrieve/update swap from store \(swapDiff)", error])
+                    self.warn("onSwapEvent", "Failed to retrieve/update swap from store", swapDiff, error)
                     return
                 }
                 
             default:
-                error("Invalid swap event", args)
+                self.error("Invalid swap event", args)
                 return
             }
+            
+            debug("onSwapEvent.swap", swap.toJSON())
             
             switch swap.state {
             case .matched:
@@ -222,7 +222,7 @@ public final class Sdk: BaseClass {
             return
         }
         
-        guard swap.isSecretHolder(portalChain.address) else {
+        if !swap.isSecretHolder(portalChain.address) {
             emit(event: "error", args: ["unknown swap for this party"])
             return
         }
@@ -243,7 +243,6 @@ public final class Sdk: BaseClass {
             try? awaitPromise(portalChain.registerInvoice(swap))
         } catch {
             self.error("onSwapMatched", "Failed to create or register invoice", error)
-            emit(event: "error", args: ["Failed to create or register invoice", error])
         }
     }
     
@@ -253,7 +252,7 @@ public final class Sdk: BaseClass {
             return
         }
         
-        guard swap.secretSeeker.invoice != nil else {
+        if swap.secretSeeker.invoice == nil {
             emit(event: "error", args: ["missing secret holder invoice!", swap.toJSON()])
             return
         }
@@ -264,7 +263,7 @@ public final class Sdk: BaseClass {
             return
         }
         
-        guard swap.isSecretSeeker(portalChain.address) else {
+        if !swap.isSecretSeeker(portalChain.address) {
             emit(event: "error", args: ["Unknown swap for this party!", swap.toJSON()])
             return
         }
@@ -293,7 +292,7 @@ public final class Sdk: BaseClass {
             return
         }
         
-        guard swap.secretHolder.invoice != nil else {
+        if swap.secretHolder.invoice == nil {
             emit(event: "error", args: ["missing secret seeker invoice!", swap.toJSON()])
             return
         }
@@ -304,7 +303,7 @@ public final class Sdk: BaseClass {
             return
         }
         
-        guard swap.isSecretHolder(portalChain.address) else {
+        if !swap.isSecretHolder(portalChain.address) {
             emit(event: "error", args: ["Unknown swap for this party!", swap.toJSON()])
             return
         }
@@ -315,6 +314,9 @@ public final class Sdk: BaseClass {
             emit(event: "error", args: [SdkError.invalidChain(chain: secretHolder.chain)])
             return
         }
+        
+        info("onSwapSeekerInvoiced", { swap })
+        emit(event: "swapSeekerInvoiced", args: [swap])
         
         do {
             try awaitPromise(nativeChain.payInvoice(secretHolder))
@@ -329,7 +331,7 @@ public final class Sdk: BaseClass {
             return
         }
         
-        guard swap.secretHolder.receipt != nil else {
+        if swap.secretHolder.receipt == nil {
             emit(event: "error", args: ["missing secret holder's invoice!", swap.toJSON()])
             return
         }
@@ -357,7 +359,6 @@ public final class Sdk: BaseClass {
             try awaitPromise(nativeChain.payInvoice(swap.secretSeeker))
         } catch {
             self.error("onSwapHolderPaid", "Failed to pay invoice", error)
-            emit(event: "error", args: ["Failed to pay invoice", error])
         }
     }
     
@@ -464,7 +465,7 @@ public final class Sdk: BaseClass {
         
     // Liquidity operations
     
-    public func deposit(chain: String, symbol: String, amount: BigInt) -> Promise<Liquidity> {
+    func deposit(chain: String, symbol: String, amount: BigInt) -> Promise<Liquidity> {
         Promise { [weak self] resolve, reject in
             guard let self else { throw SdkError.instanceUnavailable() }
             guard let nativeChain = nativeChains[chain] else { throw SdkError.invalidChain(chain: chain) }
@@ -484,7 +485,7 @@ public final class Sdk: BaseClass {
             liquidity = try awaitPromise(nativeChain.deposit(liquidity))
             
             let timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
-            timeoutTimer.schedule(deadline: .now() + 60, repeating: .never)
+            timeoutTimer.schedule(deadline: .now() + depositTimeoutInterval, repeating: .never)
             timeoutTimer.setEventHandler {
                 timeoutTimer.cancel()
                 reject(SdkError.timedOut(context: ["liquidity": liquidity]))
@@ -530,7 +531,7 @@ public final class Sdk: BaseClass {
             debug("withdraw.waiting", burnedLiquidity)
             
             let timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
-            timeoutTimer.schedule(deadline: .now() + 60, repeating: .never)
+            timeoutTimer.schedule(deadline: .now() + depositTimeoutInterval, repeating: .never)
             timeoutTimer.setEventHandler {
                 timeoutTimer.cancel()
                 reject(SdkError.timedOut(context: ["liquidity": liquidity]))
@@ -553,6 +554,63 @@ public final class Sdk: BaseClass {
             }
         }
     }
+    
+    // Market operations
+    
+    func openOrder(sellChain: String, sellSymbol: String, sellAmount: BigInt, buyChain: String, buySymbol: String, buyAmount: BigInt, orderType: Order.OrderType) -> Promise<Order> {
+        Promise { [weak self]  in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
+            if nativeChains[sellChain] == nil {
+                throw SdkError.invalidChain(chain: sellChain)
+            }
+            
+            if nativeChains[buyChain] == nil {
+                throw SdkError.invalidChain(chain: buyChain)
+            }
+            
+            if sellAmount <= 0 {
+                throw SdkError.invalidOrder(sellChain, sellSymbol, sellAmount)
+            }
+            
+            let ptb = portalChain
+            
+            let sellAssetId: String
+            do {
+                let sellAsset = try awaitPromise(ptb.retrieveAsset(chain: sellChain, symbol: sellSymbol))
+                sellAssetId = sellAsset.id
+            } catch {
+                throw SdkError.invalidAsset(chain: sellChain, symbol: sellSymbol, cause: error)
+            }
+            
+            let buyAssetId: String
+            do {
+                let buyAsset = try awaitPromise(ptb.retrieveAsset(chain: buyChain, symbol: buySymbol))
+                buyAssetId = buyAsset.id
+            } catch {
+                throw SdkError.invalidAsset(chain: buyChain, symbol: buySymbol, cause: error)
+            }
+            
+            let order = try Order(
+                trader: portalAddress(),
+                sellAsset: sellAssetId,
+                sellAmount: sellAmount,
+                buyAsset: buyAssetId,
+                buyAmount: buyAmount,
+                orderType: orderType
+            )
+            
+            do {
+                debug("openOrder.starting", ["order": order.toJSON()])
+                try awaitPromise(ptb.openOrder(order))
+                info("openOrder", ["order": order.toJSON()])
+                return order
+            } catch {
+                throw SdkError(message: "Open order error", code: "P2B", context: ["order": order.toJSON()], cause: error)
+            }
+        }
+    }
+        
 }
 
 final class SdkError: BaseError {
@@ -565,6 +623,14 @@ final class SdkError: BaseError {
     /// Reports an invalid native chain selection.
     static func invalidChain(chain: String) -> SdkError {
         let message = "Invalid native chain \(chain)!"
+        let code = "EInvalidChain"
+        let context: [String: Any] = ["chain": chain]
+        return SdkError(message: message, code: code, context: context)
+    }
+    
+    /// Reports an invalid order.
+    static func invalidOrder(_ chain: String, _ symbol: String, _ amount: BigInt) -> SdkError {
+        let message = "Invalid order on \(chain) for \(amount) \(symbol)!"
         let code = "EInvalidChain"
         let context: [String: Any] = ["chain": chain]
         return SdkError(message: message, code: code, context: context)
