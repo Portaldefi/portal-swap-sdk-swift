@@ -32,6 +32,20 @@ public final class Liquidity: Codable {
     
     var isDeposit: Bool { nativeAmount > 0 }
     var isWithdrawal: Bool { nativeAmount < 0 }
+    
+    public var notifiebleId: String {
+        let components = [
+            nativeAddress,
+            portalAddress.lowercased(),
+            symbol,
+            chain,
+            contractAddress,
+            abs(nativeAmount).description,
+            abs(portalAmount).description
+        ].joined(separator: "|")
+        
+        return components.sha256()
+    }
 
     init(
         id: String? = nil,
@@ -59,7 +73,7 @@ public final class Liquidity: Codable {
     }
 
     func equals(_ other: Liquidity) -> Bool {
-        self.id == other.id
+        self.notifiebleId == other.notifiebleId
     }
 
     func toJSON() throws -> String {
@@ -83,7 +97,7 @@ public final class Liquidity: Codable {
         return String(data: data, encoding: .utf8)!
     }
 
-    static func fromJSON(_ json: String) throws -> Liquidity {
+    public static func fromJSON(_ json: String) throws -> Liquidity {
         let cleanJson = json.replacingOccurrences(of: "^[^\\{]*|[^\\}]*$", with: "", options: .regularExpression)
         let decoder = JSONDecoder()
         return try decoder.decode(Liquidity.self, from: cleanJson.data(using: .utf8)!)
@@ -97,12 +111,24 @@ public final class Liquidity: Codable {
     required public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
-        ts = try container.decode(BigUInt.self, forKey: .ts)
+        
+        if let tsString = try? container.decode(String.self, forKey: .ts) {
+            ts = BigUInt(tsString) ?? BigUInt(0)
+        } else {
+            let tsInt = try container.decode(Int.self, forKey: .ts)
+            ts = BigUInt(tsInt)
+        }
+        
         chain = try container.decode(String.self, forKey: .chain)
         symbol = try container.decode(String.self, forKey: .symbol)
         contractAddress = try container.decode(String.self, forKey: .contractAddress)
-        nativeAmount = try BigInt(fromSignedHexString: container.decode(String.self, forKey: .nativeAmount))
-        portalAmount = try BigInt(fromSignedHexString: container.decode(String.self, forKey: .portalAmount))
+        
+        let nativeAmountString = try container.decode(String.self, forKey: .nativeAmount)
+        nativeAmount = BigInt(nativeAmountString) ?? BigInt(0)
+        
+        let portalAmountString = try container.decode(String.self, forKey: .portalAmount)
+        portalAmount = BigInt(portalAmountString) ?? BigInt(0)
+        
         nativeAddress = try container.decode(String.self, forKey: .nativeAddress)
         portalAddress = try container.decode(String.self, forKey: .portalAddress)
         portalReceipt = try container.decodeIfPresent(Receipt.self, forKey: .portalReceipt)
