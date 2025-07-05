@@ -170,7 +170,8 @@ final class Lightning: BaseClass, NativeChain {
                         case .paymentHeld:
                             self.info("invoice.paid", invoice)
                             self.emit(event: "invoice.paid", args: [swapId])
-                        case .paymentConfirmed:
+                        case .paymentConfirmed(let paymentHash):
+                            party.receipt = paymentHash
                             subscription.off("invoice.updated")
                             self.info("invoice.settled", invoice)
                             try? swap.setState(.holderInvoiced)
@@ -233,6 +234,8 @@ final class Lightning: BaseClass, NativeChain {
             debug("payInvoice", party, request)
             
             client.payViaPaymentRequest(swapId: swap.id, request: invoice).then { result in
+                party.receipt = result.id
+                
                 self.client.subscribeToPayment(id: result.id).then { [weak self] subscription in
                     guard let self = self else {
                         return reject(SwapSDKError.msg("client.subscribeToInvoice self is nil"))
