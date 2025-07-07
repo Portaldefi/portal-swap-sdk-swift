@@ -2,132 +2,7 @@ import Foundation
 import Promises
 import BigInt
 
-extension DispatchQueue {
-    static let sdk: DispatchQueue = .global(qos: .userInitiated)
-}
-
 public final class PortalSwapSDK: BaseClass {
-    public enum SwapOperationStatus {
-        case none,
-             matching,
-             canceled,
-             swapping,
-             failed(String),
-             succeded,
-             sdkStopped,
-             initiated,
-             depositing,
-             matched,
-             holderInvoiced,
-             seekerInvoiced,
-             holderPaid,
-             seekerPaid,
-             holderSettled,
-             seekerSettled,
-             withdrawing
-        
-        public var description: String {
-            switch self {
-            case .none:
-                return String()
-            case .matching:
-                return "Matching"
-            case .canceled:
-                return "Canceled"
-            case .swapping:
-                return "Swapping"
-            case .failed(let reason):
-                return "Failed: \(reason)"
-            case .succeded:
-                return "Succeeded"
-            case .sdkStopped:
-                return "SDK stopped"
-            case .initiated:
-                return "Swap initiated"
-            case .depositing:
-                return "Depositing"
-            case .matched:
-                return "Swap matched"
-            case .holderInvoiced:
-                return "Holder invoiced"
-            case .seekerInvoiced:
-                return "Seeker invoiced"
-            case .holderPaid:
-                return "Holder paid"
-            case .seekerPaid:
-                return "Seeker paid"
-            case .holderSettled:
-                return "Holder settled"
-            case .seekerSettled:
-                return "Seeker settled"
-            case .withdrawing:
-                return "Withdraw in-progress"
-            }
-        }
-    }
-    
-    struct FeeInfo {
-        let value: String
-        let symbol: String
-        let valueInUSD: String
-    }
-    
-    public struct SwapFee {
-        let portalFee: FeeInfo
-        let sellTxnFee: FeeInfo
-        let buyTxnFee: FeeInfo
-    }
-    
-    public struct InvoiceInfo {
-        var invoice: String?
-        var hash: String?
-        var preimage: String?
-    }
-    
-    public enum TransactionStatus: String {
-        case pending = "pending"
-        case confirmed = "confirmed"
-        case failed = "failed"
-    }
-    
-    public final class SwapTransaction {
-        public let chainId: String
-        
-        public var swapId: String?
-        public var hash: String?
-        
-        public let sellAsset: Pool.Asset
-        public let buyAsset: Pool.Asset
-        public let sellAmount: String
-        public var buyAmount: String
-        
-        public var minedDate = Date.now
-        
-        public var invoiceInfo: InvoiceInfo?
-        
-        public var status: TransactionStatus
-        public var sellAssetTxnHash: String?
-        public var buyAssetTxnHash: String?
-        public var swapFee: SwapFee?
-        public var fee: String?
-        public var error: String?
-        
-        init(chainId: String, swapId: String? = nil, sellAsset: Pool.Asset, buyAsset: Pool.Asset, sellAmount: String, buyAmount: String, status: TransactionStatus, sellAssetTxnHash: String? = nil, buyAssetTxnHash: String? = nil, swapFee: SwapFee? = nil, fee: String? = nil, error: String? = nil) {
-            self.chainId = chainId
-            self.swapId = swapId
-            self.sellAsset = sellAsset
-            self.buyAsset = buyAsset
-            self.sellAmount = sellAmount
-            self.buyAmount = buyAmount
-            self.status = status
-            self.sellAssetTxnHash = sellAssetTxnHash
-            self.buyAssetTxnHash = buyAssetTxnHash
-            self.swapFee = swapFee
-            self.fee = fee
-            self.error = error
-        }
-    }
-    
     private let sdk: Sdk
     
     private var timeoutWorkItem: DispatchWorkItem?
@@ -206,6 +81,11 @@ public final class PortalSwapSDK: BaseClass {
             swapStatus = .initiated
             
             timeoutWorkItem = DispatchWorkItem {
+                self.swapTransaction?.status = .failed
+                self.swapTransaction?.error = "Swap operation timed out"
+                
+                self.updateSwapTx()
+                
                 reject(SdkError.timedOut(context: [:]))
             }
 
@@ -274,9 +154,10 @@ public final class PortalSwapSDK: BaseClass {
             
             // Update buy amount from matched swap
             let buyAmount = swap.secretSeeker.amount
-            // Note: You'll need to implement formatUnits equivalent in Swift
             let buyAmountInSwap = self.formatUnits(BigInt(buyAmount), decimals: Int(buyAsset.blockchainDecimals))
             self.swapTransaction?.buyAmount = buyAmountInSwap
+            
+            updateSwapTx()
         }
         // Swap Holder Paid Event
         .on("swapHolderPaid") { [weak self] arguments in
@@ -290,31 +171,37 @@ public final class PortalSwapSDK: BaseClass {
             } else {
                 self.swapTransaction?.buyAssetTxnHash = swap.secretHolder.receipt
             }
+            
+            updateSwapTx()
         }
         // Swap Seeker Paid Event
         .on("swapSeekerPaid") { [weak self] arguments in
             guard let self = self else { return }
             guard let swap = arguments.first as? Swap else { return }
             
-            self.swapStatus = .seekerPaid
+            swapStatus = .seekerPaid
             
-            // Update transaction hashes
-            if swap.secretHolder.symbol == sellAsset.symbol {
-                self.swapTransaction?.sellAssetTxnHash = swap.secretHolder.receipt
+            swapTransaction?.invoiceInfo.invoice = swap.secretSeeker.invoice
+            swapTransaction?.invoiceInfo.hash = swap.secretSeeker.receipt
+            
+            swapTransaction?.buyAssetTxnHash = swap.secretSeeker.receipt
+            
+            if swap.secretSeeker.symbol == buyAsset.symbol {
+                swapTransaction?.buyAssetTxnHash = swap.secretSeeker.receipt
             } else {
-                self.swapTransaction?.buyAssetTxnHash = swap.secretHolder.receipt
+                swapTransaction?.sellAssetTxnHash = swap.secretSeeker.receipt
             }
             
-            self.swapTransaction?.buyAssetTxnHash = swap.secretSeeker.receipt
+            updateSwapTx()
         }
         // Swap Seeker Settled Event - Final step
         .on("swapSeekerSettled") { [weak self] _ in
             guard let self = self else { return }
             
+            self.swapStatus = .holderSettled
+            self.swapStatus = .withdrawing
+            
             do {
-                self.swapStatus = .holderSettled
-                self.swapStatus = .withdrawing
-                
                 let liquidity = try awaitPromise(
                     self.sdk.withdraw(
                         chain: sellAsset.blockchainName,
@@ -323,24 +210,31 @@ public final class PortalSwapSDK: BaseClass {
                     )
                 )
                 
+                timeoutWorkItem?.cancel()
+                
                 // Success - update transaction
                 self.swapStatus = .succeded
                 self.swapTransaction?.status = .confirmed
                 self.swapTransaction?.error = nil
                 
-                try awaitPromise(self.stopSwapSdk())
-                
-                timeoutWorkItem?.cancel()
-                
+                updateSwapTx()
+                                
                 if let transaction = self.swapTransaction {
                     resolve(transaction)
                 } else {
                     reject(NSError(domain: "PortalSwapSDK", code: -3, userInfo: [NSLocalizedDescriptionKey: "Transaction is nil"]))
                 }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                    try? awaitPromise(self.stopSwapSdk())
+                }
             } catch {
-                swapTransaction?.status = .failed
-                swapTransaction?.error = error.localizedDescription
-                swapStatus = .failed("\(error)")
+                self.swapTransaction?.status = .failed
+                self.swapTransaction?.error = error.localizedDescription
+                self.swapStatus = .failed("\(error)")
+                
+                updateSwapTx()
+                
                 timeoutWorkItem?.cancel()
                 reject(error)
                 
@@ -349,12 +243,23 @@ public final class PortalSwapSDK: BaseClass {
         }
     }
     
+    private func updateSwapTx() {
+        guard let transaction = self.swapTransaction, let hash = transaction.hash else {
+            return warn("swap tx/hash not found, can't save")
+        }
+        
+        do {
+            try sdk.store.update(hash: hash, transaction: transaction)
+        } catch {
+            warn("failed to save swap tx in db", error.localizedDescription)
+        }
+    }
+    
     private func stopSwapSdk() -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
             
             try awaitPromise(sdk.stop())
-            swapStatus = .sdkStopped
         }
     }
     
