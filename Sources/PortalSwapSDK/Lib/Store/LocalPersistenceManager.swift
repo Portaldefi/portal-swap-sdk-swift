@@ -51,12 +51,22 @@ public final class LocalPersistenceManager {
         try DBSwap.entity(key: swapId, context: viewContext)
     }
     
+    internal func update(hash: String, transaction: SwapTransaction) throws {
+        try DBSwapTransaction.update(accountId: configuration.accountId, key: hash, transaction: transaction, context: viewContext)
+    }
+    
     public func fetchSwaps() throws -> [AmmSwap] {
         let swaps = try DBAmmSwap.entities(context: viewContext)
             .filter { $0.accountId == configuration.accountId }
             .map { AmmSwap(record: $0) }
 
         return Array(Set(swaps))
+    }
+    
+    public func fetchSwapTxs() throws -> [SwapTransaction] {
+        try DBSwapTransaction.entities(context: viewContext)
+            .filter { $0.accountId == configuration.accountId }
+            .compactMap { try? SwapTransaction.from(record: $0) }
     }
     
     public func fetchSecret(key: String) throws -> Data? {

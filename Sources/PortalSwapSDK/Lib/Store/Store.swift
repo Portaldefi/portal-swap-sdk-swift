@@ -93,6 +93,13 @@ final class Store: BaseClass {
         try dbSwap.update(swap: swap)
         try manager.saveContext()
     }
+    
+    func update(hash: String, transaction: SwapTransaction) throws {
+        guard let manager = persistenceManager else {
+            throw StoreError.managerNotFound()
+        }
+        try manager.update(hash: hash, transaction: transaction)
+    }
 }
 
 final class StoreError: BaseError {
