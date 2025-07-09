@@ -9,6 +9,8 @@ final class Portal: BaseClass {
     
     private let web3: Web3!
     
+    private var queue = TransactionLock()
+    
     private var liquidityManager: ILiquidityManagerContract!
     private var assetManager: IAssetManagerContract!
     private var swapManager: ISwapManagerContract!
@@ -108,30 +110,33 @@ final class Portal: BaseClass {
                 throw NativeChainError.init(message: "Invalid portal address", code: "404")
             }
             
-            let nonce = try awaitPromise(web3.eth.getNonce(address: swapOwner))
+            let txId = try awaitPromise(withTxLock {
+                self.web3.eth.getNonce(address: swapOwner).then { nonce in
+                    guard let tx = self.liquidityManager.burnAsset(liquidity: liquidity).createTransaction(
+                        nonce: nonce,
+                        gasPrice: nil,
+                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
+                        gasLimit: EthereumQuantity(quantity: 1_000_000),
+                        from: swapOwner,
+                        value: EthereumQuantity(quantity: 0),
+                        accessList: [:],
+                        transactionType: .eip1559
+                    ) else {
+                        throw SwapSDKError.msg("failed to create burn asset transaction")
+                    }
+                                
+                    let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
+                    let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
+                    
+                    return self.web3.eth.publish(transaction: signedTx)
+                }
+            })
             
-            guard let tx = liquidityManager.burnAsset(liquidity: liquidity).createTransaction(
-                nonce: nonce,
-                gasPrice: nil,
-                maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
-                maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
-                gasLimit: EthereumQuantity(quantity: 1_000_000),
-                from: swapOwner,
-                value: EthereumQuantity(quantity: 0),
-                accessList: [:],
-                transactionType: .eip1559
-            ) else {
-                throw SwapSDKError.msg("failed to create burn asset transaction")
-            }
-                        
-            let privKey = try EthereumPrivateKey(hexPrivateKey: props.privKey)
-            let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(props.chainId))
-            
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedTx))
             debug("burn asset tx id", txId)
             
             let txIdData = try EthereumData(ethereumValue: txId)
-            let receipt = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchReceipt(txHash: txIdData) })
+            let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
                                     
             debug("burn asset receipt", receipt)
                       
@@ -165,31 +170,34 @@ final class Portal: BaseClass {
                 throw NativeChainError.init(message: "Invalid portal address", code: "404")
             }
             
-            let nonce = try awaitPromise(web3.eth.getNonce(address: swapOwner))
-            
-            guard let tx = swapManager.registerInvoice(swap).createTransaction(
-                nonce: nonce,
-                gasPrice: nil,
-                maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
-                maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
-                gasLimit: EthereumQuantity(quantity: 1_000_000),
-                from: swapOwner,
-                value: EthereumQuantity(quantity: 0),
-                accessList: [:],
-                transactionType: .eip1559
-            ) else {
-                throw NativeChainError.init(message: "Failed to create deposit transaction", code: "404")
-            }
-            
-            let privKey = try EthereumPrivateKey(hexPrivateKey: props.privKey)
-            let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(props.chainId))
-            
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedTx))
+            let txId = try awaitPromise(withTxLock {
+                self.web3.eth.getNonce(address: swapOwner).then { nonce in
+                    guard let tx = self.swapManager.registerInvoice(swap).createTransaction(
+                        nonce: nonce,
+                        gasPrice: nil,
+                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
+                        gasLimit: EthereumQuantity(quantity: 1_000_000),
+                        from: swapOwner,
+                        value: EthereumQuantity(quantity: 0),
+                        accessList: [:],
+                        transactionType: .eip1559
+                    ) else {
+                        throw NativeChainError.init(message: "Failed to create deposit transaction", code: "404")
+                    }
+                    
+                    let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
+                    let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
+                    
+                    return self.web3.eth.publish(transaction: signedTx)
+                }
+            })
+
             debug("register invoice tx id", txId)
             
             let txIdData = try EthereumData(ethereumValue: txId)
-            let receipt = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchReceipt(txHash: txIdData) })
-                                    
+            let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
+
             debug("register invoice receipt", receipt)
                       
             var gotInvoicedEvent = false
@@ -223,32 +231,40 @@ final class Portal: BaseClass {
                 throw NativeChainError.init(message: "Invalid portal address", code: "404")
             }
             
-            let nonce = try awaitPromise(web3.eth.getNonce(address: swapOwner))
+            let txId = try awaitPromise(withTxLock {
+                self.web3.eth.getNonce(address: swapOwner).then { nonce in
+                    print("Got nonce: \(nonce)")
+                    
+                    guard let tx = self.orderbookMarket.openOrder(
+                        sellAsset: order.sellAsset,
+                        sellAmount: order.sellAmount,
+                        buyAsset: order.buyAsset,
+                        buyAmount: order.buyAmount,
+                        orderType: order.orderType
+                    ).createTransaction(
+                        nonce: nonce,
+                        gasPrice: nil,
+                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
+                        gasLimit: EthereumQuantity(quantity: 1_000_000),
+                        from: swapOwner,
+                        value: EthereumQuantity(quantity: 0),
+                        accessList: [:],
+                        transactionType: .eip1559
+                    ) else {
+                        print("Failed to create transaction")
+                        throw NativeChainError.init(message: "Failed to create open order transaction", code: "404")
+                    }
+                    
+                    print("Created transaction, signing...")
+                    let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
+                    let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
+                    
+                    print("Publishing transaction...")
+                    return self.web3.eth.publish(transaction: signedTx)
+                }
+            })
             
-            guard let tx = orderbookMarket.openOrder(
-                sellAsset: order.sellAsset,
-                sellAmount: order.sellAmount,
-                buyAsset: order.buyAsset,
-                buyAmount: order.buyAmount,
-                orderType: order.orderType
-            ).createTransaction(
-                nonce: nonce,
-                gasPrice: nil,
-                maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
-                maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
-                gasLimit: EthereumQuantity(quantity: 1_000_000),
-                from: swapOwner,
-                value: EthereumQuantity(quantity: 0),
-                accessList: [:],
-                transactionType: .eip1559
-            ) else {
-                throw NativeChainError.init(message: "Failed to create open order transaction", code: "404")
-            }
-            
-            let privKey = try EthereumPrivateKey(hexPrivateKey: props.privKey)
-            let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(props.chainId))
-            
-            let txId = try awaitPromise(web3.eth.publish(transaction: signedTx))
             debug("open order tx id", txId)
             
             let txIdData = try EthereumData(ethereumValue: txId)
@@ -354,6 +370,74 @@ extension Portal {
                     return
                 }
             }
+        }
+    }
+    
+    private func withTxLock<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T> {
+        queue.run(asyncFn)
+    }
+    
+    private func emitOnFinality(txid: EthereumData, event: String, args: Any...) -> Promise<Void> {
+        waitForReceipt(hash: txid).then { _ in
+            let capitalizedEvent = "on\(event.prefix(1).uppercased())\(event.dropFirst())"
+            self.info(capitalizedEvent, args)
+            self.emit(event: event, args: args)
+            return ()
+        }
+    }
+    
+    private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
+        retryWithBackoff { self.web3.eth.fetchReceipt(txHash: hash) }
+    }
+    
+    private func retryWithBackoff<T>(_ fn: @escaping () -> Promise<T>) -> Promise<T> {
+        Promise<T> { resolve, reject in
+            let stages = [
+                [1, 0], // 1 attempt immediately
+                [10, 1000], // 10 attempts every 1 second
+                // [10, 2000], // 10 attempts every 2 seconds
+                // [10, 3000], // 10 attempts every 3 seconds
+            ]
+            
+            func tryNextStage(stageIndex: Int) {
+                guard stageIndex < stages.count else {
+                    // All retries exhausted, try one final time to get the actual error
+                    fn().then { result in
+                        resolve(result)
+                    }.catch { error in
+                        reject(error)
+                    }
+                    return
+                }
+                
+                let stage = stages[stageIndex]
+                let attempts = stage[0]
+                let delay = stage[1]
+                
+                func tryAttempt(attemptIndex: Int) {
+                    fn().then { result in
+                        resolve(result)
+                    }.catch { error in
+                        if attemptIndex == attempts - 1 {
+                            // Last attempt of this stage, continue to next stage
+                            tryNextStage(stageIndex: stageIndex + 1)
+                        } else {
+                            // More attempts in this stage
+                            if delay > 0 {
+                                DispatchQueue.sdk.asyncAfter(deadline: .now() + .milliseconds(delay)) {
+                                    tryAttempt(attemptIndex: attemptIndex + 1)
+                                }
+                            } else {
+                                tryAttempt(attemptIndex: attemptIndex + 1)
+                            }
+                        }
+                    }
+                }
+                
+                tryAttempt(attemptIndex: 0)
+            }
+            
+            tryNextStage(stageIndex: 0)
         }
     }
 }
