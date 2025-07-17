@@ -2,10 +2,10 @@ import Foundation
 import Promises
 
 class TransactionLock {
-    private var lock: Promise<Any>
+    private var lock: Promise<Void>
     
     init() {
-        lock = Promise<Any> { return () }
+        lock = Promise<Void> { resolve, _ in resolve(()) }
     }
     
     func run<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T> {
@@ -17,16 +17,13 @@ class TransactionLock {
             asyncFn()
         }
         
-        lock = Promise<Any> { resolve, reject in
-            operationPromise.then { _ in
-                resolve(())
-            }.catch { _ in
-                resolve(())
-            }
+        lock = operationPromise.then { _ in
+            ()
+        }.recover { _ in
+            ()
         }
         
         return operationPromise
     }
 }
-
 
