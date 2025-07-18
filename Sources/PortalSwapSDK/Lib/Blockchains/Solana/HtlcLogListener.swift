@@ -4,7 +4,14 @@ import SolanaSwift
 class HtlcLogListener {
     private let apiClient: SolanaAPIClient
     private let programId: PublicKey
-    private var lastProcessedSignature: String?
+    private var lastProcessedSignature: String? {
+        set {
+            UserDefaults.standard.setValue(newValue, forKey: "\(programId.description)_lastProcessedSignature")
+        }
+        get {
+            return UserDefaults.standard.string(forKey: "\(programId.description)_lastProcessedSignature")
+        }
+    }
     private var pollingTask: Task<Void, Never>?
     private var callback: ((Log) -> Void)?
     private var isMonitoring = false
