@@ -55,6 +55,8 @@ final class Solana: BaseClass, NativeChain {
     
     private let logPoller: HtlcLogListener
     
+    private var queue = TransactionLock()
+    
     var address: String {
         keyPair.publicKey.base58EncodedString
     }
@@ -90,19 +92,19 @@ final class Solana: BaseClass, NativeChain {
                 case .deposit(let depositEvent):
                     let liquidity = self.liquidityArgs(event: depositEvent, signature: log.signature, slot: log.slot)
                     self.info("deposit", liquidity)
-                    self.emitWithDelay(event: "deposit", args: [liquidity])
+                    _ = self.emitOnFinality(txid: log.signature, event: "deposit", args: [liquidity])
                 case .withdraw(let withdrawEvent):
                     let liquidity = self.liquidityArgs(event: withdrawEvent, signature: log.signature, slot: log.slot)
                     self.info("withdraw", liquidity)
-                    self.emitWithDelay(event: "withdraw", args: [liquidity])
+                    _ = self.emitOnFinality(txid: log.signature, event: "withdraw", args: [liquidity])
                 case .lock(let lockEvent):
                     let (event, swapDiff) = self.swapArgs(event: lockEvent, signature: log.signature, step: .lock)
                     self.info(event, swapDiff)
-                    self.emitWithDelay(event: event, args: [swapDiff])
+                    _ = self.emitOnFinality(txid: log.signature, event: event, args: [swapDiff])
                 case .unlock(let unlockEvent):
                     let (event, swapDiff) = self.swapArgs(event: unlockEvent, signature: log.signature, step: .unlock)
                     self.info(event, swapDiff)
-                    self.emitWithDelay(event: event, args: [swapDiff])
+                    _ = self.emitOnFinality(txid: log.signature, event: event, args: [swapDiff])
                 }
             }
         }
@@ -190,7 +192,7 @@ final class Solana: BaseClass, NativeChain {
                         preparedTransaction: preparedTransaction
                     )
                     
-                    liquidity.id = "0x\(txSignatureToHex(txSignature))"
+                    liquidity.id = "0x\(txSigTo32Bytes(txSignature))"
                     liquidity.nativeReceipt = txSignature
                     
                     self.info("deposit", ["liquidity": liquidity])
@@ -202,8 +204,8 @@ final class Solana: BaseClass, NativeChain {
             }
         }
     }
-        
-    func createInvoice(_ party: Party) -> Promises.Promise<Invoice> {
+    
+    func createInvoice(_ party: Party) -> Promise<Invoice> {
         Promise { fulfill, reject in
             Task { [weak self] in
                 guard let self else {
@@ -294,9 +296,7 @@ final class Solana: BaseClass, NativeChain {
                 guard let self else {
                     return reject(SdkError.instanceUnavailable())
                 }
-                
-                try await Task.sleep(nanoseconds: 3 * 1_000_000_000)
-                
+                                
                 do {
                     guard let invoice = party.invoice else {
                         throw SwapSDKError.msg("invoice not set")
@@ -724,6 +724,8 @@ extension Solana {
         
         let txId = try await blockchainClient.sendTransaction(preparedTransaction: preparedTransaction)
         print("txId: \(txId)")
+        
+        try awaitPromise(waitForReceipt(txid: txId))
     }
     
     private func getFundAndVault(assetAddress: String, isSOL: Bool = false, maker: PublicKey? = nil) throws -> (fund: PublicKey, vault: PublicKey) {
@@ -799,6 +801,108 @@ extension Solana {
     
     private func tokenProgramId(isSOL: Bool) -> PublicKey {
         isSOL ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID
+    }
+    
+    private func withTxLock<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T> {
+        queue.run(asyncFn)
+    }
+    
+    private func emitOnFinality(txid: String, event: String, args: [Any]) -> Promise<Void> {
+        waitForReceipt(txid: txid).then { _ in
+            let capitalizedEvent = "on\(event.prefix(1).uppercased())\(event.dropFirst())"
+            self.info(capitalizedEvent, args)
+            self.emit(event: event, args: args)
+            return ()
+        }
+    }
+    
+    private func waitForReceipt(txid: String) -> Promise<Void> {
+        retryWithBackoff { self.waitForConfirmation(txid: txid) }
+    }
+    
+    private func retryWithBackoff<T>(_ fn: @escaping () -> Promise<T>) -> Promise<T> {
+        Promise<T> { resolve, reject in
+            let stages = [
+                [1, 0], // 1 attempt immediately
+                [10, 1000], // 10 attempts every 1 second
+                // [10, 2000], // 10 attempts every 2 seconds
+                // [10, 3000], // 10 attempts every 3 seconds
+            ]
+            
+            func tryNextStage(stageIndex: Int) {
+                guard stageIndex < stages.count else {
+                    // All retries exhausted, try one final time to get the actual error
+                    fn().then { result in
+                        resolve(result)
+                    }.catch { error in
+                        reject(error)
+                    }
+                    return
+                }
+                
+                let stage = stages[stageIndex]
+                let attempts = stage[0]
+                let delay = stage[1]
+                
+                func tryAttempt(attemptIndex: Int) {
+                    fn().then { result in
+                        resolve(result)
+                    }.catch { error in
+                        if attemptIndex == attempts - 1 {
+                            // Last attempt of this stage, continue to next stage
+                            tryNextStage(stageIndex: stageIndex + 1)
+                        } else {
+                            // More attempts in this stage
+                            if delay > 0 {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delay)) {
+                                    tryAttempt(attemptIndex: attemptIndex + 1)
+                                }
+                            } else {
+                                tryAttempt(attemptIndex: attemptIndex + 1)
+                            }
+                        }
+                    }
+                }
+                
+                tryAttempt(attemptIndex: 0)
+            }
+            
+            tryNextStage(stageIndex: 0)
+        }
+    }
+    
+    private func waitForConfirmation(txid: String) -> Promise<Void> {
+        Promise { fulfill, reject in
+            Task {
+                do {
+                    let status = try await self.apiClient.getSignatureStatus(signature: txid, configs: nil)
+                    
+                    // Check if transaction is confirmed
+                    if let confirmationStatus = status.confirmationStatus {
+                        if confirmationStatus == "processed" {
+                            // Wait a bit more for finality
+                            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                            fulfill(())
+                            return
+                        } else if confirmationStatus == "confirmed" || confirmationStatus == "finalized" {
+                            fulfill(())
+                            return
+                        }
+                    }
+                    
+                    // Check for errors
+                    if let err = status.err {
+                        reject(NativeChainError(message: "Transaction failed: \(err)", code: "ETransactionFailed"))
+                        return
+                    }
+                    
+                    // Transaction is still pending
+                    reject(NativeChainError(message: "Transaction pending", code: "ETransactionPending"))
+                } catch {
+                    reject(error)
+                }
+            }
+        }
     }
 }
 
