@@ -14,6 +14,8 @@ final class Lightning: BaseClass, NativeChain {
     
     private var activeSubscriptions: [String: Any] = [:]
     
+    var queue = TransactionLock()
+    
     var address: String {
         client.publickKey
     }
@@ -96,7 +98,7 @@ final class Lightning: BaseClass, NativeChain {
                 case .paymentConfirmed:
                     subscription.off("invoice.updated")
                     self?.info("withdraw", [liquidity])
-                    self?.emitWithDelay(event: "withdraw", args: [liquidity])
+                    self?.emitOnFinality("invoice.updated", event: "withdraw", args: [liquidity])
                 case .paymentFailed(let reason):
                     subscription.off("invoice.updated")
                     self?.info("deposit paiment failed")
@@ -178,7 +180,7 @@ final class Lightning: BaseClass, NativeChain {
                             try? swap.setState(.seekerInvoiced)
                             try? swap.setState(.holderPaid)
                             try? swap.setState(.seekerPaid)
-                            self.emitWithDelay(event: "swapSeekerPaid", args: [swap])
+                            self.emitOnFinality("invoice.updated", event: "swapSeekerPaid", args: [swap])
                         case .paymentFailed(let reason):
                             subscription.off("invoice.updated")
                             self.info("invoice.cancelled", invoice)
@@ -260,7 +262,7 @@ final class Lightning: BaseClass, NativeChain {
                             if let secret {
                                 let holderSettled = HolderSettledSwap(id: swap.id, secret: Data(hex: secret))
                                 self.info("swapHolderSettled", holderSettled)
-                                self.emitWithDelay(event: "swapHolderSettled", args: [holderSettled])
+                                self.emitOnFinality("invoice.updated", event: "swapHolderSettled", args: [holderSettled])
                             } else {
                                 return reject(SwapSDKError.msg("secret is missing"))
                             }
@@ -276,7 +278,7 @@ final class Lightning: BaseClass, NativeChain {
                                         
                     let seekerPaid = SeekerPaidSwap(id: swap.id, secretSeeker: result.id)
                     self.info("swapSeekerPaid", seekerPaid)
-                    self.emitWithDelay(event: "swapSeekerPaid", args: [seekerPaid])
+                    self.emitOnFinality("invoice.updated", event: "swapSeekerPaid", args: [seekerPaid])
                 }
             }.catch { error in
                 reject(error)
@@ -292,11 +294,17 @@ final class Lightning: BaseClass, NativeChain {
             client.settleHodlInvoice(secret: secret).then { response in
                 try party.swap?.setState(.holderSettled)
                 try party.swap?.setSecret(secret)
-                self.emitWithDelay(event: "swapHolderSettled", args: [party.swap!])
+                self.emitOnFinality("invoice.updated", event: "swapHolderSettled", args: [party.swap!])
                 resolve(party)
             }.catch { error in
                 reject(error)
             }
         }
+    }
+}
+
+extension Lightning: TxLockable {
+    internal func waitForReceipt(txid: String) -> Promise<Void> {
+        Promise {}
     }
 }
