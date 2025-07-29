@@ -9,7 +9,7 @@ final class Portal: BaseClass {
     
     private let web3: Web3!
     
-    private var queue = TransactionLock()
+    var queue = TransactionLock()
     
     private var liquidityManager: ILiquidityManagerContract!
     private var assetManager: IAssetManagerContract!
@@ -41,7 +41,7 @@ final class Portal: BaseClass {
             liquidityManager = web3.eth.Contract(type: LiquidityManagerContract.self, address: liquidityManagerContractAddress)
             
             liquidityManager.watchContractEvents(
-                interval: 3,
+                interval: 5,
                 onLogs: { [weak self] logs in
                     self?.onLiquidityManagerLogs(logs)
                 },
@@ -53,7 +53,7 @@ final class Portal: BaseClass {
             swapManager = web3.eth.Contract(type: SwapManagerContract.self, address: swapManagerContractAddress)
                 
             swapManager.watchContractEvents(
-                interval: 3,
+                interval: 5,
                 onLogs: { [weak self] logs in
                     self?.onSwapManagerLogs(logs)
                 },
@@ -266,10 +266,11 @@ final class Portal: BaseClass {
             })
             
             debug("open order tx id", txId)
+            order.id = txId
             
             let txIdData = try EthereumData(ethereumValue: txId)
-            let receipt = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchReceipt(txHash: txIdData) })
-                                    
+            let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
+
             debug("open order receipt: \(receipt)")
                       
             var gotOpenOrderEvent = false
@@ -296,8 +297,12 @@ final class Portal: BaseClass {
 extension Portal {
     private func onLiquidityManagerLogs(_ logs: [EthereumLogObject]) {
         for log in logs {
+            guard let txHash = log.transactionHash else { continue }
+
             switch log.topics.first {
             case LiquidityManagerContract.AssetMinted.topic:
+                try? awaitPromise(waitForReceipt(txid: txHash.hex()))
+
                 if let assetMintedEvent = try? ABI.decodeLog(event: LiquidityManagerContract.AssetMinted, from: log),
                    let liquidityObj = assetMintedEvent["liquidity"] as? [Any],
                    let liquidity = Liquidity.fromSolidityValues(liquidityObj)
@@ -309,6 +314,8 @@ extension Portal {
                     return error("asset minted logs error", ["unwrapping data failed"])
                 }
             case LiquidityManagerContract.AssetBurned.topic:
+                try? awaitPromise(waitForReceipt(txid: txHash.hex()))
+
                 if let assetBurnedEvent = try? ABI.decodeLog(event: LiquidityManagerContract.AssetBurned, from: log) {
                     guard
                         let liquidityObj = assetBurnedEvent["liquidity"] as? [Any],
@@ -330,114 +337,72 @@ extension Portal {
     private func onSwapManagerLogs(_ logs: [EthereumLogObject]) {
         for log in logs {
             guard let topic = log.topics.first else { return }
+            guard let txHash = log.transactionHash else { continue }
             
-            DispatchQueue.sdk.asyncAfter(deadline: .now() + 1) {
-                switch topic {
-                case SwapManagerContract.SwapMatched.topic:
-                    do {
-                        let json = try ABI.decodeLog(event: SwapManagerContract.SwapMatched, from: log)
-                        let swap = try Swap(json: json)
-                        
-                        self.info("swap.matched.event", [swap.toJSON()])
-                        self.emit(event: "swapMatched", args: [swap])
-                    } catch {
-                        guard self.connected else { return }
-                        self.error("swap matched logs error", ["unwrapping data failed": error])
-                    }
-                case SwapManagerContract.SwapSeekerInvoiced.topic:
-                    do {
-                        let json = try ABI.decodeLog(event: SwapManagerContract.SwapSeekerInvoiced, from: log)
-                        let swap = try Swap(json: json)
-                        
-                        self.info("swap.seeker.invoiced.event", [swap.toJSON()])
-                        self.emit(event: "swapSeekerInvoiced", args: [swap])
-                    } catch {
-                        guard self.connected else { return }
-                        self.error("SwapSeekerInvoiced error", ["unwrapping data failed": error])
-                    }
-                case SwapManagerContract.SwapHolderInvoiced.topic:
-                    do {
-                        let json = try ABI.decodeLog(event: SwapManagerContract.SwapHolderInvoiced, from: log)
-                        let swap = try Swap(json: json)
-                        
-                        self.info("swap.holder.invoiced.event", [swap.toJSON()])
-                        self.emit(event: "swapHolderInvoiced", args: [swap])
-                    } catch {
-                        guard self.connected else { return }
-                        self.error("SwapHolderInvoiced error", ["unwrapping data failed": error])
-                    }
-                default:
-                    return
+            switch topic {
+            case SwapManagerContract.SwapMatched.topic:
+                do {
+                    try awaitPromise(waitForReceipt(txid: txHash.hex()))
+
+                    let json = try ABI.decodeLog(event: SwapManagerContract.SwapMatched, from: log)
+                    let swap = try Swap(json: json)
+                    
+                    self.info("swap.matched.event", [swap.toJSON()])
+                    self.emit(event: "swapMatched", args: [swap])
+                } catch {
+                    guard self.connected else { return }
+                    self.error("swap matched logs error", ["unwrapping data failed": error])
                 }
+            case SwapManagerContract.SwapSeekerInvoiced.topic:
+                do {
+                    try awaitPromise(waitForReceipt(txid: txHash.hex()))
+
+                    let json = try ABI.decodeLog(event: SwapManagerContract.SwapSeekerInvoiced, from: log)
+                    let swap = try Swap(json: json)
+                    
+                    self.info("swap.seeker.invoiced.event", [swap.toJSON()])
+                    self.emit(event: "swapSeekerInvoiced", args: [swap])
+                } catch {
+                    guard self.connected else { return }
+                    self.error("SwapSeekerInvoiced error", ["unwrapping data failed": error])
+                }
+            case SwapManagerContract.SwapHolderInvoiced.topic:
+                do {
+                    try awaitPromise(waitForReceipt(txid: txHash.hex()))
+
+                    let json = try ABI.decodeLog(event: SwapManagerContract.SwapHolderInvoiced, from: log)
+                    let swap = try Swap(json: json)
+                    
+                    self.info("swap.holder.invoiced.event", [swap.toJSON()])
+                    self.emit(event: "swapHolderInvoiced", args: [swap])
+                } catch {
+                    guard self.connected else { return }
+                    self.error("SwapHolderInvoiced error", ["unwrapping data failed": error])
+                }
+            default:
+                return
             }
+
         }
     }
-    
-    private func withTxLock<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T> {
-        queue.run(asyncFn)
-    }
-    
-    private func emitOnFinality(txid: EthereumData, event: String, args: Any...) -> Promise<Void> {
-        waitForReceipt(hash: txid).then { _ in
-            let capitalizedEvent = "on\(event.prefix(1).uppercased())\(event.dropFirst())"
-            self.info(capitalizedEvent, args)
-            self.emit(event: event, args: args)
-            return ()
+}
+
+extension Portal: TxLockable {
+    internal func waitForReceipt(txid: String) -> Promise<Void> {
+        Promise { [weak self] resolve, reject in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            let txId = try EthereumData(ethereumValue: txid)
+            
+            waitForReceipt(hash: txId).then { _ in
+                resolve(())
+            }.catch { error in
+                reject(error)
+            }
         }
     }
     
     private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
         retryWithBackoff { self.web3.eth.fetchReceipt(txHash: hash) }
-    }
-    
-    private func retryWithBackoff<T>(_ fn: @escaping () -> Promise<T>) -> Promise<T> {
-        Promise<T> { resolve, reject in
-            let stages = [
-                [1, 0], // 1 attempt immediately
-                [10, 1000], // 10 attempts every 1 second
-                // [10, 2000], // 10 attempts every 2 seconds
-                // [10, 3000], // 10 attempts every 3 seconds
-            ]
-            
-            func tryNextStage(stageIndex: Int) {
-                guard stageIndex < stages.count else {
-                    // All retries exhausted, try one final time to get the actual error
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        reject(error)
-                    }
-                    return
-                }
-                
-                let stage = stages[stageIndex]
-                let attempts = stage[0]
-                let delay = stage[1]
-                
-                func tryAttempt(attemptIndex: Int) {
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        if attemptIndex == attempts - 1 {
-                            // Last attempt of this stage, continue to next stage
-                            tryNextStage(stageIndex: stageIndex + 1)
-                        } else {
-                            // More attempts in this stage
-                            if delay > 0 {
-                                DispatchQueue.sdk.asyncAfter(deadline: .now() + .milliseconds(delay)) {
-                                    tryAttempt(attemptIndex: attemptIndex + 1)
-                                }
-                            } else {
-                                tryAttempt(attemptIndex: attemptIndex + 1)
-                            }
-                        }
-                    }
-                }
-                
-                tryAttempt(attemptIndex: 0)
-            }
-            
-            tryNextStage(stageIndex: 0)
-        }
     }
 }
