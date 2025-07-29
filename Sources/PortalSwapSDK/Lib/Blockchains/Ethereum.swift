@@ -14,7 +14,7 @@ final class Ethereum: BaseClass, NativeChain {
     private var connected = false
     private let NATIVE_ADDRESS = "0x0000000000000000000000000000000000000000"
     
-    private var queue = TransactionLock()
+    var queue = TransactionLock()
             
     var address: String {
         props.traderAddress
@@ -418,9 +418,9 @@ final class Ethereum: BaseClass, NativeChain {
         }
     }
 
-    
     private func processLog(_ log: EthereumLogObject) throws {
         guard let topic0 = log.topics.first else { return }
+        guard let txHash = log.transactionHash else { return }
                 
         switch topic0 {
         case NativeLiquidityManagerContract.Deposit.topic:
@@ -446,7 +446,7 @@ final class Ethereum: BaseClass, NativeChain {
                 portalAddress: portalAddress.hex(eip55: false)
             )
             
-            _ = emitOnFinality(txid: log.transactionHash!, event: "deposit", args: [liquidity])
+            emitOnFinality(txHash.hex(), event: "deposit", args: [liquidity])
             
         case NativeLiquidityManagerContract.Withdraw.topic:
             let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.Withdraw, from: log)
@@ -471,16 +471,16 @@ final class Ethereum: BaseClass, NativeChain {
                 portalAddress: portalAddress.hex(eip55: false)
             )
             
-            _ = emitOnFinality(txid: log.transactionHash!, event: "withdraw", args: [liquidity])
+            emitOnFinality(txHash.hex(), event: "withdraw", args: [liquidity])
             
         case NativeLiquidityManagerContract.SwapHolderPaid.topic:
             let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapHolderPaid, from: log)
             let id = decoded["id"] as! Data
             
-            let swapHolderPaid = HolderPaidSwap(id: id.hexString, secretHolder: log.transactionHash?.hex() ?? "")
+            let swapHolderPaid = HolderPaidSwap(id: id.hexString, secretHolder: txHash.hex())
             print("SwapHolderPaid event → \(swapHolderPaid)")
             
-            _ = emitOnFinality(txid: log.transactionHash!, event: "swapHolderPaid", args: [swapHolderPaid])
+            emitOnFinality(txHash.hex(), event: "swapHolderPaid", args: [swapHolderPaid])
             
         case NativeLiquidityManagerContract.SwapHolderSettled.topic:
             let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapHolderSettled, from: log)
@@ -490,23 +490,23 @@ final class Ethereum: BaseClass, NativeChain {
             let swapHolderSettled = HolderSettledSwap(id: id.hexString, secret: secret)
             print("SwapHolderSettled event → \(swapHolderSettled)")
             
-            _ = emitOnFinality(txid: log.transactionHash!, event: "swapHolderSettled", args: [swapHolderSettled])
+            emitOnFinality(txHash.hex(), event: "swapHolderSettled", args: [swapHolderSettled])
             
         case NativeLiquidityManagerContract.SwapInvoiceCreated.topic:
             let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapInvoiceCreated, from: log)
             let swap = try Swap(json: decoded)
             print("SwapInvoiceCreated event → \(swap)")
             
-            _ = emitOnFinality(txid: log.transactionHash!, event: "swapInvoiceCreated", args: [swap])
+            emitOnFinality(txHash.hex(), event: "swapInvoiceCreated", args: [swap])
             
         case NativeLiquidityManagerContract.SwapSeekerPaid.topic:
             let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapSeekerPaid, from: log)
             let id = decoded["id"] as! Data
-            let seekerPaid = SeekerPaidSwap(id: id.hexString, secretSeeker: log.transactionHash?.hex() ?? "")
+            let seekerPaid = SeekerPaidSwap(id: id.hexString, secretSeeker: txHash.hex())
             
             print("SwapSeekerPaid event → \(seekerPaid)")
             
-            _ = emitOnFinality(txid: log.transactionHash!, event: "swapSeekerPaid", args: [seekerPaid])
+            emitOnFinality(txHash.hex(), event: "swapSeekerPaid", args: [seekerPaid])
             
         case NativeLiquidityManagerContract.SwapSeekerSettled.topic:
             let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapSeekerSettled, from: log)
@@ -515,11 +515,31 @@ final class Ethereum: BaseClass, NativeChain {
             let seekerSettled = SeekerSettledSwap(id: id.hexString)
             print("SwapSeekerSettled event → \(seekerSettled)")
 
-            _ = emitOnFinality(txid: log.transactionHash!, event: "swapSeekerSettled", args: [seekerSettled])
+            emitOnFinality(txHash.hex(), event: "swapSeekerSettled", args: [seekerSettled])
             
         default:
             print("Unknown event topic: \(topic0.hex())")
         }
+    }
+}
+
+extension Ethereum: TxLockable {
+    internal func waitForReceipt(txid: String) -> Promise<Void> {
+        Promise { [weak self] resolve, reject in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            let txId = try EthereumData(ethereumValue: txid)
+            
+            waitForReceipt(hash: txId).then { _ in
+                resolve(())
+            }.catch { error in
+                reject(error)
+            }
+        }
+    }
+    
+    private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
+        retryWithBackoff { self.web3.eth.fetchReceipt(txHash: hash) }
     }
 }
 
@@ -546,73 +566,5 @@ extension Ethereum {
     private func sign(transaction: EthereumTransaction) throws -> EthereumSignedTransaction {
         let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
         return try transaction.sign(with: privKey, chainId: EthereumQuantity.string(props.chainId))
-    }
-    
-    private func withTxLock<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T> {
-        queue.run(asyncFn)
-    }
-    
-    private func emitOnFinality(txid: EthereumData, event: String, args: [Any]) -> Promise<Void> {
-        waitForReceipt(hash: txid).then { _ in
-            let capitalizedEvent = "on\(event.prefix(1).uppercased())\(event.dropFirst())"
-            self.info(capitalizedEvent, args)
-            self.emit(event: event, args: args)
-            return ()
-        }
-    }
-    
-    private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
-        retryWithBackoff { self.web3.eth.fetchReceipt(txHash: hash) }
-    }
-    
-    private func retryWithBackoff<T>(_ fn: @escaping () -> Promise<T>) -> Promise<T> {
-        Promise<T> { resolve, reject in
-            let stages = [
-                [1, 0], // 1 attempt immediately
-                [10, 1000], // 10 attempts every 1 second
-                // [10, 2000], // 10 attempts every 2 seconds
-                // [10, 3000], // 10 attempts every 3 seconds
-            ]
-            
-            func tryNextStage(stageIndex: Int) {
-                guard stageIndex < stages.count else {
-                    // All retries exhausted, try one final time to get the actual error
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        reject(error)
-                    }
-                    return
-                }
-                
-                let stage = stages[stageIndex]
-                let attempts = stage[0]
-                let delay = stage[1]
-                
-                func tryAttempt(attemptIndex: Int) {
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        if attemptIndex == attempts - 1 {
-                            // Last attempt of this stage, continue to next stage
-                            tryNextStage(stageIndex: stageIndex + 1)
-                        } else {
-                            // More attempts in this stage
-                            if delay > 0 {
-                                DispatchQueue.sdk.asyncAfter(deadline: .now() + .milliseconds(delay)) {
-                                    tryAttempt(attemptIndex: attemptIndex + 1)
-                                }
-                            } else {
-                                tryAttempt(attemptIndex: attemptIndex + 1)
-                            }
-                        }
-                    }
-                }
-                
-                tryAttempt(attemptIndex: 0)
-            }
-            
-            tryNextStage(stageIndex: 0)
-        }
     }
 }
