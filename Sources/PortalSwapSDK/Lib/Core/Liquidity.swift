@@ -68,8 +68,8 @@ public final class Liquidity: Codable {
         self.contractAddress = contractAddress
         self.nativeAmount = nativeAmount
         self.portalAmount = nativeAmount * 100
-        self.nativeAddress = nativeAddress.lowercased()
-        self.portalAddress = portalAddress.lowercased()
+        self.nativeAddress = nativeAddress
+        self.portalAddress = portalAddress
     }
 
     func equals(_ other: Liquidity) -> Bool {
