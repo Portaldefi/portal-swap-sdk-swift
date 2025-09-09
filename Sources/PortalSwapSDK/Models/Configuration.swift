@@ -86,13 +86,9 @@ public struct SwapSdkConfig {
     
     public let id: String
     public let blockchains: Blockchains
-    public let sellAsset: String
-    public let buyAsset: String
     
-    public init(id: String, sellAsset: String, buyAsset: String, blockchains: Blockchains) {
+    public init(id: String, blockchains: Blockchains) {
         self.id = id
-        self.sellAsset = sellAsset
-        self.buyAsset = buyAsset
         self.blockchains = blockchains
     }
 }
