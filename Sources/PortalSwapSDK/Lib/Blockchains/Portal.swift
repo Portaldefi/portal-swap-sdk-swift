@@ -15,6 +15,7 @@ final class Portal: BaseClass {
     private var assetManager: IAssetManagerContract!
     private var swapManager: ISwapManagerContract!
     private var orderbookMarket: IOrderbookMarketContract!
+    private var portalTransfer: IPortalTransferContract!
             
     private var connected = false
     
@@ -27,18 +28,27 @@ final class Portal: BaseClass {
         
         web3 = Web3(rpcURL: props.rpcUrl)
         
+        let orderbookMarketContractAddress = try! DynamicContract.address(props.orderbookMarketContractAddress)
+        orderbookMarket = web3.eth.Contract(type: OrderbookMarketContract.self, address: orderbookMarketContractAddress)
+        
+        let assetManagerContractAddress = try! DynamicContract.address(props.assetManagerContractAddress)
+        assetManager = web3.eth.Contract(type: AssetManagerContract.self, address: assetManagerContractAddress)
+        
+        let liquidityManagerContractAddress = try! DynamicContract.address(props.liquidityManagerContractAddress)
+        liquidityManager = web3.eth.Contract(type: LiquidityManagerContract.self, address: liquidityManagerContractAddress)
+        
+        let swapManagerContractAddress = try! DynamicContract.address(props.swapManagerContractAddress)
+        swapManager = web3.eth.Contract(type: SwapManagerContract.self, address: swapManagerContractAddress)
+        
+        let portalTransferContractAddress = try! DynamicContract.address("0x0000000000000000000000000000000000001000")
+        portalTransfer = web3.eth.Contract(type: PortalTransferContract.self, address: portalTransferContractAddress)
+        
         super.init(id: "portal")
     }
     
     func start() -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
-            
-            let assetManagerContractAddress = try DynamicContract.address(props.assetManagerContractAddress)
-            assetManager = web3.eth.Contract(type: AssetManagerContract.self, address: assetManagerContractAddress)
-            
-            let liquidityManagerContractAddress = try DynamicContract.address(props.liquidityManagerContractAddress)
-            liquidityManager = web3.eth.Contract(type: LiquidityManagerContract.self, address: liquidityManagerContractAddress)
             
             liquidityManager.watchContractEvents(
                 interval: 5,
@@ -48,9 +58,6 @@ final class Portal: BaseClass {
                 onError: { [weak self] error in
                     self?.debug("Liquidity manager logs error", error)
                 })
-            
-            let swapManagerContractAddress = try DynamicContract.address(props.swapManagerContractAddress)
-            swapManager = web3.eth.Contract(type: SwapManagerContract.self, address: swapManagerContractAddress)
                 
             swapManager.watchContractEvents(
                 interval: 5,
@@ -61,13 +68,12 @@ final class Portal: BaseClass {
                     self?.debug("Swap manager logs error", error)
                 })
             
-            let orderbookMarketContractAddress = try DynamicContract.address(props.orderbookMarketContractAddress)
-            orderbookMarket = web3.eth.Contract(type: OrderbookMarketContract.self, address: orderbookMarketContractAddress)
-            
             info("start")
             emit(event: "start")
             
             connected = true
+            
+            debug("started")
         }
     }
     
@@ -79,6 +85,8 @@ final class Portal: BaseClass {
             
             liquidityManager.stopWatchingContractEvents()
             swapManager.stopWatchingContractEvents()
+            
+            debug("stopped")
         }
     }
     
@@ -138,7 +146,7 @@ final class Portal: BaseClass {
             let txIdData = try EthereumData(ethereumValue: txId)
             let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
                                     
-            debug("burn asset receipt", receipt)
+            debug("burn asset receipt status", receipt.status ?? "unknown")
                       
             var gotBurnedAssetEvent = false
             
@@ -198,7 +206,7 @@ final class Portal: BaseClass {
             let txIdData = try EthereumData(ethereumValue: txId)
             let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
 
-            debug("register invoice receipt", receipt)
+            debug("register invoice receipt", receipt.status ?? "unknown")
                       
             var gotInvoicedEvent = false
             
@@ -223,6 +231,24 @@ final class Portal: BaseClass {
         }
     }
     
+    func getOrderLimits(assetId: String) -> Promise<(min: BigUInt, max: BigUInt)> {
+        Promise { [weak self] resolve, reject in
+            guard let self else {
+                throw SdkError.instanceUnavailable()
+            }
+            
+            orderbookMarket.getOrderLimits(assetId: assetId).call { result, error in
+                if let min = result?["minAmount"] as? BigUInt, let max = result?["maxAmount"] as? BigUInt {
+                    resolve((min: min, max: max))
+                } else if let error {
+                    reject(error)
+                } else {
+                    reject(SwapSDKError.msg("failed to get order limits") )
+                }
+            }
+        }
+    }
+    
     func openOrder(_ order: Order) -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
@@ -233,8 +259,6 @@ final class Portal: BaseClass {
             
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
-                    print("Got nonce: \(nonce)")
-                    
                     guard let tx = self.orderbookMarket.openOrder(
                         sellAsset: order.sellAsset,
                         sellAmount: order.sellAmount,
@@ -256,11 +280,9 @@ final class Portal: BaseClass {
                         throw NativeChainError.init(message: "Failed to create open order transaction", code: "404")
                     }
                     
-                    print("Created transaction, signing...")
                     let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
                     let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
                     
-                    print("Publishing transaction...")
                     return self.web3.eth.publish(transaction: signedTx)
                 }
             })
@@ -271,7 +293,7 @@ final class Portal: BaseClass {
             let txIdData = try EthereumData(ethereumValue: txId)
             let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
 
-            debug("open order receipt: \(receipt)")
+            debug("open order receipt: \(String(describing: receipt.status))")
                       
             var gotOpenOrderEvent = false
             
@@ -290,6 +312,65 @@ final class Portal: BaseClass {
             guard gotOpenOrderEvent else {
                 throw SwapSDKError.msg("Failed to open order")
             }
+        }
+    }
+    
+    func transfer(dstChain: String, receiver: EthereumAddress, amount: String, dstContract: EthereumAddress, message: Data) -> Promise<Bool> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            
+            guard let swapOwner = EthereumAddress(hexString: address) else {
+                throw NativeChainError.init(message: "Invalid portal address", code: "404")
+            }
+            
+            let txId = try awaitPromise(withTxLock {
+                self.web3.eth.getNonce(address: swapOwner).then { nonce in
+                    guard let tx = self.portalTransfer.transfer(
+                        dstChain: dstChain,
+                        receiver: receiver,
+                        amount: amount,
+                        dstContract: dstContract,
+                        message: message
+                    ).createTransaction(
+                        nonce: nonce,
+                        gasPrice: nil,
+                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
+                        gasLimit: EthereumQuantity(quantity: 1_000_000),
+                        from: swapOwner,
+                        value: EthereumQuantity(quantity: 0),
+                        accessList: [:],
+                        transactionType: .eip1559
+                    ) else {
+                        throw NativeChainError.init(message: "Failed to create transfer transaction", code: "404")
+                    }
+                    
+                    let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
+                    let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
+                    
+                    return self.web3.eth.publish(transaction: signedTx)
+                }
+            })
+            
+            debug("transfer tx id", txId)
+            
+            let txIdData = try EthereumData(ethereumValue: txId)
+            let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
+
+            debug("transfer receipt: \(String(describing: receipt.status))")
+                                  
+            for log in receipt.logs {
+                guard let topic0 = log.topics.first else { continue }
+                
+                switch topic0 {
+                case OrderbookMarketContract.OrderCreated.topic:
+                    return true
+                default:
+                    continue
+                }
+            }
+            
+            return false
         }
     }
 }
@@ -403,6 +484,18 @@ extension Portal: TxLockable {
     }
     
     private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
-        retryWithBackoff { self.web3.eth.fetchReceipt(txHash: hash) }
+        retry(attempts: 10, delay: 3) {
+            Promise {
+                let confirmations: BigUInt = 1
+                let receipt = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.fetchReceipt(txHash: hash) })
+                let head = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.blockNumber() })
+                
+                guard head.quantity >= receipt.blockNumber.quantity + confirmations else {
+                    throw SdkError(message: "Not confirmed yet", code: String())
+                }
+                
+                return receipt
+            }
+        }
     }
 }

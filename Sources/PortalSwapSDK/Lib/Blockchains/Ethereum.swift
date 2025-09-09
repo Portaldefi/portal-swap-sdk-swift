@@ -24,7 +24,12 @@ final class Ethereum: BaseClass, NativeChain {
         self.props = props
         
         web3 = Web3(rpcURL: props.url)
-        print("Ethereum rpc client url: \(props.url)")
+        
+        let nativeLiquidityContractAddress = try! DynamicContract.address(props.nativeLiquidityManagerContractAddress)
+        nativeLiquidity = web3.eth.Contract(type: NativeLiquidityManagerContract.self, address: nativeLiquidityContractAddress)
+        
+        let invoiceManagerContractAddress = try! DynamicContract.address(props.invoiceManagerContractAddress)
+        invoiceManager = web3.eth.Contract(type: InvoiceManagerContract.self, address: invoiceManagerContractAddress)
         
         super.init(id: "ethereum")
     }
@@ -32,9 +37,6 @@ final class Ethereum: BaseClass, NativeChain {
     func start() -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
-            
-            let nativeLiquidityContractAddress = try DynamicContract.address(props.nativeLiquidityManagerContractAddress)
-            nativeLiquidity = web3.eth.Contract(type: NativeLiquidityManagerContract.self, address: nativeLiquidityContractAddress)
             
             nativeLiquidity.watchContractEvents(
                 interval: 3,
@@ -44,14 +46,7 @@ final class Ethereum: BaseClass, NativeChain {
                 onError: { [weak self] error in
                     self?.debug("Native Liquidity Manager logs error", error)
                 })
-            
-            print("(ETH) native liquidity address: \(nativeLiquidityContractAddress.hex(eip55: false))")
-            
-            let invoiceManagerContractAddress = try DynamicContract.address(props.invoiceManagerContractAddress)
-            invoiceManager = web3.eth.Contract(type: InvoiceManagerContract.self, address: invoiceManagerContractAddress)
-            
-            print("(ETH) invoice manager address: \(invoiceManagerContractAddress.hex(eip55: false))")
-            
+                        
             invoiceManager.watchContractEvents(
                 interval: 3,
                 onLogs: { [weak self] logs in
@@ -65,6 +60,8 @@ final class Ethereum: BaseClass, NativeChain {
             self.emit(event: "start")
             
             connected = true
+            
+            debug("started")
         }
     }
     
@@ -75,10 +72,10 @@ final class Ethereum: BaseClass, NativeChain {
             self.connected = false
             
             nativeLiquidity.stopWatchingContractEvents()
-            nativeLiquidity = nil
             
             invoiceManager.stopWatchingContractEvents()
-            invoiceManager = nil
+            
+            debug("stopped")
         }
     }
         
@@ -135,7 +132,7 @@ final class Ethereum: BaseClass, NativeChain {
                         throw NativeChainError.init(message: "Failed to create deposit transaction", code: "404")
                     }
 
-                    print("deposit tx: \(tx)")
+                    print("deposit tx: \(tx.data.hex())")
                     
                     let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
                     let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
@@ -149,7 +146,7 @@ final class Ethereum: BaseClass, NativeChain {
             let txIdData = try EthereumData(ethereumValue: txId)
             let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
             
-            print("Deposit receipt: \(receipt)")
+            print("Deposit receipt status: \(String(describing: receipt.status))")
             
             var depositedLiquidity: Liquidity?
             
@@ -230,7 +227,7 @@ final class Ethereum: BaseClass, NativeChain {
                         throw NativeChainError.init(message: "Failed to create pay invoice transaction", code: "404")
                     }
                     
-                    print("pay invoice tx: \(tx)")
+                    print("pay invoice tx: \(tx.data.hex())")
 
                     let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
                     let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
@@ -246,8 +243,8 @@ final class Ethereum: BaseClass, NativeChain {
             let txIdData = try EthereumData(ethereumValue: txId)
             let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
             
-            print("Pay invoice receipt: \(receipt)")
-            print("logs: \(receipt.logs)")
+            print("Pay invoice receipt status: \(String(describing: receipt.status))")
+            print("logs: \(receipt.logs.count)")
             
             guard !receipt.logs.isEmpty else {
                 throw NativeChainError(message: "Pay invoice event missing logs", code: "404")
@@ -290,7 +287,7 @@ final class Ethereum: BaseClass, NativeChain {
                         throw NativeChainError(message: "Failed to create invoice transaction", code: "404")
                     }
                     
-                    print("createInvoice tx: \(tx)")
+                    print("createInvoice tx: \(tx.data.hex())")
                     
                     let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
                     let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
@@ -304,7 +301,7 @@ final class Ethereum: BaseClass, NativeChain {
             let txIdData = try EthereumData(ethereumValue: txId)
             let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
             
-            print("CreateInvoice receipt: \(receipt)")
+            print("CreateInvoice receipt status: \(String(describing: receipt.status))")
             
             // Extract event information from receipt
             var swapInvoice: String?
@@ -337,9 +334,6 @@ final class Ethereum: BaseClass, NativeChain {
             guard let swapInvoice else {
                 throw NativeChainError(message: "SwapInvoiceCreated event missing or invoice not found", code: "404")
             }
-            
-            // Update party with invoice
-//            party.invoice = swapInvoice
             
             info("createInvoice", ["party": party])
             
@@ -383,7 +377,7 @@ final class Ethereum: BaseClass, NativeChain {
                         throw NativeChainError(message: "Failed to create invoice transaction", code: "404")
                     }
                     
-                    print("settleInvoice tx: \(tx)")
+                    print("settleInvoice tx: \(tx.data.hex())")
 
                     let privKey = try EthereumPrivateKey(hexPrivateKey: self.props.privKey)
                     let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(self.props.chainId))
@@ -397,7 +391,7 @@ final class Ethereum: BaseClass, NativeChain {
             let txIdData = try EthereumData(ethereumValue: txId)
             let receipt = try awaitPromise(retry(attempts: 3, delay: 2) { self.web3.eth.fetchReceipt(txHash: txIdData) })
             
-            print("settleInvoice receipt: \(receipt)")
+            print("settleInvoice receipt status: \(String(describing: receipt.status))")
             
             guard !receipt.logs.isEmpty else {
                 throw NativeChainError(message: "settleInvoice logs empty", code: "404")
@@ -539,7 +533,19 @@ extension Ethereum: TxLockable {
     }
     
     private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
-        retryWithBackoff { self.web3.eth.fetchReceipt(txHash: hash) }
+        retry(attempts: 10, delay: 3) {
+            Promise {
+                let confirmations: BigUInt = 1
+                let receipt = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.fetchReceipt(txHash: hash) })
+                let head = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.blockNumber() })
+                
+                guard head.quantity >= receipt.blockNumber.quantity + confirmations else {
+                    throw SdkError(message: "Not confirmed yet", code: String())
+                }
+                
+                return receipt
+            }
+        }
     }
 }
 

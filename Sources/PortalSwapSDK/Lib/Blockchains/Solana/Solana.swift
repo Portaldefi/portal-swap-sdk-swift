@@ -6,14 +6,14 @@ import SolanaSwift
 
 struct DepositEvent {
     let token_mint: String
-    let amount: UInt64
+    let amount: Int64
     let maker: String
     let portal_address: String
 }
 
 struct WithdrawEvent {
     let token_mint: String
-    let amount: UInt64
+    let amount: Int64
     let maker: String
     let portal_address: String
     let id: String
@@ -25,7 +25,7 @@ struct LockEvent {
     let secret_hash: String
     let owner_pubkey: String
     let token_mint: String
-    let amount: UInt64
+    let amount: Int64
 }
 
 struct UnlockEvent {
@@ -55,7 +55,7 @@ final class Solana: BaseClass, NativeChain {
     
     private let logPoller: HtlcLogListener
     
-    private var queue = TransactionLock()
+    var queue = TransactionLock()
     
     var address: String {
         keyPair.publicKey.base58EncodedString
@@ -63,6 +63,7 @@ final class Solana: BaseClass, NativeChain {
     
     init(props: SwapSdkConfig.Blockchains.Solana) {
         self.keyPair = props.keyPair
+        print(props.keyPair.publicKey.base58EncodedString)
 
         if let provider = props.provider {
             self.apiClient = provider.apiClient
@@ -92,21 +93,23 @@ final class Solana: BaseClass, NativeChain {
                 case .deposit(let depositEvent):
                     let liquidity = self.liquidityArgs(event: depositEvent, signature: log.signature, slot: log.slot)
                     self.info("deposit", liquidity)
-                    _ = self.emitOnFinality(txid: log.signature, event: "deposit", args: [liquidity])
+                    self.emitOnFinality(log.signature, event: "deposit", args: [liquidity])
                 case .withdraw(let withdrawEvent):
                     let liquidity = self.liquidityArgs(event: withdrawEvent, signature: log.signature, slot: log.slot)
                     self.info("withdraw", liquidity)
-                    _ = self.emitOnFinality(txid: log.signature, event: "withdraw", args: [liquidity])
+                    self.emitOnFinality(log.signature, event: "withdraw", args: [liquidity])
                 case .lock(let lockEvent):
                     let (event, swapDiff) = self.swapArgs(event: lockEvent, signature: log.signature, step: .lock)
                     self.info(event, swapDiff)
-                    _ = self.emitOnFinality(txid: log.signature, event: event, args: [swapDiff])
+                    self.emitOnFinality(log.signature, event: event, args: [swapDiff])
                 case .unlock(let unlockEvent):
                     let (event, swapDiff) = self.swapArgs(event: unlockEvent, signature: log.signature, step: .unlock)
                     self.info(event, swapDiff)
-                    _ = self.emitOnFinality(txid: log.signature, event: event, args: [swapDiff])
+                    self.emitOnFinality(log.signature, event: event, args: [swapDiff])
                 }
             }
+            
+            self.debug("started")
         }
     }
     
@@ -115,6 +118,8 @@ final class Solana: BaseClass, NativeChain {
             guard let self else { throw SdkError.instanceUnavailable() }
             
             logPoller.cleanup()
+            
+            debug("stopped")
         }
     }
     
@@ -128,16 +133,54 @@ final class Solana: BaseClass, NativeChain {
                 do {
                     let assetAddress = liquidity.contractAddress
                     let isSOL = liquidity.symbol == "SOL"
-                    
-                    if isSOL {
-                        try await wrapSol(liquidity.nativeAmount)
-                    }
-                    
+                                        
                     let (fund, vault) = try getFundAndVault(assetAddress: assetAddress, isSOL: isSOL)
                     let makerTokenAccount = try getMyAssociatedTokenAddress(
                         assetAddress: assetAddress,
                         isSOL: isSOL
                     )
+                    
+                    // Check if ATA exists for SOL
+                    var instructions: [TransactionInstruction] = []
+                    
+                    if isSOL {
+                        let accountInfoResult: BufferInfo<TokenAccountState>? = try await apiClient.getAccountInfo(account: makerTokenAccount.base58EncodedString)
+                        let accountExists = accountInfoResult != nil
+                        
+                        // If account doesn't exist, create it first
+                        if !accountExists {
+                            let createATAInstruction = try AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
+                                mint: try PublicKey(string: assetAddress),
+                                owner: keyPair.publicKey,
+                                payer: keyPair.publicKey,
+                                tokenProgramId: tokenProgramId(isSOL: isSOL)
+                            )
+                            instructions.append(createATAInstruction)
+                        }
+                        
+                        // Add SOL transfer and sync instructions
+                        let amountLamports = UInt64(truncatingIfNeeded: liquidity.nativeAmount)
+                        
+                        let transferInstruction = SystemProgram.transferInstruction(
+                            from: keyPair.publicKey,
+                            to: makerTokenAccount,
+                            lamports: amountLamports
+                        )
+                        
+                        instructions.append(transferInstruction)
+                        
+                        // Add sync native instruction
+                        let syncNativeInstructionData: [UInt8] = [17]
+                        let syncNativeInstruction = TransactionInstruction(
+                            keys: [
+                                AccountMeta(publicKey: makerTokenAccount, isSigner: false, isWritable: true)
+                            ],
+                            programId: TOKEN_PROGRAM_ID,
+                            data: syncNativeInstructionData
+                        )
+                        
+                        instructions.append(syncNativeInstruction)
+                    }
                     
                     let method = "global:deposit"
                     let methodData = Data(method.utf8)
@@ -155,22 +198,12 @@ final class Solana: BaseClass, NativeChain {
                         AccountMeta(publicKey: SystemProgram.id, isSigner: false, isWritable: false)
                     ]
                     
-                    self.debug("deposit.starting", [
-                        "contract": ["name": "hashtimelock", "address": assetAddress],
-                        "fund": fund.base58EncodedString,
-                        "vault": vault.base58EncodedString,
-                        "amount": liquidity.nativeAmount,
-                        "portalAddress": liquidity.portalAddress
-                    ])
-                    
                     var data = Data(discriminator)
                     
-                    // Append amount as 8 bytes (equivalent to BN in TypeScript)
                     let amountValue = UInt64(truncatingIfNeeded: liquidity.nativeAmount)
                     var amountBytes = amountValue.littleEndian
                     data.append(Data(bytes: &amountBytes, count: MemoryLayout<UInt64>.size))
                     
-                    // Append portal address as a string with length prefix
                     let portalAddressData = liquidity.portalAddress.data(using: .utf8)!
                     var portalAddressLength = UInt32(portalAddressData.count).littleEndian
                     data.append(Data(bytes: &portalAddressLength, count: MemoryLayout<UInt32>.size))
@@ -182,8 +215,11 @@ final class Solana: BaseClass, NativeChain {
                         data: Array(data)
                     )
                     
+                    // Add the deposit instruction
+                    instructions.append(instruction)
+                    
                     let preparedTransaction = try await blockchainClient.prepareTransaction(
-                        instructions: [instruction],
+                        instructions: instructions, // Use instructions array instead of [instruction]
                         signers: [keyPair],
                         feePayer: keyPair.publicKey
                     )
@@ -306,9 +342,11 @@ final class Solana: BaseClass, NativeChain {
                     let inv = try await apiClient.fetchInvoice(at: invoicePubkey)
                     
                     let isSOL = party.symbol == "SOL"
-                    if isSOL {
-                        try await wrapSol(BigInt(party.amount))
-                    }
+                    
+                    // Remove this separate wrapSol call:
+                    // if isSOL {
+                    //     try await wrapSol(BigInt(party.amount))
+                    // }
                     
                     let hash = Data(hex: party.swap!.secretHash)
                     
@@ -327,16 +365,59 @@ final class Solana: BaseClass, NativeChain {
                         tokenProgramId: tokenProgramId(isSOL: isSOL)
                     )
                     
+                    let makerTokenAccount = try getMyAssociatedTokenAddress(
+                        assetAddress: party.contractAddress,
+                        isSOL: isSOL
+                    )
+                    
+                    // Start with empty instructions array
+                    var instructions: [TransactionInstruction] = []
+                    
+                    // Handle SOL wrapping if needed
+                    if isSOL {
+                        let accountInfoResult: BufferInfo<TokenAccountState>? = try await apiClient.getAccountInfo(account: makerTokenAccount.base58EncodedString)
+                        let accountExists = accountInfoResult != nil
+                        
+                        // If account doesn't exist, create it first
+                        if !accountExists {
+                            let createATAInstruction = try AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
+                                mint: tokenMint,
+                                owner: keyPair.publicKey,
+                                payer: keyPair.publicKey,
+                                tokenProgramId: tokenProgramId(isSOL: isSOL)
+                            )
+                            instructions.append(createATAInstruction)
+                        }
+                        
+                        // Add SOL transfer and sync instructions
+                        let amountLamports = UInt64(truncatingIfNeeded: party.amount)
+                        
+                        let transferInstruction = SystemProgram.transferInstruction(
+                            from: keyPair.publicKey,
+                            to: makerTokenAccount,
+                            lamports: amountLamports
+                        )
+                        instructions.append(transferInstruction)
+                        
+                        // Add sync native instruction
+                        let syncNativeInstructionData: [UInt8] = [17]
+                        let syncNativeInstruction = TransactionInstruction(
+                            keys: [
+                                AccountMeta(publicKey: makerTokenAccount, isSigner: false, isWritable: true)
+                            ],
+                            programId: TOKEN_PROGRAM_ID,
+                            data: syncNativeInstructionData
+                        )
+                        instructions.append(syncNativeInstruction)
+                    }
+                    
                     let accounts = [
                         // maker
                         AccountMeta(publicKey: keyPair.publicKey, isSigner: true, isWritable: true),
                         // tokenMint
                         AccountMeta(publicKey: tokenMint, isSigner: false, isWritable: false),
                         // makerTokenAccount
-                        AccountMeta(publicKey: try getMyAssociatedTokenAddress(
-                            assetAddress: party.contractAddress,
-                            isSOL: isSOL
-                        ), isSigner: false, isWritable: true),
+                        AccountMeta(publicKey: makerTokenAccount, isSigner: false, isWritable: true),
                         // taker
                         AccountMeta(publicKey: taker, isSigner: false, isWritable: false),
                         // takerTokenAccount
@@ -393,14 +474,17 @@ final class Solana: BaseClass, NativeChain {
                     
                     data.append((isHolderOnSolana) ? 1 : 0)
                     
-                    let instruction = TransactionInstruction(
+                    let lockInstruction = TransactionInstruction(
                         keys: accounts,
                         programId: programId,
                         data: Array(data)
                     )
                     
+                    // Add the lock instruction
+                    instructions.append(lockInstruction)
+                    
                     let preparedTransaction = try await blockchainClient.prepareTransaction(
-                        instructions: [instruction],
+                        instructions: instructions, // Use instructions array
                         signers: [keyPair],
                         feePayer: keyPair.publicKey
                     )
@@ -438,14 +522,15 @@ final class Solana: BaseClass, NativeChain {
                 }
                 
                 do {
-                    let isSOL = party.symbol == "SOL"
-                    let hash = Data(hex: swap.secretHash)
+                    let isSOL = (party.symbol == "SOL")
+                    let hash = Data(hex: swap.secretHash)              // <-- secret_hash bytes
                     let invoicePubkey = try PublicKey(string: invoice)
                     
+                    // Fetch invoice to learn maker (payer)
                     let inv = try await apiClient.fetchInvoice(at: invoicePubkey)
-                    
                     let maker = inv.payerPubkey
                     
+                    // PDAs: HTL & purse are derived with (maker, secret_hash)
                     let (htl, purse) = try getHtlAndPurse(
                         hash: hash,
                         assetAddress: party.contractAddress,
@@ -453,80 +538,56 @@ final class Solana: BaseClass, NativeChain {
                         isSOL: isSOL
                     )
                     
+                    // Token mint
                     let tokenMint = try PublicKey(string: party.contractAddress)
-                    let makerTokenAccount = try PublicKey.associatedTokenAddress(
-                        walletAddress: maker,
+                    
+                    // IMPORTANT: taker_token_account (not maker)
+                    let takerTokenAccount = try PublicKey.associatedTokenAddress(
+                        walletAddress: keyPair.publicKey,           // taker = our signer
                         tokenMintAddress: tokenMint,
                         tokenProgramId: tokenProgramId(isSOL: isSOL)
                     )
                     
-                    let accounts = [
-                        // 1. taker
-                        AccountMeta(publicKey: keyPair.publicKey, isSigner: true, isWritable: true),
-                        
-                        // 2. maker
-                        AccountMeta(publicKey: maker, isSigner: false, isWritable: true),
-                        
-                        // 3. tokenMint
-                        AccountMeta(publicKey: tokenMint, isSigner: false, isWritable: false),
-                        
-                        // 4. taker_token_account (ADD THIS - taker's token account, not maker's)
-                        AccountMeta(publicKey: try PublicKey.associatedTokenAddress(
-                            walletAddress: keyPair.publicKey,  // taker's wallet
-                            tokenMintAddress: tokenMint,
-                            tokenProgramId: tokenProgramId(isSOL: isSOL)
-                        ), isSigner: false, isWritable: true),
-                        
-                        // 5. htl
-                        AccountMeta(publicKey: htl, isSigner: false, isWritable: true),
-                        
-                        // 6. purse
-                        AccountMeta(publicKey: purse, isSigner: false, isWritable: true),
-                        
-                        // 7. associated_token_program (ADD THIS)
-                        AccountMeta(publicKey: try PublicKey(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
-                                   isSigner: false, isWritable: false),
-                        
-                        // 8. tokenProgram
-                        AccountMeta(publicKey: tokenProgramId(isSOL: isSOL), isSigner: false, isWritable: false),
-                        
-                        // 9. system_program (ADD THIS)
-                        AccountMeta(publicKey: try PublicKey(string: "11111111111111111111111111111111"),
-                                   isSigner: false, isWritable: false)
+                    // Build accounts in the same order as the on-chain struct:
+                    // taker, maker, token_mint, taker_token_account, invoice, htl, purse,
+                    // associated_token_program, token_program, system_program
+                    let accounts: [AccountMeta] = [
+                        AccountMeta(publicKey: keyPair.publicKey, isSigner: true,  isWritable: true),   // taker
+                        AccountMeta(publicKey: maker,             isSigner: false, isWritable: true),   // maker (mut because close=maker on htl)
+                        AccountMeta(publicKey: tokenMint,         isSigner: false, isWritable: false),  // token_mint
+                        AccountMeta(publicKey: takerTokenAccount, isSigner: false, isWritable: true),   // taker_token_account (init_if_needed)
+                        AccountMeta(publicKey: invoicePubkey,     isSigner: false, isWritable: true),   // invoice (close = taker)
+                        AccountMeta(publicKey: htl,               isSigner: false, isWritable: true),   // htl (close = maker)
+                        AccountMeta(publicKey: purse,             isSigner: false, isWritable: true),   // purse
+                        AccountMeta(publicKey: try PublicKey(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"), isSigner: false, isWritable: false), // associated_token_program
+                        AccountMeta(publicKey: tokenProgramId(isSOL: isSOL), isSigner: false, isWritable: false), // token_program
+                        AccountMeta(publicKey: try PublicKey(string: "11111111111111111111111111111111"), isSigner: false, isWritable: false) // system_program
                     ]
-
                     
-                    let swapToSend = "{\"id\":\"0x\(swap.id)\"}"
-                    let isHolderOnSolana = swap.secretHolder.chain != "solana"
-                    
-                    self.debug("settleInvoice.starting", [
-                        "contract": ["name": "hashtimelock", "address": party.contractAddress],
-                        "htl": htl.base58EncodedString,
-                        "purse": purse.base58EncodedString,
-                        "maker": maker.base58EncodedString,
-                        "makerTokenAccount": makerTokenAccount.base58EncodedString,
-                        "amount": party.amount,
-                        "swapToSend": swapToSend,
-                        "isHolderOnSolana": isHolderOnSolana
-                    ])
-                    
-                    // Create unlock instruction
+                    // Build instruction data for "global:unlock"
+                    // Layout: [8-byte discrim] + secret[32] + swap_bytes (len+data) + is_holder[u8] + secret_hash[32]
                     let method = "global:unlock"
-                    let methodData = Data(method.utf8)
-                    let discriminator = Array(SHA256.hash(data: methodData).prefix(8))
+                    let discrim = Array(SHA256.hash(data: Data(method.utf8)).prefix(8))
                     
-                    var data = Data(discriminator)
                     guard secret.count == 32 else {
                         throw NativeChainError(message: "Secret must be exactly 32 bytes", code: "")
                     }
-                    data.append(secret)
+                    
+                    let swapToSend = "{\"id\":\"0x\(swap.id)\"}"
+                    let isHolderOnSolana = (swap.secretHolder.chain != "solana") // matches your TS
+                    
+                    var data = Data(discrim)
+                    data.append(secret) // 32 bytes
                     
                     let swapData = swapToSend.data(using: .utf8)!
-                    var swapDataLength = UInt32(swapData.count).littleEndian
-                    data.append(Data(bytes: &swapDataLength, count: MemoryLayout<UInt32>.size))
+                    var swapLenLE = UInt32(swapData.count).littleEndian
+                    data.append(Data(bytes: &swapLenLE, count: MemoryLayout<UInt32>.size))
                     data.append(swapData)
                     
-                    data.append(isHolderOnSolana ? UInt8(1) : UInt8(0))
+                    data.append(isHolderOnSolana ? UInt8(1) : UInt8(0)) // bool as u8
+                    
+                    // NEW: append secret_hash [32]
+                    data.append(hash)
                     
                     let instruction = TransactionInstruction(
                         keys: accounts,
@@ -534,15 +595,13 @@ final class Solana: BaseClass, NativeChain {
                         data: Array(data)
                     )
                     
-                    let preparedTransaction = try await blockchainClient.prepareTransaction(
+                    let prepared = try await blockchainClient.prepareTransaction(
                         instructions: [instruction],
                         signers: [keyPair],
                         feePayer: keyPair.publicKey
                     )
                     
-                    let _ = try await blockchainClient.sendTransaction(
-                        preparedTransaction: preparedTransaction
-                    )
+                    _ = try await blockchainClient.sendTransaction(preparedTransaction: prepared)
                     
                     self.info("settleInvoice", party)
                     fulfill(party)
@@ -615,7 +674,7 @@ extension Solana {
         }
         
         var tokenMint: String = ""
-        var amount: UInt64 = 0
+        var amount: Int64 = 0
         var maker: String = ""
         var portalAddress: String = ""
         
@@ -802,73 +861,11 @@ extension Solana {
     private func tokenProgramId(isSOL: Bool) -> PublicKey {
         isSOL ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID
     }
-    
-    private func withTxLock<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T> {
-        queue.run(asyncFn)
-    }
-    
-    private func emitOnFinality(txid: String, event: String, args: [Any]) -> Promise<Void> {
-        waitForReceipt(txid: txid).then { _ in
-            let capitalizedEvent = "on\(event.prefix(1).uppercased())\(event.dropFirst())"
-            self.info(capitalizedEvent, args)
-            self.emit(event: event, args: args)
-            return ()
-        }
-    }
-    
-    private func waitForReceipt(txid: String) -> Promise<Void> {
+}
+
+extension Solana: TxLockable {
+    internal func waitForReceipt(txid: String) -> Promise<Void> {
         retryWithBackoff { self.waitForConfirmation(txid: txid) }
-    }
-    
-    private func retryWithBackoff<T>(_ fn: @escaping () -> Promise<T>) -> Promise<T> {
-        Promise<T> { resolve, reject in
-            let stages = [
-                [1, 0], // 1 attempt immediately
-                [10, 1000], // 10 attempts every 1 second
-                // [10, 2000], // 10 attempts every 2 seconds
-                // [10, 3000], // 10 attempts every 3 seconds
-            ]
-            
-            func tryNextStage(stageIndex: Int) {
-                guard stageIndex < stages.count else {
-                    // All retries exhausted, try one final time to get the actual error
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        reject(error)
-                    }
-                    return
-                }
-                
-                let stage = stages[stageIndex]
-                let attempts = stage[0]
-                let delay = stage[1]
-                
-                func tryAttempt(attemptIndex: Int) {
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        if attemptIndex == attempts - 1 {
-                            // Last attempt of this stage, continue to next stage
-                            tryNextStage(stageIndex: stageIndex + 1)
-                        } else {
-                            // More attempts in this stage
-                            if delay > 0 {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delay)) {
-                                    tryAttempt(attemptIndex: attemptIndex + 1)
-                                }
-                            } else {
-                                tryAttempt(attemptIndex: attemptIndex + 1)
-                            }
-                        }
-                    }
-                }
-                
-                tryAttempt(attemptIndex: 0)
-            }
-            
-            tryNextStage(stageIndex: 0)
-        }
     }
     
     private func waitForConfirmation(txid: String) -> Promise<Void> {
@@ -881,7 +878,7 @@ extension Solana {
                     if let confirmationStatus = status.confirmationStatus {
                         if confirmationStatus == "processed" {
                             // Wait a bit more for finality
-                            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                            try await Task.sleep(nanoseconds: 3_000_000_000) // 3 second
                             fulfill(())
                             return
                         } else if confirmationStatus == "confirmed" || confirmationStatus == "finalized" {

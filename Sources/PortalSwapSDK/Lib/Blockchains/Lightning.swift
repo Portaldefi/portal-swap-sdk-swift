@@ -32,6 +32,8 @@ final class Lightning: BaseClass, NativeChain {
             guard let self else { throw SdkError.instanceUnavailable() }
             
             emit(event: "start")
+            
+            debug("started")
         }
     }
     
@@ -40,6 +42,8 @@ final class Lightning: BaseClass, NativeChain {
             guard let self else { throw SdkError.instanceUnavailable() }
             
             emit(event: "stop")
+            
+            debug("stopped")
         }
     }
     
@@ -305,6 +309,12 @@ final class Lightning: BaseClass, NativeChain {
 
 extension Lightning: TxLockable {
     internal func waitForReceipt(txid: String) -> Promise<Void> {
-        Promise {}
+        withTxLock {
+            Promise { resolve, reject in
+                DispatchQueue.sdk.asyncAfter(deadline: .now() + 2.0) {
+                    resolve(())
+                }
+            }
+        }
     }
 }
