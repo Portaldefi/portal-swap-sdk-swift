@@ -6,6 +6,7 @@ import BigInt
 protocol IOrderbookMarketContract: EthereumContract, IRPCLogsPoller {
     static var OrderCreated: SolidityEvent { get }
 
+    func getOrderLimits(assetId: String) -> SolidityInvocation
     func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation
 }
 
@@ -47,6 +48,22 @@ open class OrderbookMarketContract: StaticContract {
 }
 
 extension OrderbookMarketContract: IOrderbookMarketContract {
+    func getOrderLimits(assetId: String) -> SolidityInvocation {
+        let inputs = [
+            SolidityFunctionParameter(name: "assetId", type: .uint256)
+        ]
+        let outputs = [
+            SolidityFunctionParameter(name: "minAmount", type: .uint256),
+            SolidityFunctionParameter(name: "maxAmount", type: .uint256)
+        ]
+        
+        let assetIdBigUInt = BigUInt(assetId.dropFirst(2), radix: 16) ?? BigUInt(0)
+
+        let method = SolidityConstantFunction(name: "getOrderLimits", inputs: inputs, outputs: outputs, handler: self)
+        
+        return method.invoke(assetIdBigUInt)
+    }
+    
     func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation {
         let inputs = [
             SolidityFunctionParameter(name: "sellAsset", type: .uint256),
