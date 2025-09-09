@@ -3,7 +3,7 @@ import CoreData
 
 public final class LocalPersistenceManager {
     private let configuration: PersistenceConfiguration
-    private var viewContext: NSManagedObjectContext { container.viewContext }
+    var viewContext: NSManagedObjectContext { container.viewContext }
     private var container: PersistentContainer
     private var isSaving = false
     
@@ -18,6 +18,10 @@ public final class LocalPersistenceManager {
             }
             print("Loaded LOCAL STORE successfully")
         })
+        
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.undoManager = nil // Disable for better performance
         
         self.configuration = configuration
     }
