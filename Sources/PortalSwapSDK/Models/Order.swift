@@ -6,7 +6,7 @@ public class Order {
         case market = 0, limit
     }
 
-    public let id: String
+    public var id: String
     public let ts: Int
     public let trader: String
     public let sellAsset: String
