@@ -1,13 +1,20 @@
 import Foundation
 import Promises
 import BigInt
+import Web3
 
 public final class PortalSwapSDK: BaseClass {
     private let sdk: Sdk
     
     private var timeoutWorkItem: DispatchWorkItem?
     
-    public var swapTransaction: SwapTransaction?
+    public var swapTransaction: SwapTransaction? {
+        didSet {
+            if let swapTransaction {
+                emit(event: "swapTxUpdated", args: [swapTransaction])
+            }
+        }
+    }
     public var swapStatus: SwapOperationStatus = .none {
         didSet {
             emit(event: "swapStatusUpdated", args: [swapStatus])
@@ -31,8 +38,8 @@ public final class PortalSwapSDK: BaseClass {
             if let self {
                 sdk.off("error")
                 timeoutWorkItem?.cancel()
-                try? awaitPromise(stopSwapSdk())
                 emit(event: "error", args: args)
+                try? awaitPromise(stopSwapSdk())
             }
         }
         
@@ -65,10 +72,14 @@ public final class PortalSwapSDK: BaseClass {
         }
     }
     
+    public func getOrderLimits(assetId: String) -> Promise<(min: BigUInt, max: BigUInt)> {
+        sdk.getOrderLimits(assetId: assetId)
+    }
+    
     public func swap(sellAsset: Pool.Asset, buyAsset: Pool.Asset, sellAmount: String, buyAmount: String) -> Promise<SwapTransaction> {
         Promise { [weak self] resolve, reject in
             guard let self else { return reject(SdkError.instanceUnavailable()) }
-            
+                        
             swapTransaction = SwapTransaction(
                 chainId: sellAsset.blockchainId.description,
                 sellAsset: sellAsset,
@@ -78,6 +89,9 @@ public final class PortalSwapSDK: BaseClass {
                 status: .pending
             )
             
+            swapTransaction?.sellAmount = sellAmount
+            swapTransaction?.buyAmount = buyAmount
+            
             swapStatus = .initiated
             
             timeoutWorkItem = DispatchWorkItem {
@@ -86,22 +100,26 @@ public final class PortalSwapSDK: BaseClass {
                 
                 self.updateSwapTx()
                 
-                reject(SdkError.timedOut(context: [:]))
+                reject(SdkError.timedOut(context: ["Swap operation": "timed out"]))
+                
+//                _ = try? awaitPromise(self.stopSwapSdk())
             }
 
             DispatchQueue.sdk.asyncAfter(deadline: .now() + 300, execute: timeoutWorkItem!)
             
             do {
-                try awaitPromise(sdk.start())
-                
+                try awaitPromise(sdk.start(sellAsset: sellAsset.blockchainName, buyAsset: buyAsset.blockchainName))
+
                 swapStatus = .depositing
-                
+
                 let liquidity = try awaitPromise(
                     sdk.deposit(chain: sellAsset.blockchainName, symbol: sellAsset.symbol, amount: BigInt(stringLiteral: sellAmount))
                 )
                 
                 swapTransaction?.sellAssetTxnHash = liquidity.nativeReceipt
-                            
+                
+                swapStatus = .openingOrder
+                
                 let openOrder = try awaitPromise(
                     sdk.openOrder(
                         sellChain: sellAsset.blockchainName,
@@ -117,6 +135,8 @@ public final class PortalSwapSDK: BaseClass {
                 print("Open Order: \(openOrder)")
                 swapTransaction?.hash = openOrder.id
                 
+                swapStatus = .matching
+                                
                 setupSwapEventListeners(
                     sellAsset: sellAsset,
                     buyAsset: buyAsset,
@@ -151,11 +171,13 @@ public final class PortalSwapSDK: BaseClass {
             
             self.swapTransaction?.swapId = swap.id
             self.swapStatus = .matched
+            self.swapStatus = .swapping
             
-            // Update buy amount from matched swap
-            let buyAmount = swap.secretSeeker.amount
-            let buyAmountInSwap = self.formatUnits(BigInt(buyAmount), decimals: Int(buyAsset.blockchainDecimals))
-            self.swapTransaction?.buyAmount = buyAmountInSwap
+            self.swapTransaction?.buyAmount = swap.secretSeeker.amount.description
+            
+            let tx = self.swapTransaction
+            
+            swapTransaction = tx
             
             updateSwapTx()
         }
@@ -195,14 +217,15 @@ public final class PortalSwapSDK: BaseClass {
             updateSwapTx()
         }
         // Swap Seeker Settled Event - Final step
-        .on("swapSeekerSettled") { [weak self] _ in
+        .on("swapSeekerSettled") { [weak self] arguments in
             guard let self = self else { return }
-            
-            self.swapStatus = .holderSettled
+            guard let swap = arguments.first as? Swap else { return }
+                                    
+            self.swapStatus = .seekerSettled
             self.swapStatus = .withdrawing
             
             do {
-                let liquidity = try awaitPromise(
+                _ = try awaitPromise(
                     self.sdk.withdraw(
                         chain: sellAsset.blockchainName,
                         symbol: sellAsset.symbol,
@@ -257,16 +280,22 @@ public final class PortalSwapSDK: BaseClass {
     
     private func stopSwapSdk() -> Promise<Void> {
         Promise { [weak self] in
-            guard let self else { throw SdkError.instanceUnavailable() }
+            guard let self else {
+                throw SdkError.instanceUnavailable()
+            }
             
+            self.swapTransaction = nil
+            self.sdk.removeAllListeners()
             try awaitPromise(sdk.stop())
         }
     }
     
-    // Helper function to format units (equivalent to ethers.utils.formatUnits)
     private func formatUnits(_ value: BigInt, decimals: Int) -> String {
-        let divisor = pow(10.0, Double(decimals))
-        let doubleValue = Double(value.description) ?? 0
-        return String(doubleValue / divisor)
+        let valueDecimal = Decimal(string: value.description) ?? 0
+        let divisor = pow(Decimal(10), decimals)
+        let result = valueDecimal / divisor
+        
+        let decimalNumber = NSDecimalNumber(decimal: result)
+        return decimalNumber.stringValue
     }
 }
