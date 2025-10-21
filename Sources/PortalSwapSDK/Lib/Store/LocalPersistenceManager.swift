@@ -5,6 +5,7 @@ public final class LocalPersistenceManager {
     private let configuration: PersistenceConfiguration
     private var viewContext: NSManagedObjectContext { container.viewContext }
     private var container: PersistentContainer
+    private var isSaving = false
     
     fileprivate init(configuration: PersistenceConfiguration) throws {
         let model = try LocalPersistenceManager.model(for: configuration.modelName)
@@ -22,7 +23,14 @@ public final class LocalPersistenceManager {
     }
     
     internal func saveContext() throws {
-        try viewContext.save()
+        guard !isSaving && viewContext.hasChanges else { return }
+        
+        isSaving = true
+        defer { isSaving = false }
+        
+        try viewContext.performAndWait {
+            try viewContext.save()
+        }
     }
     
     internal func secretEntity() -> DBSecret {
@@ -33,14 +41,14 @@ public final class LocalPersistenceManager {
         try DBSecret.entity(key: key, context: viewContext)
     }
     
-    internal func swapEntity() -> DBAmmSwap {
-        let swap = DBAmmSwap(context: viewContext)
+    internal func swapEntity() -> DBSwap {
+        let swap = DBSwap(context: viewContext)
         swap.accountId = configuration.accountId
         return swap
     }
     
-    internal func swap(key: String) throws -> DBAmmSwap {
-        try DBAmmSwap.entity(key: key, context: viewContext)
+    internal func swap(swapId: String) throws -> DBSwap {
+        try DBSwap.entity(key: swapId, context: viewContext)
     }
     
     public func fetchSwaps() throws -> [AmmSwap] {
@@ -67,9 +75,9 @@ extension LocalPersistenceManager {
         return try LocalPersistenceManager(configuration: config)
     }
     
-//    static func manager(configuration: PersistenceConfiguration) throws -> LocalPersistenceManager {
-//        return try LocalPersistenceManager(configuration: configuration)
-//    }
+    static func manager(configuration: PersistenceConfiguration) throws -> LocalPersistenceManager {
+        try LocalPersistenceManager(configuration: configuration)
+    }
     
     static func model(for name: String) throws -> NSManagedObjectModel {
         guard let url = Bundle.module.url(forResource: name, withExtension: "momd") else {

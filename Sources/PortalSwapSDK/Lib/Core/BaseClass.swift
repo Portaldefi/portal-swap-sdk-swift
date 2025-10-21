@@ -4,6 +4,8 @@ import Combine
 open class BaseClass: CustomDebugStringConvertible {
     public typealias EventName = String
     
+    let id = UUID()
+
     public let instanceId: String
     private var subjects = [EventName: PassthroughSubject<[Any], Never>]()
     private var listenerSubscriptions = [EventName: [UUID: AnyCancellable]]()
@@ -17,20 +19,17 @@ open class BaseClass: CustomDebugStringConvertible {
     
     // MARK: - Event Management
     
-    @discardableResult
-    public func emit(event: EventName, args: [Any]? = []) -> Bool {
-        guard let subject = subjects[event] else { return false }
+    public func emit(event: EventName, args: [Any]? = []) {
+        guard let subject = subjects[event] else { return }
         subject.send(args ?? [])
-        return true
     }
     
     @discardableResult
-    public func on(_ event: EventName, _ action: @escaping ([Any]) -> Void) -> UUID {
+    public func on(_ event: EventName, _ action: @escaping ([Any]) -> Void) -> Self {
         if subjects[event] == nil {
             subjects[event] = PassthroughSubject<[Any], Never>()
         }
 
-        let id = UUID()
         let cancellable = subjects[event]!.sink(receiveValue: action)
         listenerSubscriptions[event, default: [:]][id] = cancellable
         
@@ -38,7 +37,7 @@ open class BaseClass: CustomDebugStringConvertible {
         subscribe(cancellable)
 
         emit(event: "newListener", args: [event, id])
-        return id
+        return self
     }
     
     public func once(_ event: EventName, _ action: @escaping ([Any]) -> Void) {
@@ -58,8 +57,8 @@ open class BaseClass: CustomDebugStringConvertible {
         emit(event: "newListener", args: [event, id])
     }
     
-    public func off(_ event: EventName, listenerId: UUID) {
-        removeListener(event: event, listenerId: listenerId)
+    public func off(_ event: EventName) {
+        removeListener(event: event, listenerId: id)
     }
     
     public func removeAllListeners(event: EventName? = nil) {
@@ -132,43 +131,6 @@ open class BaseClass: CustomDebugStringConvertible {
     
     private func subscribe(_ subscription: AnyCancellable) {
         subscription.store(in: &subscriptions)
-    }
-    
-    func forwardSwap() -> ([Any]) -> Void {
-        { [weak self] args in
-            if let data = args as? [AmmSwap], let swap = data.first {
-                self?.emit(event: "swap.\(swap.status)", args: [swap])
-            } else {
-                self?.debug("Unexpected arguments on forwardSwap: \(args) [Sdk]")
-            }
-        }
-    }
-    
-    func forwardEvent(_ event: String) -> ([Any]) -> Void {
-        { [weak self] args in
-            self?.emit(event: event, args: args)
-        }
-    }
-    
-    func forwardLog() -> ([Any]) -> Void {
-        { [weak self] args in
-            if let level = args.first as? String {
-                let argsArray = Array(args.dropFirst())
-                self?.logFunction(level, "forwardedLog", argsArray)
-                
-                if self?.logLevels.contains(level) == true {
-                    self?.emit(event: level, args: argsArray)
-                }
-            } else {
-                self?.emit(event: "log", args: args)
-            }
-        }
-    }
-    
-    func forwardError() -> ([Any]) -> Void {
-        { [weak self] args in
-            self?.emit(event: "error", args: args)
-        }
     }
 
     private enum LogLevel: String {

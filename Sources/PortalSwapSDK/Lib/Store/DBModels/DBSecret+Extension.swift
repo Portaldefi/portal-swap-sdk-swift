@@ -14,7 +14,6 @@ extension DBSecret {
 
             context.performAndWait {
                 self.data = secret
-                self.swapID = UUID().uuidString
                 self.secretHash = key
             }
         } else {

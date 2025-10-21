@@ -23,6 +23,24 @@
     <entity name="DBSecret" representedClassName="DBSecret" syncable="YES" codeGenerationType="class">
         <attribute name="data" attributeType="Binary"/>
         <attribute name="secretHash" attributeType="String"/>
-        <attribute name="swapID" attributeType="String"/>
+    </entity>
+    <entity name="DBSwap" representedClassName="DBSwap" syncable="YES" codeGenerationType="class">
+        <attribute name="accountId" attributeType="String"/>
+        <attribute name="secretHash" attributeType="Binary"/>
+        <attribute name="state" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="swapId" attributeType="Binary"/>
+        <relationship name="secretHolder" maxCount="1" deletionRule="Nullify" destinationEntity="DBSwapParty" inverseName="secretHolder" inverseEntity="DBSwapParty"/>
+        <relationship name="secretSeeker" maxCount="1" deletionRule="Nullify" destinationEntity="DBSwapParty" inverseName="secretSeeker" inverseEntity="DBSwapParty"/>
+    </entity>
+    <entity name="DBSwapParty" representedClassName="DBSwapParty" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" attributeType="String"/>
+        <attribute name="chain" attributeType="String"/>
+        <attribute name="contractAddress" attributeType="String"/>
+        <attribute name="invoice" optional="YES" attributeType="String"/>
+        <attribute name="portalAddress" attributeType="String"/>
+        <attribute name="receipt" optional="YES" attributeType="String"/>
+        <attribute name="symbol" attributeType="String"/>
+        <relationship name="secretHolder" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="DBSwap" inverseName="secretHolder" inverseEntity="DBSwap"/>
+        <relationship name="secretSeeker" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="DBSwap" inverseName="secretSeeker" inverseEntity="DBSwap"/>
     </entity>
 </model>
