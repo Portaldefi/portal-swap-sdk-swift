@@ -2,7 +2,7 @@ import Foundation
 import Web3
 
 public struct Pool: Identifiable {
-    public struct Asset: Identifiable, Hashable {
+    public struct Asset: Identifiable, Hashable, Codable {
         public let id: EthereumAddress
         public let name: String
         public let symbol: String

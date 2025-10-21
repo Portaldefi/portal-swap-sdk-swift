@@ -3,8 +3,8 @@ import Promises
 import BigInt
 
 final class Sdk: BaseClass {
-    private let store: Store
-    private(set) var portalChain: Portal
+    let store: Store
+    let portalChain: Portal
     private(set) var nativeChains = [String: NativeChain]()
     
     private var depositTimeoutTimer: Timer?

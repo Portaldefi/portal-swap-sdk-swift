@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23605" systemVersion="23H311" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="DBAmmSwap" representedClassName="DBAmmSwap" syncable="YES" codeGenerationType="class">
+        <attribute name="accountId" optional="YES" attributeType="String"/>
+        <attribute name="buyAmount" optional="YES" attributeType="String"/>
+        <attribute name="buyAsset" optional="YES" attributeType="String"/>
+        <attribute name="buyAssetSymbol" optional="YES" attributeType="String"/>
+        <attribute name="buyAssetTx" optional="YES" attributeType="String"/>
+        <attribute name="buyId" optional="YES" attributeType="String"/>
+        <attribute name="liquidityPoolId" optional="YES" attributeType="String"/>
+        <attribute name="secretHash" optional="YES" attributeType="String"/>
+        <attribute name="sellAmount" optional="YES" attributeType="String"/>
+        <attribute name="sellAsset" optional="YES" attributeType="String"/>
+        <attribute name="sellAssetSymbol" optional="YES" attributeType="String"/>
+        <attribute name="sellAssetTx" optional="YES" attributeType="String"/>
+        <attribute name="slippage" optional="YES" attributeType="String"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="swapCreation" optional="YES" attributeType="String"/>
+        <attribute name="swapId" optional="YES" attributeType="String"/>
+        <attribute name="swapOwner" optional="YES" attributeType="String"/>
+        <attribute name="swapTxHash" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="DBSecret" representedClassName="DBSecret" syncable="YES" codeGenerationType="class">
+        <attribute name="data" attributeType="Binary"/>
+        <attribute name="secretHash" attributeType="String"/>
+    </entity>
+    <entity name="DBSwap" representedClassName="DBSwap" syncable="YES" codeGenerationType="class">
+        <attribute name="accountId" attributeType="String"/>
+        <attribute name="secretHash" attributeType="Binary"/>
+        <attribute name="state" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="swapId" attributeType="Binary"/>
+        <relationship name="secretHolder" maxCount="1" deletionRule="Nullify" destinationEntity="DBSwapParty" inverseName="secretHolder" inverseEntity="DBSwapParty"/>
+        <relationship name="secretSeeker" maxCount="1" deletionRule="Nullify" destinationEntity="DBSwapParty" inverseName="secretSeeker" inverseEntity="DBSwapParty"/>
+    </entity>
+    <entity name="DBSwapParty" representedClassName="DBSwapParty" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" attributeType="String"/>
+        <attribute name="chain" attributeType="String"/>
+        <attribute name="contractAddress" attributeType="String"/>
+        <attribute name="invoice" optional="YES" attributeType="String"/>
+        <attribute name="portalAddress" attributeType="String"/>
+        <attribute name="receipt" optional="YES" attributeType="String"/>
+        <attribute name="symbol" attributeType="String"/>
+        <relationship name="secretHolder" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="DBSwap" inverseName="secretHolder" inverseEntity="DBSwap"/>
+        <relationship name="secretSeeker" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="DBSwap" inverseName="secretSeeker" inverseEntity="DBSwap"/>
+    </entity>
+    <entity name="DBSwapTransaction" representedClassName="DBSwapTransaction" syncable="YES" codeGenerationType="class">
+        <attribute name="accountId" optional="YES" attributeType="String"/>
+        <attribute name="jsonData" optional="YES" attributeType="String"/>
+        <attribute name="txHash" optional="YES" attributeType="String"/>
+    </entity>
+</model>
