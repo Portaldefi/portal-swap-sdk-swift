@@ -8,6 +8,67 @@ extension DBSwap {
         self.init(entity: entity, insertInto: context)
     }
     
+    func updateFromDomainSwap(_ swap: Swap) throws {
+        guard let context = managedObjectContext else {
+            throw SwapSDKError.msg("Cannot obtain managed object context")
+        }
+        
+        self.state = swap.state.rawValue
+        
+        switch swap.state {
+        case .holderInvoiced:
+            if swap.secretHash != self.secretHash?.hexString {
+                self.secretHash = Data(hex: swap.secretHash)
+            }
+            if let invoice = swap.secretSeeker.invoice {
+                self.ensureSecretSeeker(context: context)
+                self.secretSeeker?.invoice = invoice
+            }
+            
+        case .seekerInvoiced:
+            if let invoice = swap.secretHolder.invoice {
+                self.ensureSecretHolder(context: context)
+                self.secretHolder?.invoice = invoice
+            }
+            
+        case .holderPaid:
+            if let receipt = swap.secretHolder.receipt {
+                self.ensureSecretHolder(context: context)
+                self.secretHolder?.receipt = receipt
+            }
+            
+        case .seekerPaid:
+            if let receipt = swap.secretSeeker.receipt {
+                self.ensureSecretSeeker(context: context)
+                self.secretSeeker?.receipt = receipt
+            }
+            
+        case .holderSettled:
+            if let secret = swap.secret {
+                let secretHash = secret.sha256()
+                
+                if self.secretHash != secretHash {
+                    throw SdkError(message: "secretHash mismatch: \(self.secretHash?.hexString ?? "nil") vs \(secretHash.hexString)", code: String())
+                }
+            }
+            
+        default:
+            break
+        }
+    }
+    
+    private func ensureSecretSeeker(context: NSManagedObjectContext) {
+        if self.secretSeeker == nil {
+            self.secretSeeker = DBSwapParty(context: context)
+        }
+    }
+    
+    private func ensureSecretHolder(context: NSManagedObjectContext) {
+        if self.secretHolder == nil {
+            self.secretHolder = DBSwapParty(context: context)
+        }
+    }
+    
     func update(swap: Swap) throws {
         guard let context = managedObjectContext else {
             throw SwapSDKError.msg("Cannot obtain manage object context")

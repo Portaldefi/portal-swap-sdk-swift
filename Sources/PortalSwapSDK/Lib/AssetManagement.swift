@@ -50,8 +50,8 @@ final class AssetManagement: BaseClass {
             resolve(
                 poolModels.compactMap { model in
                     guard
-                        let baseAsset = assets.first(where: { $0.id.hex(eip55: true) == model.baseAsset.hex(eip55: true) }),
-                        let quoteAsset = assets.first(where: { $0.id.hex(eip55: true) == model.quoteAsset.hex(eip55: true) })
+                        let baseAsset = assets.first(where: { $0.id.description == model.baseAsset.hex(eip55: true) }),
+                        let quoteAsset = assets.first(where: { $0.id.description == model.quoteAsset.hex(eip55: true) })
                     else {
                         return nil
                     }
@@ -82,7 +82,7 @@ final class AssetManagement: BaseClass {
                     
                     self.assets = assetsArray.compactMap { dataArray in
                         guard let asset = dataArray as? [Any],
-                              let id = asset[0] as? EthereumAddress,
+                              let id = asset[0] as? BigUInt,
                               let name = asset[1] as? String,
                               let symbol = asset[2] as? String,
                               let logo = asset[3] as? String,
@@ -161,7 +161,7 @@ final class AssetManagement: BaseClass {
     }
     
     func retrieveAsset(_ id: String) -> Pool.Asset? {
-        assets.first(where: { $0.id.hex(eip55: false) == id })
+        assets.first(where: { $0.id.description == id })
     }
     
     func retrieveAssetByNativeProps(blockchainName: String, blockchainAddress: String) -> Promise<Pool.Asset?> {

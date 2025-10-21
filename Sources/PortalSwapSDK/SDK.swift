@@ -4,30 +4,17 @@ import BigInt
 
 final class Sdk: BaseClass {
     let store: Store
-    let portalChain: Portal
+    private let portalChain: Portal
+    private let config: SwapSdkConfig
     private(set) var nativeChains = [String: NativeChain]()
     
-    private var depositTimeoutTimer: Timer?
+    private var timeoutTimer: DispatchSourceTimer?
     private let depositTimeoutInterval: TimeInterval = 60*5
     
     init(config: SwapSdkConfig) {
+        self.config = config
         store = Store(accountId: config.id)
-            
-        let requiredChains = Set([config.sellAsset, config.buyAsset])
-        
-        for chainKey in requiredChains {
-            switch chainKey {
-            case "ethereum":
-                nativeChains[chainKey] = Ethereum(props: config.blockchains.ethereum) as NativeChain
-            case "lightning":
-                nativeChains[chainKey] = Lightning(props: config.blockchains.lightning) as NativeChain
-            case "solana":
-                nativeChains[chainKey] = Solana(props: config.blockchains.solana) as NativeChain
-            default:
-                break
-            }
-        }
-        
+
         portalChain = Portal(props: config.blockchains.portal)
         
         super.init(id: "sdk")
@@ -38,17 +25,6 @@ final class Sdk: BaseClass {
             .on("swapMatched", onSwapEvent())
             .on("swapHolderInvoiced", onSwapEvent())
             .on("swapSeekerInvoiced", onSwapEvent())
-        
-        for nativeChain in nativeChains.values {
-            nativeChain
-                .on("log", onLog())
-                .on("error", onError())
-                .on("swapHolderPaid", onSwapEvent())
-                .on("swapSeekerPaid", onSwapEvent())
-                .on("swapHolderSettled", onSwapEvent())
-                .on("swapSeekerSettled", onSwapEvent())
-        }
-
     }
     
     func portalAddress() -> String {
@@ -62,9 +38,34 @@ final class Sdk: BaseClass {
         return nativeChain.address
     }
     
-    func start() -> Promise<Void> {
+    func start(sellAsset: String, buyAsset: String) -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
+            
+            let requiredChains = Set([sellAsset, buyAsset])
+            
+            for chainKey in requiredChains {
+                switch chainKey {
+                case "ethereum":
+                    nativeChains[chainKey] = Ethereum(props: config.blockchains.ethereum) as NativeChain
+                case "lightning":
+                    nativeChains[chainKey] = Lightning(props: config.blockchains.lightning) as NativeChain
+                case "solana":
+                    nativeChains[chainKey] = Solana(props: config.blockchains.solana) as NativeChain
+                default:
+                    break
+                }
+            }
+            
+            for nativeChain in nativeChains.values {
+                nativeChain
+                    .on("log", onLog())
+                    .on("error", onError())
+                    .on("swapHolderPaid", onSwapEvent())
+                    .on("swapSeekerPaid", onSwapEvent())
+                    .on("swapHolderSettled", onSwapEvent())
+                    .on("swapSeekerSettled", onSwapEvent())
+            }
             
             try awaitPromise(portalChain.start())
             try awaitPromise(store.start())
@@ -72,6 +73,8 @@ final class Sdk: BaseClass {
             for nativeChain in nativeChains.values {
                 try awaitPromise(nativeChain.start())
             }
+            
+            debug("started")
         }
     }
 
@@ -79,12 +82,18 @@ final class Sdk: BaseClass {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
             
+            timeoutTimer?.cancel()
+            
             try awaitPromise(portalChain.stop())
             try awaitPromise(store.stop())
 
             for nativeChain in nativeChains.values {
                 try awaitPromise(nativeChain.stop())
             }
+            
+            nativeChains.removeAll()
+            
+            debug("stopped")
         }
     }
     
@@ -484,13 +493,13 @@ final class Sdk: BaseClass {
             debug("deposit.starting", try liquidity.toJSON())
             liquidity = try awaitPromise(nativeChain.deposit(liquidity))
             
-            let timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
-            timeoutTimer.schedule(deadline: .now() + depositTimeoutInterval, repeating: .never)
-            timeoutTimer.setEventHandler {
-                timeoutTimer.cancel()
-                reject(SdkError.timedOut(context: ["liquidity": liquidity]))
+            timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
+            timeoutTimer?.schedule(deadline: .now() + depositTimeoutInterval, repeating: .never)
+            timeoutTimer?.setEventHandler {
+                self.timeoutTimer?.cancel()
+                reject(SdkError.timedOut(context: ["deposit operation": "timed out"]))
             }
-            timeoutTimer.resume()
+            timeoutTimer?.resume()
                         
             portalChain.on("AssetMinted") { [weak self] args in
                 guard let self = self else { return }
@@ -500,7 +509,7 @@ final class Sdk: BaseClass {
                     
                 guard liquidity.equals(deposit) else { return }
                 
-                timeoutTimer.cancel()
+                timeoutTimer?.cancel()
 
                 portalChain.off("AssetMinted")
                 
@@ -526,36 +535,42 @@ final class Sdk: BaseClass {
                 portalAddress: portalChain.address
             )
             
-            debug("withdraw.starting", liquidity)
-            let burnedLiquidity = try awaitPromise(portalChain.burnAsset(liquidity))
-            debug("withdraw.waiting", burnedLiquidity)
-            
-            let timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
-            timeoutTimer.schedule(deadline: .now() + depositTimeoutInterval, repeating: .never)
-            timeoutTimer.setEventHandler {
-                timeoutTimer.cancel()
-                reject(SdkError.timedOut(context: ["liquidity": liquidity]))
+            timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.sdk)
+            timeoutTimer?.schedule(deadline: .now() + depositTimeoutInterval, repeating: .never)
+            timeoutTimer?.setEventHandler {
+                self.timeoutTimer?.cancel()
+                reject(SdkError.timedOut(context: ["deposit withdrawal": "timed out"]))
             }
-            timeoutTimer.resume()
-                        
+            timeoutTimer?.resume()
+            
             nativeChain.on("withdraw") { [weak self] args in
                 guard let self = self else { return }
-                guard let withdraw = args[0] as? Liquidity else { return }
+                guard let withdraw = args[0] as? Liquidity else {
+                    return
+                }
                 
                 debug("withdraw", withdraw, liquidity)
                     
                 guard liquidity.equals(withdraw) else { return }
                 
-                timeoutTimer.cancel()
+                timeoutTimer?.cancel()
 
                 portalChain.off("withdraw")
                 
                 resolve(liquidity)
             }
+            
+            debug("withdraw.starting", try? liquidity.toJSON())
+            let burnedLiquidity = try awaitPromise(portalChain.burnAsset(liquidity))
+            debug("withdraw.waiting", try? burnedLiquidity.toJSON())
         }
     }
     
     // Market operations
+    
+    func getOrderLimits(assetId: String) -> Promise<(min: BigUInt, max: BigUInt)> {
+        portalChain.getOrderLimits(assetId: assetId)
+    }
     
     func openOrder(sellChain: String, sellSymbol: String, sellAmount: BigInt, buyChain: String, buySymbol: String, buyAmount: BigInt, orderType: Order.OrderType) -> Promise<Order> {
         Promise { [weak self]  in
@@ -606,7 +621,7 @@ final class Sdk: BaseClass {
                 info("openOrder", ["order": order.toJSON()])
                 return order
             } catch {
-                throw SdkError(message: "Open order error", code: "P2B", context: ["order": order.toJSON()], cause: error)
+                throw SdkError(message: "Open order error", code: "P2B", context: nil, cause: error)
             }
         }
     }

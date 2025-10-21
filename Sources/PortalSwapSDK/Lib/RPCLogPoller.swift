@@ -15,6 +15,15 @@ class RPCLogPoller {
     private var lastProcessedBlock: BigUInt?
     private var isPolling: Bool = false
     
+    private var lastProcessedEthBlock: BigUInt {
+        set {
+            UserDefaults.standard.setValue(Int(newValue), forKey: "\(pollerId)_lastProcessedBlock")
+        }
+        get {
+            return BigUInt(UserDefaults.standard.integer(forKey: "\(pollerId)_lastProcessedBlock"))
+        }
+    }
+    
     private let queue = DispatchQueue(label: "rpc.logpoller.queue")
     
     /// Initializes the LogPooler.
@@ -55,6 +64,7 @@ class RPCLogPoller {
     
     /// Stops the polling process.
     func stopPolling() {
+//        lastProcessedBlock = nil
         timer?.cancel()
         timer = nil
     }
@@ -74,15 +84,34 @@ class RPCLogPoller {
             case .success(let latest):
                 let latestBlock = latest.quantity
                 
-                // compute fromBlock under the queue
                 let fromBlock: BigUInt
-                if let last = self.lastProcessedBlock {
-                    fromBlock = last + 1
+
+                if pollerId.contains("Ethereum") {
+//                    print("\(pollerId) latest block - \(latestBlock)")
+                    
+                    if lastProcessedBlock == 0 {
+                        fromBlock = latestBlock
+                        lastProcessedEthBlock = latestBlock
+                    } else {
+                        if lastProcessedEthBlock + 5 < latestBlock {
+                            fromBlock = latestBlock
+                            lastProcessedEthBlock = latestBlock
+                        } else {
+                            fromBlock = lastProcessedEthBlock + 1
+                        }
+                    }
+                    
+//                    print("\(pollerId) from block - \(fromBlock)")
                 } else {
-                    // On first run, start from current block to avoid processing old events
-                    fromBlock = latestBlock
+                    // compute fromBlock under the queue
+                    if let last = self.lastProcessedBlock {
+                        fromBlock = last + 1
+                    } else {
+                        // On first run, start from current block to avoid processing old events
+                        fromBlock = latestBlock
+                    }
                 }
-                
+                                            
                 guard latestBlock >= fromBlock else {
                     self.isPolling = false
                     return
@@ -95,17 +124,23 @@ class RPCLogPoller {
                                topics: self.topics,
                                fromBlock: fromTag,
                                toBlock: toTag) { logsResponse in
+                    
+                    if self.pollerId.contains("Ethereum") {
+                        self.lastProcessedEthBlock = latestBlock
+                    } else {
+                        self.lastProcessedBlock = latestBlock
+                    }
+                    
                     self.queue.async {
                         defer {
                             self.isPolling = false
                         }
                                                 
                         switch logsResponse.status {
-                        case .success(let newLogs) where !newLogs.isEmpty:
-                            self.onLogs(newLogs)
-                            self.lastProcessedBlock = latestBlock
                         case .success(let newLogs):
-                            self.lastProcessedBlock = latestBlock
+                            if !newLogs.isEmpty {
+                                self.onLogs(newLogs)
+                            }
                         case .failure(let err):
                             self.onError(err)
                         }

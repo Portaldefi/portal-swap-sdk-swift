@@ -3,7 +3,7 @@ import Web3
 
 public struct Pool: Identifiable {
     public struct Asset: Identifiable, Hashable, Codable {
-        public let id: EthereumAddress
+        public let id: BigUInt
         public let name: String
         public let symbol: String
         public let logo: String
@@ -12,7 +12,11 @@ public struct Pool: Identifiable {
         public let blockchainAddress: String
         public let blockchainDecimals: UInt8
         
-        public init(id: EthereumAddress, name: String, symbol: String, logo: String, blockchainId: BigUInt, blockchainName: String, blockchainAddress: String, blockchainDecimals: UInt8) {
+        public var hexId: String {
+            "0x" + String(id, radix: 16)
+        }
+        
+        public init(id: BigUInt, name: String, symbol: String, logo: String, blockchainId: BigUInt, blockchainName: String, blockchainAddress: String, blockchainDecimals: UInt8) {
             self.id = id
             self.name = name
             self.symbol = symbol

@@ -10,16 +10,32 @@ class AnchorAccountFetcher {
     
     // Fetch invoice account similar to Anchor's account.invoice.fetch()
     func fetchInvoice(address: PublicKey) async throws -> InvoiceAccountState {
-        // Get account info with the specific type
-        let accountInfo: BufferInfo<InvoiceAccountState>? = try await apiClient.getAccountInfo(
-            account: address.base58EncodedString
-        )
+        let maxRetries = 5
+        let delaySeconds: UInt64 = 5_000_000_000
         
-        guard let account = accountInfo else {
-            throw SwapSDKError.msg("Invoice account not found at address: \(address.base58EncodedString)")
+        for attempt in 1...maxRetries {
+            do {
+                let accountInfo: BufferInfo<InvoiceAccountState>? = try await apiClient.getAccountInfo(
+                    account: address.base58EncodedString
+                )
+                
+                guard let account = accountInfo else {
+                    if attempt == maxRetries {
+                        throw SwapSDKError.msg("Invoice account not found at address: \(address.base58EncodedString)")
+                    }
+                    
+                    try await Task.sleep(nanoseconds: delaySeconds)
+                    continue
+                }
+                
+                return account.data
+            } catch {
+                if attempt == maxRetries { throw error }
+                try await Task.sleep(nanoseconds: delaySeconds)
+            }
         }
         
-        return account.data
+        throw SwapSDKError.msg("Max retries exceeded")
     }
 }
 

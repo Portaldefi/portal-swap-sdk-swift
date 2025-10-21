@@ -22,6 +22,8 @@ final class Store: BaseClass {
 
             persistenceManager = try LocalPersistenceManager.manager(accountId: accountId)
             emit(event: "open", args: [])
+            
+            debug("started")
         }
     }
     
@@ -31,6 +33,8 @@ final class Store: BaseClass {
 
             persistenceManager = nil
             emit(event: "close", args: [])
+            
+            debug("stopped")
         }
     }
     
@@ -89,9 +93,18 @@ final class Store: BaseClass {
         guard let manager = persistenceManager else {
             throw StoreError.managerNotFound()
         }
-        let dbSwap = try manager.swap(swapId: swap.id)
-        try dbSwap.update(swap: swap)
-        try manager.saveContext()
+        
+        try manager.viewContext.performAndWait {
+            let dbSwap = try manager.swap(swapId: swap.id)
+            
+            manager.viewContext.refresh(dbSwap, mergeChanges: true)
+            
+            try dbSwap.updateFromDomainSwap(swap)
+            
+            if manager.viewContext.hasChanges {
+                try manager.viewContext.save()
+            }
+        }
     }
     
     func update(hash: String, transaction: SwapTransaction) throws {

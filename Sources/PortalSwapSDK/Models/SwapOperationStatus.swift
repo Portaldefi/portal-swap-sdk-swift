@@ -1,6 +1,7 @@
 public enum SwapOperationStatus {
     case none,
          matching,
+         matched,
          canceled,
          swapping,
          failed(String),
@@ -8,7 +9,7 @@ public enum SwapOperationStatus {
          sdkStopped,
          initiated,
          depositing,
-         matched,
+         openingOrder,
          holderInvoiced,
          seekerInvoiced,
          holderPaid,
@@ -21,12 +22,14 @@ public enum SwapOperationStatus {
         switch self {
         case .none:
             return String()
+        case .openingOrder:
+            return "Opening order"
         case .matching:
-            return "Matching"
+            return "Swap matching"
         case .canceled:
             return "Canceled"
         case .swapping:
-            return "Swapping"
+            return "Creating invoice"
         case .failed(let reason):
             return "Failed: \(reason)"
         case .succeded:
@@ -52,7 +55,7 @@ public enum SwapOperationStatus {
         case .seekerSettled:
             return "Seeker settled"
         case .withdrawing:
-            return "Withdraw in-progress"
+            return "Withdrawing deposit"
         }
     }
 }

@@ -19,7 +19,6 @@ extension DBAmmSwap {
             
             swapTxHash = swap.swapTxHash
             
-            liquidityPoolId = swap.liquidityPoolId.hexString
             secretHash = swap.secretHash.hexString
             sellAssetSymbol = swap.sellAssetSymbol
             sellAsset = swap.sellAsset.hex(eip55: true)
@@ -33,11 +32,8 @@ extension DBAmmSwap {
             
             buyAssetTx = swap.buyAssetTx
             
-            slippage = swap.slippage.description
             swapCreation = swap.swapCreation.description
-            swapOwner = swap.swapOwner.hex(eip55: true)
             status = swap.status
-            buyId = swap.buyId
         }
     }
     

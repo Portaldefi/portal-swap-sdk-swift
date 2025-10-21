@@ -4,12 +4,19 @@ import SolanaSwift
 class HtlcLogListener {
     private let apiClient: SolanaAPIClient
     private let programId: PublicKey
-    private var lastProcessedSignature: String?
+    private var lastProcessedSignature: String? {
+        set {
+            UserDefaults.standard.setValue(newValue, forKey: "\(programId.description)_lastProcessedSignature")
+        }
+        get {
+            return UserDefaults.standard.string(forKey: "\(programId.description)_lastProcessedSignature")
+        }
+    }
     private var pollingTask: Task<Void, Never>?
     private var callback: ((Log) -> Void)?
     private var isMonitoring = false
     
-    private let pollingInterval: TimeInterval = 2.0 // seconds
+    private let pollingInterval: TimeInterval = 3.0 // seconds
     private let maxSignaturesPerBatch = 20
     
     private let transactionCache = TransactionCache()
@@ -39,7 +46,7 @@ class HtlcLogListener {
     private struct DepositEventData: Codable {
         let maker: String
         let token_mint: String
-        let amount: UInt64
+        let amount: Int64
         let portal_address: String
     }
 
@@ -47,7 +54,7 @@ class HtlcLogListener {
         let id: String
         let maker: String
         let token_mint: String
-        let amount: UInt64
+        let amount: Int64
         let portal_address: String
     }
 
@@ -55,7 +62,7 @@ class HtlcLogListener {
         let secret_hash: String
         let owner_pubkey: String
         let token_mint: String
-        let amount: UInt64
+        let amount: Int64
         let swap: SwapData
         let is_holder: Bool
     }
@@ -132,6 +139,10 @@ class HtlcLogListener {
             let signatureInfoWithStatus = zip(signatures.reversed(), statuses.reversed())
             
             for (signatureInfo, status) in signatureInfoWithStatus {
+                if signatureInfo.signature == lastProcessedSignature {
+                    continue
+                }
+                
                 if transactionCache.hasProcessed(signatureInfo.signature) {
                     continue
                 }

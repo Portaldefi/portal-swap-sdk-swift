@@ -1,4 +1,5 @@
 import Foundation
+import BigInt
 
 public final class SwapTransaction: Codable {
     struct FeeInfo: Codable {
@@ -32,7 +33,7 @@ public final class SwapTransaction: Codable {
     
     public let sellAsset: Pool.Asset
     public let buyAsset: Pool.Asset
-    public let sellAmount: String
+    public var sellAmount: String
     public var buyAmount: String
     
     public var minedDate = Date.now
@@ -46,6 +47,16 @@ public final class SwapTransaction: Codable {
     public var fee: String?
     public var error: String?
     
+    public var uiSellAmount: String {
+        let decimals = BigUInt(10).power(Int(sellAsset.blockchainDecimals))
+        return "\(Decimal(string: sellAmount)! / Decimal(string: decimals.description)!)"
+    }
+    
+    public var uiBuyAmount: String {
+        let decimals = BigUInt(10).power(Int(buyAsset.blockchainDecimals))
+        return "\(Decimal(string: buyAmount)! / Decimal(string: decimals.description)!)"
+    }
+        
     init(chainId: String, swapId: String? = nil, sellAsset: Pool.Asset, buyAsset: Pool.Asset, sellAmount: String, buyAmount: String, status: TransactionStatus, sellAssetTxnHash: String? = nil, buyAssetTxnHash: String? = nil, swapFee: SwapFee? = nil, fee: String? = nil, error: String? = nil) {
         self.chainId = chainId
         self.swapId = swapId
