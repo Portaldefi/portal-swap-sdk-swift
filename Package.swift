@@ -18,7 +18,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/google/promises.git", .upToNextMajor(from: "2.3.0")),
-        .package(url: "https://github.com/cuhte3/Web3.swift.git", from: "0.8.9"),
+        .package(url: "https://github.com/cuhte3/Web3.swift.git", from: "0.8.10"),
         .package(url: "https://github.com/cuhte3/SwiftBTC", .upToNextMajor(from: "1.0.0")),
         .package(url: "https://github.com/cuhte3/solana-swift.git", branch: "main")
     ],
@@ -31,7 +31,7 @@ let package = Package(
                 .product(name: "Web3PromiseKit", package: "Web3.swift"),
                 .product(name: "Web3ContractABI", package: "Web3.swift"),
                 .product(name: "SwiftBTC", package: "SwiftBTC"),
-                .product(name: "SolanaSwift", package: "solana-swift")
+                .product(name : "SolanaSwift", package: "solana-swift")
             ]
         ),
         .testTarget(
