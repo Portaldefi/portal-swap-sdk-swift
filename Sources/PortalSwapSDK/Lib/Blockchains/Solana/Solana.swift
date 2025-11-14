@@ -52,15 +52,15 @@ final class Solana: BaseClass, NativeChain {
     private let apiClient: SolanaAPIClient
     private let blockchainClient: BlockchainClient
     private let programId: PublicKey
-    
-    private let logPoller: HtlcLogListener
-    
+
+    private var logPoller: HtlcLogListener?
+
     var queue = TransactionLock()
-    
+
     var address: String {
         keyPair.publicKey.base58EncodedString
     }
-    
+
     init(props: SwapSdkConfig.Blockchains.Solana) {
         self.keyPair = props.keyPair
         print(props.keyPair.publicKey.base58EncodedString)
@@ -77,18 +77,42 @@ final class Solana: BaseClass, NativeChain {
             self.apiClient = jsonRpcClient
             self.blockchainClient = BlockchainClient(apiClient: apiClient)
         }
-        
+
         self.programId = try! PublicKey(string: props.programId)
-        self.logPoller = HtlcLogListener(apiClient: apiClient, programId: programId)
-                
+
         super.init(id: "solana")
     }
-    
-    func start() -> Promise<Void> {
-        Promise {
-            self.logPoller.monitor { [weak self] log in
+
+    func start(height: BigUInt) -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            let currentHeight = try awaitPromise(getBlockHeight())
+            var startHeight = UInt64(truncatingIfNeeded: height)
+
+            if startHeight == 0 {
+                startHeight = currentHeight
+                info("start: height was 0 or undefined, starting from current slot", [
+                    "startHeight": startHeight
+                ])
+            } else if startHeight > currentHeight {
+                info("start: stored height > current height (network reset?), starting from current slot", [
+                    "storedHeight": startHeight,
+                    "currentHeight": currentHeight,
+                    "startHeight": currentHeight
+                ])
+                startHeight = currentHeight
+            }
+
+            logPoller = HtlcLogListener(
+                apiClient: apiClient,
+                programId: programId,
+                initialSlot: startHeight
+            )
+
+            logPoller?.startPolling { [weak self] log in
                 guard let self else { return }
-                
+
                 switch log.event {
                 case .deposit(let depositEvent):
                     let liquidity = self.liquidityArgs(event: depositEvent, signature: log.signature, slot: log.slot)
@@ -107,22 +131,39 @@ final class Solana: BaseClass, NativeChain {
                     self.info(event, swapDiff)
                     self.emitOnFinality(log.signature, event: event, args: [swapDiff])
                 }
+
+                self.emit(event: "blockheight", args: [log.slot])
             }
-            
-            self.debug("started")
         }
     }
     
     func stop() -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
-            
-            logPoller.cleanup()
-            
-            debug("stopped")
+
+            logPoller?.cleanup()
+
+            info("stop")
         }
     }
-    
+
+    func getBlockHeight() -> Promise<UInt64> {
+        Promise { [weak self] fulfill, reject in
+            guard let self else {
+                return reject(SdkError.instanceUnavailable())
+            }
+
+            Task {
+                do {
+                    let blockheight = try await self.apiClient.getSlot()
+                    fulfill(blockheight)
+                } catch {
+                    reject(error)
+                }
+            }
+        }
+    }
+
     func deposit(_ liquidity: Liquidity) -> Promise<Liquidity> {
         Promise { fulfill, reject in
             Task { [weak self] in
