@@ -27,7 +27,7 @@ final class Lightning: BaseClass, NativeChain {
         super.init(id: "lightning")
     }
     
-    func start() -> Promise<Void> {
+    func start(height: BigUInt) -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
             
