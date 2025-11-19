@@ -113,6 +113,10 @@ final class Store: BaseClass {
         }
         try manager.update(hash: hash, transaction: transaction)
     }
+    
+    func setBlockHeight(chain: String, height: Int) {
+        
+    }
 }
 
 final class StoreError: BaseError {
