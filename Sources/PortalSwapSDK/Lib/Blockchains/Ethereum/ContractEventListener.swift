@@ -143,11 +143,11 @@ class ContractEventListener: BaseClass {
     }
 
     func getLastProcessedBlock() -> BigUInt {
-        return lastProcessedBlock
+        lastProcessedBlock
     }
 
     private func getCurrentBlockNumber() async throws -> BigUInt {
-        return try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { continuation in
             web3.eth.blockNumber { response in
                 switch response.status {
                 case .success(let blockNumber):
@@ -164,7 +164,7 @@ class ContractEventListener: BaseClass {
         fromBlock: EthereumQuantityTag,
         toBlock: EthereumQuantityTag
     ) async throws -> [EthereumLogObject] {
-        return try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { continuation in
             web3.eth.getLogs(
                 addresses: addresses,
                 topics: nil,
