@@ -6,76 +6,118 @@ import BigInt
 
 final class Ethereum: BaseClass, NativeChain {
     private let props: SwapSdkConfig.Blockchains.Ethereum
-    
+
     private var web3: Web3!
     private var nativeLiquidity: INativeLiquidityManagerContract!
     private var invoiceManager: IInvoiceManagerContract!
-    
+    private var eventListener: ContractEventListener?
+
     private var connected = false
     private let NATIVE_ADDRESS = "0x0000000000000000000000000000000000000000"
-    
+    private let confirmations: Int
+
     var queue = TransactionLock()
-            
+
     var address: String {
         props.traderAddress
     }
-    
+
     init(props: SwapSdkConfig.Blockchains.Ethereum) {
         self.props = props
         
+        let chainId = Int(props.chainId)!
+        self.confirmations = Self.getConfsForNetwork(chainId)
+
         web3 = Web3(rpcURL: props.url)
-        
+
         let nativeLiquidityContractAddress = try! DynamicContract.address(props.nativeLiquidityManagerContractAddress)
         nativeLiquidity = web3.eth.Contract(type: NativeLiquidityManagerContract.self, address: nativeLiquidityContractAddress)
-        
+
         let invoiceManagerContractAddress = try! DynamicContract.address(props.invoiceManagerContractAddress)
         invoiceManager = web3.eth.Contract(type: InvoiceManagerContract.self, address: invoiceManagerContractAddress)
-        
+
         super.init(id: "ethereum")
+
+        info("Using \(confirmations) confirmations for chain \(props.chainId)")
+    }
+
+    private static func getConfsForNetwork(_ chainId: Int) -> Int {
+        switch chainId {
+        case 1: return 30
+        case 11155111: return 5
+        default: return 10
+        }
     }
     
-    func start() -> Promise<Void> {
+    func start(height: BigUInt) -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
-            
-            nativeLiquidity.watchContractEvents(
-                interval: 3,
-                onLogs: { [weak self] logs in
-                    self?.onAccountingLogs(logs)
-                },
-                onError: { [weak self] error in
-                    self?.debug("Native Liquidity Manager logs error", error)
-                })
-                        
-            invoiceManager.watchContractEvents(
-                interval: 3,
-                onLogs: { [weak self] logs in
-                    self?.onAccountingLogs(logs)
-                },
-                onError: { [weak self] error in
-                    self?.debug("Invoice Manager logs error", error)
-                })
-            
-            self.info("start")
-            self.emit(event: "start")
-            
+
+            let currentHeight = try awaitPromise(getCurrentBlockHeight())
+            var startHeight = height
+
+            if height == 0 {
+                startHeight = currentHeight
+                info("start: height was 0, starting from current block \(startHeight)")
+            } else if height > currentHeight {
+                startHeight = currentHeight
+                warn("start: stored height > current height (network reset?), starting from current block", [
+                    "storedHeight": height,
+                    "currentHeight": currentHeight,
+                    "startHeight": startHeight
+                ])
+            }
+
+            let contracts = [
+                ContractConfig(
+                    address: nativeLiquidity.address!,
+                    events: nativeLiquidity.events
+                ),
+                ContractConfig(
+                    address: invoiceManager.address!,
+                    events: invoiceManager.events
+                )
+            ]
+
+            eventListener = ContractEventListener(
+                web3: web3,
+                contracts: contracts,
+                initialBlock: startHeight,
+                confirmations: confirmations
+            )
+
+            eventListener?.startPolling { [weak self] log in
+                self?.onAccountingLog(log)
+            }
+
+            info("start: height=\(startHeight), confirmations=\(confirmations)")
+            emit(event: "start")
             connected = true
-            
-            debug("started")
         }
     }
     
     func stop() -> Promise<Void> {
         Promise { [weak self] in
             guard let self else { throw SdkError.instanceUnavailable() }
-            
-            self.connected = false
-            
-            nativeLiquidity.stopWatchingContractEvents()
-            
-            invoiceManager.stopWatchingContractEvents()
-            
-            debug("stopped")
+
+            eventListener?.stop()
+            eventListener = nil
+            connected = false
+
+            info("stop")
+        }
+    }
+
+    private func getCurrentBlockHeight() -> Promise<BigUInt> {
+        Promise { [weak self] resolve, reject in
+            self?.web3.eth.blockNumber { response in
+                switch response.status {
+                case .success(let blockNumber):
+                    resolve(blockNumber.quantity)
+                case .failure(let error):
+                    reject(error)
+                }
+            }
         }
     }
         
@@ -401,118 +443,84 @@ final class Ethereum: BaseClass, NativeChain {
         }
     }
     
-    private func onAccountingLogs(_ logs: [EthereumLogObject]) {
-        for log in logs {
-            do {
-                try processLog(log)
-            } catch {
-                self.error("onAccountingLogs", error, ["log": log])
-                emit(event: "error", args: [error, log])
+    private func onAccountingLog(_ log: ProcessedLog) {
+        do {
+            let txHash = log.transactionHash
+            let blockNumber = log.blockNumber
+
+            switch log.eventName {
+            case "Deposit":
+                let id = log.args["id"] as! Data
+                let ts = log.args["ts"] as! BigUInt
+                let chain = log.args["chain"] as! String
+                let symbol = log.args["symbol"] as! String
+                let contractAddress = log.args["contractAddress"] as! EthereumAddress
+                let nativeAmount = log.args["nativeAmount"] as! BigUInt
+                let nativeAddress = log.args["nativeAddress"] as! EthereumAddress
+                let portalAddress = log.args["portalAddress"] as! EthereumAddress
+
+                let liquidity = try Liquidity(
+                    chain: chain,
+                    symbol: symbol,
+                    contractAddress: contractAddress.hex(eip55: false),
+                    nativeAmount: BigInt(nativeAmount),
+                    nativeAddress: nativeAddress.hex(eip55: false),
+                    portalAddress: portalAddress.hex(eip55: false)
+                )
+
+                emitOnFinality(txHash, event: "deposit", args: [liquidity])
+
+            case "Withdraw":
+                let id = log.args["id"] as! Data
+                let ts = log.args["ts"] as! BigUInt
+                let chain = log.args["chain"] as! String
+                let symbol = log.args["symbol"] as! String
+                let contractAddress = log.args["contractAddress"] as! EthereumAddress
+                let nativeAmount = log.args["nativeAmount"] as! BigInt
+                let nativeAddress = log.args["nativeAddress"] as! EthereumAddress
+                let portalAddress = log.args["portalAddress"] as! EthereumAddress
+
+                let liquidity = try Liquidity(
+                    chain: chain,
+                    symbol: symbol,
+                    contractAddress: contractAddress.hex(eip55: false),
+                    nativeAmount: BigInt(nativeAmount),
+                    nativeAddress: nativeAddress.hex(eip55: false),
+                    portalAddress: portalAddress.hex(eip55: false)
+                )
+
+                emitOnFinality(txHash, event: "withdraw", args: [liquidity])
+
+            case "SwapHolderPaid":
+                let id = log.args["id"] as! Data
+                let swapHolderPaid = HolderPaidSwap(id: id.hexString, secretHolder: txHash)
+                emitOnFinality(txHash, event: "swapHolderPaid", args: [swapHolderPaid])
+
+            case "SwapSeekerPaid":
+                let id = log.args["id"] as! Data
+                let seekerPaid = SeekerPaidSwap(id: id.hexString, secretSeeker: txHash)
+                emitOnFinality(txHash, event: "swapSeekerPaid", args: [seekerPaid])
+
+            case "SwapHolderSettled":
+                let id = log.args["id"] as! Data
+                let secret = log.args["secret"] as! Data
+                let swapHolderSettled = HolderSettledSwap(id: id.hexString, secret: secret)
+                emitOnFinality(txHash, event: "swapHolderSettled", args: [swapHolderSettled])
+
+            case "SwapSeekerSettled":
+                let id = log.args["id"] as! Data
+                let seekerSettled = SeekerSettledSwap(id: id.hexString)
+                emitOnFinality(txHash, event: "swapSeekerSettled", args: [seekerSettled])
+
+            default:
+                debug("accounting.on\(log.eventName)", log.args)
             }
-        }
-    }
 
-    private func processLog(_ log: EthereumLogObject) throws {
-        guard let topic0 = log.topics.first else { return }
-        guard let txHash = log.transactionHash else { return }
-                
-        switch topic0 {
-        case NativeLiquidityManagerContract.Deposit.topic:
-            let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.Deposit, from: log)
-            
-            let id = decoded["id"] as! Data
-            let ts = decoded["ts"] as! BigUInt
-            let chain = decoded["chain"] as! String
-            let symbol = decoded["symbol"] as! String
-            let contractAddress = decoded["contractAddress"] as! EthereumAddress
-            let nativeAmount  = decoded["nativeAmount"] as! BigUInt
-            let nativeAddress = decoded["nativeAddress"] as! EthereumAddress
-            let portalAddress = decoded["portalAddress"] as! EthereumAddress
-            
-            print("Deposit event → id: \(id.hexString), ts: \(ts.description), chain: \(chain), symbol: \(symbol), contractAddress: \(contractAddress.hex(eip55: true)), nativeAmount: \(nativeAmount), nativeAddress: \(nativeAddress.hex(eip55: true)), portalAddress: \(portalAddress.hex(eip55: true))")
-            
-            let liquidity = try Liquidity(
-                chain: chain,
-                symbol: symbol,
-                contractAddress: contractAddress.hex(eip55: false),
-                nativeAmount: BigInt(nativeAmount),
-                nativeAddress: nativeAddress.hex(eip55: false),
-                portalAddress: portalAddress.hex(eip55: false)
-            )
-            
-            emitOnFinality(txHash.hex(), event: "deposit", args: [liquidity])
-            
-        case NativeLiquidityManagerContract.Withdraw.topic:
-            let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.Withdraw, from: log)
-            
-            let id = decoded["id"] as! Data
-            let ts = decoded["ts"] as! BigUInt
-            let chain = decoded["chain"] as! String
-            let symbol = decoded["symbol"] as! String
-            let contractAddress = decoded["contractAddress"] as! EthereumAddress
-            let nativeAmount  = decoded["nativeAmount"] as! BigInt
-            let nativeAddress = decoded["nativeAddress"] as! EthereumAddress
-            let portalAddress = decoded["portalAddress"] as! EthereumAddress
-            
-            print("Withdraw event → id: \(id.hexString), ts: \(ts.description), chain: \(chain), symbol: \(symbol), nativeAmount: \(nativeAmount), nativeAddress: \(nativeAddress.hex(eip55: true)), portalAddress: \(portalAddress.hex(eip55: true))")
-            
-            let liquidity = try Liquidity(
-                chain: chain,
-                symbol: symbol,
-                contractAddress: contractAddress.hex(eip55: false),
-                nativeAmount: BigInt(nativeAmount),
-                nativeAddress: nativeAddress.hex(eip55: false),
-                portalAddress: portalAddress.hex(eip55: false)
-            )
-            
-            emitOnFinality(txHash.hex(), event: "withdraw", args: [liquidity])
-            
-        case NativeLiquidityManagerContract.SwapHolderPaid.topic:
-            let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapHolderPaid, from: log)
-            let id = decoded["id"] as! Data
-            
-            let swapHolderPaid = HolderPaidSwap(id: id.hexString, secretHolder: txHash.hex())
-            print("SwapHolderPaid event → \(swapHolderPaid)")
-            
-            emitOnFinality(txHash.hex(), event: "swapHolderPaid", args: [swapHolderPaid])
-            
-        case NativeLiquidityManagerContract.SwapHolderSettled.topic:
-            let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapHolderSettled, from: log)
-            let id = decoded["id"] as! Data
-            let secret = decoded["secret"] as! Data
-            
-            let swapHolderSettled = HolderSettledSwap(id: id.hexString, secret: secret)
-            print("SwapHolderSettled event → \(swapHolderSettled)")
-            
-            emitOnFinality(txHash.hex(), event: "swapHolderSettled", args: [swapHolderSettled])
-            
-        case NativeLiquidityManagerContract.SwapInvoiceCreated.topic:
-            let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapInvoiceCreated, from: log)
-            let swap = try Swap(json: decoded)
-            print("SwapInvoiceCreated event → \(swap)")
-            
-            emitOnFinality(txHash.hex(), event: "swapInvoiceCreated", args: [swap])
-            
-        case NativeLiquidityManagerContract.SwapSeekerPaid.topic:
-            let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapSeekerPaid, from: log)
-            let id = decoded["id"] as! Data
-            let seekerPaid = SeekerPaidSwap(id: id.hexString, secretSeeker: txHash.hex())
-            
-            print("SwapSeekerPaid event → \(seekerPaid)")
-            
-            emitOnFinality(txHash.hex(), event: "swapSeekerPaid", args: [seekerPaid])
-            
-        case NativeLiquidityManagerContract.SwapSeekerSettled.topic:
-            let decoded = try ABI.decodeLog(event: NativeLiquidityManagerContract.SwapSeekerSettled, from: log)
-            let id = decoded["id"] as! Data
-            
-            let seekerSettled = SeekerSettledSwap(id: id.hexString)
-            print("SwapSeekerSettled event → \(seekerSettled)")
+            emit(event: "blockheight", args: [blockNumber])
 
-            emitOnFinality(txHash.hex(), event: "swapSeekerSettled", args: [seekerSettled])
-            
-        default:
-            print("Unknown event topic: \(topic0.hex())")
+        } catch {
+            self.error("onAccountingLog", error, ["log": log])
+            emit(event: "error", args: [error, log])
         }
     }
 }

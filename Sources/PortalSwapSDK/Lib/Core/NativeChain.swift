@@ -79,7 +79,7 @@ extension TxLockable {
 protocol NativeChain: BaseClass, TxLockable {
     var address: String { get }
 
-    func start() -> Promise<Void>
+    func start(height: BigUInt?) -> Promise<Void>
     func stop() -> Promise<Void>
 
     func deposit(_ liquidity: Liquidity) -> Promise<Liquidity>
@@ -87,6 +87,16 @@ protocol NativeChain: BaseClass, TxLockable {
     func createInvoice(_ party: Party) -> Promise<Invoice>
     func payInvoice(_ party: Party) -> Promise<Void>
     func settleInvoice(for party: Party, with secret: Data) -> Promise<Party>
+}
+
+extension NativeChain {
+    func start(height: BigUInt? = 0) -> Promise<Void> {
+        if let height {
+            start(height: height)
+        } else {
+            start(height: 0)
+        }
+    }
 }
 
 final class NativeChainError: BaseError {
