@@ -97,6 +97,23 @@ final class Sdk: BaseClass {
         }
     }
     
+    private func onBlockheight() -> ([Any]) -> Void {
+        { [weak self] arguments in
+            guard let self = self else { return }
+            
+            guard
+                arguments.count >= 2,
+                let chain = arguments[0] as? String,
+                let height = arguments[1] as? Int else
+            {
+                return
+            }
+            
+            store.setBlockHeight(chain: chain, height: height)
+            debug("onBlockheight", chain, height)
+        }
+    }
+    
     private func onLog() -> ([Any]) -> Void {
         return { [weak self] args in
             guard let self = self else { return }
