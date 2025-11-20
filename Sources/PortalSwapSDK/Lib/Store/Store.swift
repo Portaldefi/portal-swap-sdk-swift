@@ -1,6 +1,7 @@
 import Foundation
 import CoreData
 import Promises
+import BigInt
 
 final class Store: BaseClass {
     private let accountId: String
@@ -116,6 +117,10 @@ final class Store: BaseClass {
     
     func setBlockHeight(chain: String, height: Int) {
         
+    }
+    
+    func getBlockHeight(chain: String) -> BigUInt? {
+        nil
     }
 }
 
