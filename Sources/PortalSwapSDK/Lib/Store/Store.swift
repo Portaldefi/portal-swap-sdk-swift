@@ -1,7 +1,7 @@
 import Foundation
 import CoreData
 import Promises
-import BigInt
+import Security
 
 final class Store: BaseClass {
     private let accountId: String
@@ -116,11 +116,43 @@ final class Store: BaseClass {
     }
     
     func setBlockHeight(chain: String, height: Int) {
+        let key = "sdk.blockheight.\(chain)"
+        let data = String(height).data(using: .utf8)!
         
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        
+        // Delete existing
+        SecItemDelete(query as CFDictionary)
+        
+        // Add new
+        SecItemAdd(query as CFDictionary, nil)
     }
     
-    func getBlockHeight(chain: String) -> BigUInt? {
-        nil
+    func getBlockHeight(chain: String) -> Int? {
+        let key = "sdk.blockheight.\(chain)"
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let string = String(data: data, encoding: .utf8),
+              let height = Int(string) else {
+            return nil
+        }
+        
+        return height
     }
 }
 
