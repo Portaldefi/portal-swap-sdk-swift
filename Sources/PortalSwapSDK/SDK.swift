@@ -70,11 +70,27 @@ final class Sdk: BaseClass {
             
             try awaitPromise(portalChain.start())
             try awaitPromise(store.start())
-            
+                        
             for (chainKey, nativeChain) in nativeChains {
-                let height = store.getBlockHeight(chain: chainKey)
-                info("start chain", chainKey, "from height", height ?? 0)
-                try awaitPromise(nativeChain.start(height: height))
+                let height: Int
+                
+                if store.hasUnfinishedSwaps() {
+                    height = store.getBlockHeight(chain: chainKey) ?? 0
+                    
+                    guard height > 0 else {
+                        throw SdkError(
+                            message: "Cannot start native chain \(chainKey) - missing blockheight for unfinished swaps",
+                            code: "EInvalidBlockheight",
+                            context: ["chain": chainKey]
+                        )
+                    }
+                    
+                    info("start \(chainKey), from: \(height)")
+                } else {
+                    height = 0
+                }
+                
+                try awaitPromise(nativeChain.start(height: BigUInt(height)))
             }
             
             debug("started")
