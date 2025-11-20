@@ -65,13 +65,32 @@ final class Sdk: BaseClass {
                     .on("swapSeekerPaid", onSwapEvent())
                     .on("swapHolderSettled", onSwapEvent())
                     .on("swapSeekerSettled", onSwapEvent())
+                    .on("blockheight", onBlockheight())
             }
             
             try awaitPromise(portalChain.start())
             try awaitPromise(store.start())
-            
-            for nativeChain in nativeChains.values {
-                try awaitPromise(nativeChain.start())
+                        
+            for (chainKey, nativeChain) in nativeChains {
+                let height: Int
+                
+                if store.hasUnfinishedSwaps() {
+                    height = store.getBlockHeight(chain: chainKey) ?? 0
+                    
+                    guard height > 0 else {
+                        throw SdkError(
+                            message: "Cannot start native chain \(chainKey) - missing blockheight for unfinished swaps",
+                            code: "EInvalidBlockheight",
+                            context: ["chain": chainKey]
+                        )
+                    }
+                    
+                    info("start \(chainKey), from: \(height)")
+                } else {
+                    height = 0
+                }
+                
+                try awaitPromise(nativeChain.start(height: BigUInt(height)))
             }
             
             debug("started")
@@ -94,6 +113,23 @@ final class Sdk: BaseClass {
             nativeChains.removeAll()
             
             debug("stopped")
+        }
+    }
+    
+    private func onBlockheight() -> ([Any]) -> Void {
+        { [weak self] arguments in
+            guard let self = self else { return }
+            
+            guard
+                arguments.count >= 2,
+                let chain = arguments[0] as? String,
+                let height = arguments[1] as? Int else
+            {
+                return
+            }
+            
+            store.setBlockHeight(chain: chain, height: height)
+            debug("onBlockheight", chain, height)
         }
     }
     

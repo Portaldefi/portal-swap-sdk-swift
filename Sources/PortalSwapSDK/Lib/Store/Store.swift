@@ -1,6 +1,7 @@
 import Foundation
 import CoreData
 import Promises
+import Security
 
 final class Store: BaseClass {
     private let accountId: String
@@ -112,6 +113,68 @@ final class Store: BaseClass {
             throw StoreError.managerNotFound()
         }
         try manager.update(hash: hash, transaction: transaction)
+    }
+    
+    func hasUnfinishedSwaps() -> Bool {
+        guard let manager = persistenceManager else {
+            return false
+        }
+        
+        do {
+            let swaps = try manager.fetchSwapTxs()
+            let unfinishedSwaps = swaps.filter { tx in
+                tx.status == .pending
+            }
+                        
+            if unfinishedSwaps.count > 0 {
+                return true
+            }
+            
+            return false
+        } catch {
+            warn("hasUnfinishedSwaps: error checking swaps, assuming none", error)
+            return false
+        }
+    }
+    
+    func setBlockHeight(chain: String, height: Int) {
+        let key = "sdk.blockheight.\(chain)"
+        let data = String(height).data(using: .utf8)!
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        
+        // Delete existing
+        SecItemDelete(query as CFDictionary)
+        
+        // Add new
+        SecItemAdd(query as CFDictionary, nil)
+    }
+    
+    func getBlockHeight(chain: String) -> Int? {
+        let key = "sdk.blockheight.\(chain)"
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let string = String(data: data, encoding: .utf8),
+              let height = Int(string) else {
+            return nil
+        }
+        
+        return height
     }
 }
 

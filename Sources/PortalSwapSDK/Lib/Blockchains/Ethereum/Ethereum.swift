@@ -450,8 +450,6 @@ final class Ethereum: BaseClass, NativeChain {
 
             switch log.eventName {
             case "Deposit":
-                let id = log.args["id"] as! Data
-                let ts = log.args["ts"] as! BigUInt
                 let chain = log.args["chain"] as! String
                 let symbol = log.args["symbol"] as! String
                 let contractAddress = log.args["contractAddress"] as! EthereumAddress
@@ -471,8 +469,6 @@ final class Ethereum: BaseClass, NativeChain {
                 emitOnFinality(txHash, event: "deposit", args: [liquidity])
 
             case "Withdraw":
-                let id = log.args["id"] as! Data
-                let ts = log.args["ts"] as! BigUInt
                 let chain = log.args["chain"] as! String
                 let symbol = log.args["symbol"] as! String
                 let contractAddress = log.args["contractAddress"] as! EthereumAddress
