@@ -115,6 +115,28 @@ final class Store: BaseClass {
         try manager.update(hash: hash, transaction: transaction)
     }
     
+    func hasUnfinishedSwaps() -> Bool {
+        guard let manager = persistenceManager else {
+            return false
+        }
+        
+        do {
+            let swaps = try manager.fetchSwapTxs()
+            let unfinishedSwaps = swaps.filter { tx in
+                tx.status == .pending
+            }
+                        
+            if unfinishedSwaps.count > 0 {
+                return true
+            }
+            
+            return false
+        } catch {
+            warn("hasUnfinishedSwaps: error checking swaps, assuming none", error)
+            return false
+        }
+    }
+    
     func setBlockHeight(chain: String, height: Int) {
         let key = "sdk.blockheight.\(chain)"
         let data = String(height).data(using: .utf8)!
