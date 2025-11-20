@@ -65,13 +65,16 @@ final class Sdk: BaseClass {
                     .on("swapSeekerPaid", onSwapEvent())
                     .on("swapHolderSettled", onSwapEvent())
                     .on("swapSeekerSettled", onSwapEvent())
+                    .on("blockheight", onBlockheight())
             }
             
             try awaitPromise(portalChain.start())
             try awaitPromise(store.start())
             
-            for nativeChain in nativeChains.values {
-                try awaitPromise(nativeChain.start())
+            for (chainKey, nativeChain) in nativeChains {
+                let height = store.getBlockHeight(chain: chainKey)
+                info("start chain", chainKey, "from height", height ?? 0)
+                try awaitPromise(nativeChain.start(height: height))
             }
             
             debug("started")
