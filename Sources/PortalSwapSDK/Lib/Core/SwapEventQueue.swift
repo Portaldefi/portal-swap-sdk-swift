@@ -75,8 +75,38 @@ final class SwapEventQueue {
     func clear(swapId: String) {
         queues.removeValue(forKey: swapId)
     }
-    
+
+    func clearAll() {
+        queues.removeAll()
+    }
+
     func getQueueSize(swapId: String) -> Int {
         queues[swapId]?.count ?? 0
+    }
+
+    func getTotalQueueSize() -> Int {
+        queues.values.reduce(0) { $0 + $1.count }
+    }
+
+    func getDebugInfo() -> [String: Any] {
+        let now = Date()
+        let swaps = queues.map { (swapId, queue) -> [String: Any] in
+            [
+                "id": swapId,
+                "queueSize": queue.count,
+                "events": queue.map { event -> [String: Any] in
+                    [
+                        "state": "\(event.swapDiff.state)",
+                        "age": now.timeIntervalSince(event.timestamp)
+                    ]
+                }
+            ]
+        }
+
+        return [
+            "swapCount": queues.count,
+            "totalEvents": getTotalQueueSize(),
+            "swaps": swaps
+        ]
     }
 }
