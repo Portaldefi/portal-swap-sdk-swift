@@ -653,6 +653,36 @@ final class Solana: BaseClass, NativeChain {
             }
         }
     }
+
+    func getHTLCTimeout(invoiceId: String) -> Promise<UInt64> {
+        Promise { fulfill, reject in
+            Task { [weak self] in
+                guard let self else {
+                    return reject(SdkError.instanceUnavailable())
+                }
+
+                do {
+                    let invoicePubkey = try PublicKey(string: invoiceId)
+
+                    let invoice = try await apiClient.fetchInvoice(at: invoicePubkey)
+                    let maker = invoice.payerPubkey
+                    let secretHash = invoice.secretHash
+
+                    let (htlPDA, _) = try PublicKey.findProgramAddress(
+                        seeds: [Data("htl".utf8), maker.data, secretHash],
+                        programId: programId
+                    )
+
+                    let htl = try await apiClient.fetchHTLC(at: htlPDA)
+                    fulfill(htl.timeout)
+                } catch {
+                    let err = NativeChainError(message: "Failed to get HTLC timeout", code: "404")
+                    self.error("getHTLCTimeout", err)
+                    reject(err)
+                }
+            }
+        }
+    }
 }
 
 extension Solana {
