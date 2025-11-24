@@ -15,6 +15,7 @@ protocol IInvoiceManagerContract: EthereumContract, IRPCLogsPoller {
     func createInvoice(swap: Swap) -> SolidityInvocation
     func payInvoice(swap: Swap) -> SolidityInvocation
     func settleInvoice(swap: Swap, secret: Data) -> SolidityInvocation
+    func getSwapTimeout(swap swapId: String) -> SolidityInvocation
 }
 
 class InvoiceManagerContract: StaticContract {
@@ -276,7 +277,19 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
         let method = SolidityNonPayableFunction(name: "settleInvoice", inputs: inputs, handler: self)
         return method.invoke(swapTuple, secret)
     }
-    
+
+    func getSwapTimeout(swap swapId: String) -> SolidityInvocation {
+        let inputs = [
+            SolidityFunctionParameter(name: "swapId", type: .bytes(length: 32))
+        ]
+        let outputs = [
+            SolidityFunctionParameter(name: "", type: .uint256)
+        ]
+
+        let method = SolidityConstantFunction(name: "getSwapTimeout", inputs: inputs, outputs: outputs, handler: self)
+        return method.invoke(Data(hex: swapId))
+    }
+
     func watchContractEvents(interval: TimeInterval, onLogs: @escaping ([EthereumLogObject]) -> Void, onError: @escaping (Error) -> Void) {
         guard let contractAddress = address else {
             let error = NSError(domain: "InvoiceManagerContract", code: -1, userInfo: [NSLocalizedDescriptionKey: "Contract address is nil"])
