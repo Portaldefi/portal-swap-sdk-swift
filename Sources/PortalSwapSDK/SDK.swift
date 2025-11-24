@@ -6,10 +6,11 @@ final class Sdk: BaseClass {
     let store: Store
     private let portalChain: Portal
     private let config: SwapSdkConfig
-    private(set) var nativeChains = [String: NativeChain]()
-    
-    private var timeoutTimer: DispatchSourceTimer?
+    private let eventQueue = SwapEventQueue()
     private let depositTimeoutInterval: TimeInterval = 60*5
+    
+    private(set) var nativeChains = [String: NativeChain]()
+    private var timeoutTimer: DispatchSourceTimer?
     
     init(config: SwapSdkConfig) {
         self.config = config
@@ -168,6 +169,25 @@ final class Sdk: BaseClass {
         }
     }
     
+    private func handleSwapState(swap: Swap) {
+        switch swap.state {
+        case .matched:
+            onSwapMatched(swap: swap)
+        case .holderInvoiced:
+            swapHolderInvoiced(swap: swap)
+        case .seekerInvoiced:
+            swapSeekerInvoiced(swap: swap)
+        case .holderPaid:
+            swapHolderPaid(swap: swap)
+        case .seekerPaid:
+            swapSeekerPaid(swap: swap)
+        case .holderSettled:
+            swapHolderSettled(swap: swap)
+        case .seekerSettled:
+            swapSeekerSettled(swap: swap)
+        }
+    }
+    
     private func onSwapEvent() -> ([Any]) -> Void {
         return { [weak self] args in
             guard let self = self else { return }
@@ -222,10 +242,32 @@ final class Sdk: BaseClass {
                 
                 do {
                     swap = try store.get(swapId: swapDiff.id)
+                    
+                    // Check if this event can be processed immediately or needs to be queued
+                    let queueResult = eventQueue.enqueue(swap: swap, swapDiff: swapDiff)
+                    
+                    if !queueResult.canProcess {
+                        // Event is out of order and has been queued
+                        self.warn("onSwapEvent", queueResult.reason ?? "Event queued", swapDiff)
+                        return
+                    }
+                    
+                    // Process this event
                     try swap.update(swapDiff)
                     try store.update(swap: swap)
+                    
+                    // Check if any queued events can now be processed
+                    let readyEvents = eventQueue.processQueue(swap: swap)
+                    for readyDiff in readyEvents {
+                        debug("onSwapEvent.processingQueued", readyDiff)
+                        try swap.update(readyDiff)
+                        try store.update(swap: swap)
+                        
+                        self.handleSwapState(swap: swap)
+                    }
+                    
                 } catch {
-                    self.warn("onSwapEvent", "Failed to retrieve/update swap from store", swapDiff, error)
+                    self.warn("onSwapEvent", "Failed to process swap event", swapDiff, error)
                     return
                 }
                 
@@ -235,23 +277,8 @@ final class Sdk: BaseClass {
             }
             
             debug("onSwapEvent.swap", swap.toJSON())
-            
-            switch swap.state {
-            case .matched:
-                onSwapMatched(swap: swap)
-            case .holderInvoiced:
-                swapHolderInvoiced(swap: swap)
-            case .seekerInvoiced:
-                swapSeekerInvoiced(swap: swap)
-            case .holderPaid:
-                swapHolderPaid(swap: swap)
-            case .seekerPaid:
-                swapSeekerPaid(swap: swap)
-            case .holderSettled:
-                swapHolderSettled(swap: swap)
-            case .seekerSettled:
-                swapSeekerSettled(swap: swap)
-            }
+
+            handleSwapState(swap: swap)
         }
     }
         
