@@ -421,14 +421,62 @@ final class Sdk: BaseClass {
          
         info("onSwapHolderPaid", swap.toJSON())
         emit(event: "swapHolderPaid", args: [swap])
-        
-        guard let nativeChain = nativeChains[swap.secretSeeker.chain] else {
+
+        guard let holderChain = nativeChains[swap.secretHolder.chain] else {
+            emit(event: "error", args: [SdkError.invalidChain(chain: swap.secretHolder.chain)])
+            return
+        }
+
+        guard let seekerChain = nativeChains[swap.secretSeeker.chain] else {
             emit(event: "error", args: [SdkError.invalidChain(chain: swap.secretSeeker.chain)])
             return
         }
         
         do {
-            try awaitPromise(nativeChain.payInvoice(swap.secretSeeker))
+            let holderCurrentHeight = try awaitPromise(holderChain.getBlockHeight())
+            let seekerCurrentHeight = try awaitPromise(seekerChain.getBlockHeight())
+
+            var holderAbsoluteTimeout: UInt64
+            if swap.secretHolder.chain == "ethereum" {
+                holderAbsoluteTimeout = try awaitPromise((holderChain as! Ethereum).getSwapTimeout(swapId: swap.id))
+            } else if swap.secretHolder.chain == "solana" {
+                guard let holderInvoice = swap.secretHolder.invoice else {
+                    throw SwapSDKError.msg("Holder invoice is missing")
+                }
+                holderAbsoluteTimeout = try awaitPromise((holderChain as! Solana).getHTLCTimeout(invoiceId: holderInvoice))
+            } else {
+                holderAbsoluteTimeout = holderCurrentHeight + 1000
+            }
+
+            let timeoutBlocks = calculateSwapTimeoutBlocks(
+                secretHolderChain: swap.secretHolder.chain,
+                secretSeekerChain: swap.secretSeeker.chain
+            )
+            let seekerExpectedTimeout = seekerCurrentHeight + UInt64(timeoutBlocks.secretSeekerTimeoutBlocks)
+
+            let isSecretHolder = false
+            let timeoutValidation = validateCounterpartyTimeout(
+                myTimeoutBlock: seekerExpectedTimeout,
+                theirTimeoutBlock: holderAbsoluteTimeout,
+                myCurrentBlock: seekerCurrentHeight,
+                theirCurrentBlock: holderCurrentHeight,
+                isSecretHolder: isSecretHolder,
+                myChain: swap.secretSeeker.chain,
+                theirChain: swap.secretHolder.chain
+            )
+
+            if !timeoutValidation.isValid {
+                let err = SwapSDKError.msg("Invalid timeout validation: \(timeoutValidation.reason ?? "")")
+                self.error("onSwapHolderPaid.timeout_validation_failed", err, [
+                    "timeoutValidation": timeoutValidation,
+                    "swap": swap.toJSON(),
+                    "holderAbsoluteTimeout": holderAbsoluteTimeout,
+                    "seekerExpectedTimeout": seekerExpectedTimeout
+                ])
+                throw err
+            }
+
+            try awaitPromise(seekerChain.payInvoice(swap.secretSeeker))
         } catch {
             self.error("onSwapHolderPaid", "Failed to pay invoice", error)
         }
