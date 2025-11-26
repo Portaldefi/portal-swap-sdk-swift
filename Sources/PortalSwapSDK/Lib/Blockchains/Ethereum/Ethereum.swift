@@ -120,7 +120,19 @@ final class Ethereum: BaseClass, NativeChain {
             }
         }
     }
-        
+
+    func getBlockHeight() -> Promise<UInt64> {
+        Promise { [weak self] in
+            guard let self else {
+                throw SdkError.instanceUnavailable()
+            }
+
+            let blockNumber = try awaitPromise(getCurrentBlockHeight())
+            info("getBlockHeight", ["blockNumber": blockNumber])
+            return try UInt64(blockNumber)
+        }
+    }
+
     func deposit(_ liquidity: Liquidity) -> Promise<Liquidity> {
         Promise { [weak self] in
             guard let self else {
@@ -442,7 +454,35 @@ final class Ethereum: BaseClass, NativeChain {
             return party
         }
     }
-    
+
+    func getSwapTimeout(swapId: String) -> Promise<UInt64> {
+        Promise { [weak self] resolve, reject in
+            guard let self else {
+                return reject(SdkError.instanceUnavailable())
+            }
+
+            invoiceManager.getSwapTimeout(swap: swapId).call { response, error in
+                if let timeout = response?[""] as? BigUInt {
+                    do {
+                        let timeoutUInt64 = try UInt64(timeout)
+                        resolve(timeoutUInt64)
+                    } catch {
+                        let err = NativeChainError(message: "Failed to convert timeout to UInt64", code: "404")
+                        self.error("getSwapTimeout", err)
+                        reject(err)
+                    }
+                } else if let error {
+                    self.error("getSwapTimeout", error)
+                    reject(error)
+                } else {
+                    let err = NativeChainError(message: "Failed to decode timeout", code: "404")
+                    self.error("getSwapTimeout", err)
+                    reject(err)
+                }
+            }
+        }
+    }
+
     private func onAccountingLog(_ log: ProcessedLog) {
         do {
             let txHash = log.transactionHash
