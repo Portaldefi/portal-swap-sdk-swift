@@ -120,7 +120,19 @@ final class Ethereum: BaseClass, NativeChain {
             }
         }
     }
-        
+
+    func getBlockHeight() -> Promise<UInt64> {
+        Promise { [weak self] in
+            guard let self else {
+                throw SdkError.instanceUnavailable()
+            }
+
+            let blockNumber = try awaitPromise(getCurrentBlockHeight())
+            info("getBlockHeight", ["blockNumber": blockNumber])
+            return try UInt64(blockNumber)
+        }
+    }
+
     func deposit(_ liquidity: Liquidity) -> Promise<Liquidity> {
         Promise { [weak self] in
             guard let self else {

@@ -305,6 +305,11 @@ final class Lightning: BaseClass, NativeChain {
             }
         }
     }
+    
+    func getBlockHeight() -> Promise<UInt64> {
+        //FIXME: implement proper block height fetching
+        Promise { UInt64(0) }
+    }
 }
 
 extension Lightning: TxLockable {

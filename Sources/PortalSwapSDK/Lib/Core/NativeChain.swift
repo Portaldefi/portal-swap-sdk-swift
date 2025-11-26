@@ -87,6 +87,7 @@ protocol NativeChain: BaseClass, TxLockable {
     func createInvoice(_ party: Party) -> Promise<Invoice>
     func payInvoice(_ party: Party) -> Promise<Void>
     func settleInvoice(for party: Party, with secret: Data) -> Promise<Party>
+    func getBlockHeight() -> Promise<UInt64>
 }
 
 extension NativeChain {
