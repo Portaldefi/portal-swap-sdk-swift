@@ -579,7 +579,7 @@ extension Ethereum: TxLockable {
     private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
         retry(attempts: 10, delay: 3) {
             Promise {
-                let confirmations: BigUInt = 1
+                let confirmations = BigUInt(self.confirmations)
                 let receipt = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.fetchReceipt(txHash: hash) })
                 let head = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.blockNumber() })
                 
