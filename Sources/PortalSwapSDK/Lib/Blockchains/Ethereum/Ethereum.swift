@@ -165,19 +165,35 @@ final class Ethereum: BaseClass, NativeChain {
             guard let swapOwner = EthereumAddress(hexString: address) else {
                 throw NativeChainError.init(message: "Invalid eth address", code: "404")
             }
+
+            let invocation = nativeLiquidity.ethDeposit(
+                assetAddress: assetAddress,
+                nativeAmount: liquidity.nativeAmount,
+                nativeAddress: portalAddress
+            )
+
+            guard let call = invocation.createCall() else {
+                throw NativeChainError.init(message: "Failed to create call for gas estimation", code: "404")
+            }
+
+            let fees = try awaitPromise(web3.eth.estimateFeesPerGas())
             
+            info("estimateFeesPerGas", [
+                "maxFeePerGas": fees.maxFeePerGas,
+                "maxPriorityFeePerGas": fees.maxPriorityFeePerGas
+            ])
+
+            let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
+            info("estimateGasLimit", ["gasLimit": gasLimit])
+
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
-                    guard let tx = self.nativeLiquidity.ethDeposit(
-                        assetAddress: assetAddress,
-                        nativeAmount: liquidity.nativeAmount,
-                        nativeAddress: portalAddress
-                    ).createTransaction(
+                    guard let tx = invocation.createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
-                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
-                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
-                        gasLimit: EthereumQuantity(quantity: 200_000),
+                        maxFeePerGas: EthereumQuantity(quantity: fees.maxFeePerGas),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: fees.maxPriorityFeePerGas),
+                        gasLimit: EthereumQuantity(quantity: gasLimit),
                         from: swapOwner,
                         value: txValue,
                         accessList: [:],
@@ -264,15 +280,30 @@ final class Ethereum: BaseClass, NativeChain {
             
             let quantity = (party.contractAddress == NATIVE_ADDRESS) ? party.amount : 0
             let txValue: EthereumQuantity = EthereumQuantity(quantity: quantity)
-            
+
+            let invocation = invoiceManager.payInvoice(swap: swap)
+
+            guard let call = invocation.createCall() else {
+                throw NativeChainError.init(message: "Failed to create call for gas estimation", code: "404")
+            }
+
+            let fees = try awaitPromise(web3.eth.estimateFeesPerGas())
+            info("estimateFeesPerGas", [
+                "maxFeePerGas": fees.maxFeePerGas,
+                "maxPriorityFeePerGas": fees.maxPriorityFeePerGas
+            ])
+
+            let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
+            info("estimateGasLimit", ["gasLimit": gasLimit])
+
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
-                    guard let tx = self.invoiceManager.payInvoice(swap: swap).createTransaction(
+                    guard let tx = invocation.createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
-                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
-                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
-                        gasLimit: EthereumQuantity(quantity: 1_000_000),
+                        maxFeePerGas: EthereumQuantity(quantity: fees.maxFeePerGas),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: fees.maxPriorityFeePerGas),
+                        gasLimit: EthereumQuantity(quantity: gasLimit),
                         from: swapOwner,
                         value: txValue,
                         accessList: [:],
@@ -320,19 +351,34 @@ final class Ethereum: BaseClass, NativeChain {
             guard let swapOwner = EthereumAddress(hexString: address) else {
                 throw NativeChainError(message: "Invalid eth address", code: "404")
             }
-            
+
             guard let swap = party.swap else {
                 throw NativeChainError(message: "Invalid swap", code: "404")
             }
-            
+
+            let invocation = invoiceManager.createInvoice(swap: swap)
+
+            guard let call = invocation.createCall() else {
+                throw NativeChainError(message: "Failed to create call for gas estimation", code: "404")
+            }
+
+            let fees = try awaitPromise(web3.eth.estimateFeesPerGas())
+            info("estimateFeesPerGas", [
+                "maxFeePerGas": fees.maxFeePerGas,
+                "maxPriorityFeePerGas": fees.maxPriorityFeePerGas
+            ])
+
+            let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
+            info("estimateGasLimit", ["gasLimit": gasLimit])
+
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
-                    guard let tx = self.invoiceManager.createInvoice(swap: swap).createTransaction(
+                    guard let tx = invocation.createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
-                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
-                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
-                        gasLimit: EthereumQuantity(quantity: 1_000_000),
+                        maxFeePerGas: EthereumQuantity(quantity: fees.maxFeePerGas),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: fees.maxPriorityFeePerGas),
+                        gasLimit: EthereumQuantity(quantity: gasLimit),
                         from: swapOwner,
                         value: EthereumQuantity(quantity: 0),
                         accessList: [:],
@@ -411,18 +457,30 @@ final class Ethereum: BaseClass, NativeChain {
             
             let secretHex = "0x" + secret.hexString
             debug("settleInvoice.starting", swap.toJSON(), secretHex)
-            
+
+            let invocation = invoiceManager.settleInvoice(swap: swap, secret: secret)
+
+            guard let call = invocation.createCall() else {
+                throw NativeChainError(message: "Failed to create call for gas estimation", code: "404")
+            }
+
+            let fees = try awaitPromise(web3.eth.estimateFeesPerGas())
+            info("estimateFeesPerGas", [
+                "maxFeePerGas": fees.maxFeePerGas,
+                "maxPriorityFeePerGas": fees.maxPriorityFeePerGas
+            ])
+
+            let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
+            info("estimateGasLimit", ["gasLimit": gasLimit])
+
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
-                    guard let tx = self.invoiceManager.settleInvoice(
-                        swap: swap,
-                        secret: secret
-                    ).createTransaction(
+                    guard let tx = invocation.createTransaction(
                         nonce: nonce,
                         gasPrice: nil,
-                        maxFeePerGas: EthereumQuantity(quantity: 100.gwei),
-                        maxPriorityFeePerGas: EthereumQuantity(quantity: 2.gwei),
-                        gasLimit: EthereumQuantity(quantity: 1_000_000),
+                        maxFeePerGas: EthereumQuantity(quantity: fees.maxFeePerGas),
+                        maxPriorityFeePerGas: EthereumQuantity(quantity: fees.maxPriorityFeePerGas),
+                        gasLimit: EthereumQuantity(quantity: gasLimit),
                         from: swapOwner,
                         value: EthereumQuantity(quantity: 0),
                         accessList: [:],
@@ -594,25 +652,6 @@ extension Ethereum: TxLockable {
 }
 
 extension Ethereum {
-    private func suggestedGasFees() -> Promise<GasEstimateResponse> {
-        Promise { resolve, reject in
-            let gasFeeUrlPath = "https://gas.api.infura.io/v3/7bffa4b191da4e9682d4351178c4736e/networks/11155111/suggestedGasFees"
-            let gasFeeUrl = URL(string: gasFeeUrlPath)!
-            var request = URLRequest(url: gasFeeUrl)
-            
-            request.httpMethod = "GET"
-            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            
-            URLSession.shared.dataTask(with: request) { (data, response, error) in
-                guard error == nil, let data, let fees = try? JSONDecoder().decode(GasEstimateResponse.self, from: data) else {
-                    return reject(SwapSDKError.msg("fetching infura gas fees failed"))
-                }
-                resolve(fees)
-            }
-            .resume()
-        }
-    }
-    
     private func sign(transaction: EthereumTransaction) throws -> EthereumSignedTransaction {
         let privKey = try EthereumPrivateKey(hexPrivateKey: "\(props.privKey)")
         return try transaction.sign(with: privKey, chainId: EthereumQuantity.string(props.chainId))
