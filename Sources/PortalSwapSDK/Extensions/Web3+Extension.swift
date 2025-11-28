@@ -1,4 +1,5 @@
 import Web3
+import Web3ContractABI
 import Promises
 
 extension Web3.Eth {
@@ -151,6 +152,60 @@ extension Web3.Eth {
             }.catch { error in
                 reject(error)
             }
+        }
+    }
+
+    func publishTransaction(
+        invocation: SolidityInvocation,
+        privateKey: String,
+        chainId: String,
+        from: EthereumAddress,
+        value: EthereumQuantity = EthereumQuantity(quantity: 0)
+    ) -> Promise<String> {
+        Promise {
+            guard let call = invocation.createCall() else {
+                throw NativeChainError(message: "Failed to create call for gas estimation", code: "404")
+            }
+
+            let fees = try awaitPromise(estimateFeesPerGas())
+            print("Estimated fees - maxFeePerGas: \(fees.maxFeePerGas), maxPriorityFeePerGas: \(fees.maxPriorityFeePerGas)")
+
+            let gasLimit = try awaitPromise(estimateGasLimit(call: call))
+            print("Estimated gas limit: \(gasLimit)")
+
+            let simulationPromise = Promise<Void> { resolve, reject in
+                invocation.call(block: .latest) { result, error in
+                    if let error = error {
+                        print("Transaction simulation failed: \(error)")
+                        reject(error)
+                    } else {
+                        resolve(())
+                    }
+                }
+            }
+            try awaitPromise(simulationPromise)
+            print("Transaction simulation successful")
+
+            let nonce = try awaitPromise(getNonce(address: from))
+
+            guard let tx = invocation.createTransaction(
+                nonce: nonce,
+                gasPrice: nil,
+                maxFeePerGas: EthereumQuantity(quantity: fees.maxFeePerGas),
+                maxPriorityFeePerGas: EthereumQuantity(quantity: fees.maxPriorityFeePerGas),
+                gasLimit: EthereumQuantity(quantity: gasLimit),
+                from: from,
+                value: value,
+                accessList: [:],
+                transactionType: .eip1559
+            ) else {
+                throw NativeChainError(message: "Failed to create transaction", code: "404")
+            }
+
+            let privKey = try EthereumPrivateKey(hexPrivateKey: privateKey)
+            let signedTx = try tx.sign(with: privKey, chainId: EthereumQuantity.string(chainId))
+
+            return try awaitPromise(publish(transaction: signedTx))
         }
     }
 }
