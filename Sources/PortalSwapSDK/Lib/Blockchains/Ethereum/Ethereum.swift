@@ -186,6 +186,19 @@ final class Ethereum: BaseClass, NativeChain {
             let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
             info("estimateGasLimit", ["gasLimit": gasLimit])
 
+            let simulationPromise = Promise<Void> { resolve, reject in
+                invocation.call(block: .latest) { result, error in
+                    if let error = error {
+                        self.error("simulateTransaction", "Transaction will fail", error)
+                        reject(error)
+                    } else {
+                        resolve(())
+                    }
+                }
+            }
+            try awaitPromise(simulationPromise)
+            info("simulateTransaction", ["status": "success"])
+            
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
                     guard let tx = invocation.createTransaction(
@@ -296,6 +309,19 @@ final class Ethereum: BaseClass, NativeChain {
             let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
             info("estimateGasLimit", ["gasLimit": gasLimit])
 
+            let simulationPromise = Promise<Void> { resolve, reject in
+                invocation.call(block: .latest) { result, error in
+                    if let error = error {
+                        self.error("simulateTransaction", "Transaction will fail", error)
+                        reject(error)
+                    } else {
+                        resolve(())
+                    }
+                }
+            }
+            try awaitPromise(simulationPromise)
+            info("simulateTransaction", ["status": "success"])
+
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
                     guard let tx = invocation.createTransaction(
@@ -370,6 +396,19 @@ final class Ethereum: BaseClass, NativeChain {
 
             let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
             info("estimateGasLimit", ["gasLimit": gasLimit])
+
+            let simulationPromise = Promise<Void> { resolve, reject in
+                invocation.call(block: .latest) { result, error in
+                    if let error = error {
+                        self.error("simulateTransaction", "Transaction will fail", error)
+                        reject(error)
+                    } else {
+                        resolve(())
+                    }
+                }
+            }
+            try awaitPromise(simulationPromise)
+            info("simulateTransaction", ["status": "success"])
 
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
@@ -472,6 +511,19 @@ final class Ethereum: BaseClass, NativeChain {
 
             let gasLimit = try awaitPromise(web3.eth.estimateGasLimit(call: call))
             info("estimateGasLimit", ["gasLimit": gasLimit])
+
+            let simulationPromise = Promise<Void> { resolve, reject in
+                invocation.call(block: .latest) { result, error in
+                    if let error = error {
+                        self.error("simulateTransaction", "Transaction will fail", error)
+                        reject(error)
+                    } else {
+                        resolve(())
+                    }
+                }
+            }
+            try awaitPromise(simulationPromise)
+            info("simulateTransaction", ["status": "success"])
 
             let txId = try awaitPromise(withTxLock {
                 self.web3.eth.getNonce(address: swapOwner).then { nonce in
