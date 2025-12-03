@@ -52,6 +52,7 @@ final class Solana: BaseClass, NativeChain {
     private let apiClient: SolanaAPIClient
     private let blockchainClient: BlockchainClient
     private let programId: PublicKey
+    private let retryUtil: SolanaTransactionRetry
 
     private var logPoller: HtlcLogListener?
 
@@ -79,6 +80,7 @@ final class Solana: BaseClass, NativeChain {
         }
 
         self.programId = try! PublicKey(string: props.programId)
+        self.retryUtil = SolanaTransactionRetry(apiClient: apiClient, blockchainClient: blockchainClient)
 
         super.init(id: "solana")
     }
@@ -258,16 +260,14 @@ final class Solana: BaseClass, NativeChain {
                     
                     // Add the deposit instruction
                     instructions.append(instruction)
-                    
-                    let preparedTransaction = try await blockchainClient.prepareTransaction(
-                        instructions: instructions, // Use instructions array instead of [instruction]
+
+                    let txSignature = try await retryUtil.executeWithRetry(
+                        instructions: instructions,
                         signers: [keyPair],
-                        feePayer: keyPair.publicKey
+                        options: RetryOptions(minPriorityFee: 200_000)
                     )
                     
-                    let txSignature = try await blockchainClient.sendTransaction(
-                        preparedTransaction: preparedTransaction
-                    )
+                    debug("deposit.txID", ["\(txSigTo32Bytes(txSignature))"])
                     
                     liquidity.id = "0x\(txSigTo32Bytes(txSignature))"
                     liquidity.nativeReceipt = txSignature
@@ -320,7 +320,7 @@ final class Solana: BaseClass, NativeChain {
                     
                     let swapToSend = "{\"id\":\"\(party.swap!.id)\"}"
                     
-                    self.debug("createInvoice.starting", [
+                    debug("createInvoice.starting", [
                         "contract": ["name": "hashtimelock", "address": party.contractAddress],
                         "invoice": invoice.base58EncodedString,
                         "amount": party.amount,
@@ -344,16 +344,14 @@ final class Solana: BaseClass, NativeChain {
                         programId: programId,
                         data: Array(data)
                     )
-                    
-                    let preparedTransaction = try await blockchainClient.prepareTransaction(
+
+                    let txSignature = try await retryUtil.executeWithRetry(
                         instructions: [instruction],
                         signers: [keyPair],
-                        feePayer: keyPair.publicKey
+                        options: RetryOptions(minPriorityFee: 200_000)
                     )
                     
-                    let _ = try await blockchainClient.sendTransaction(
-                        preparedTransaction: preparedTransaction
-                    )
+                    debug("createInvoice.txID", ["\(txSigTo32Bytes(txSignature))"])
                     
                     party.invoice = invoice.base58EncodedString
                     
@@ -523,16 +521,13 @@ final class Solana: BaseClass, NativeChain {
                     
                     // Add the lock instruction
                     instructions.append(lockInstruction)
-                    
-                    let preparedTransaction = try await blockchainClient.prepareTransaction(
-                        instructions: instructions, // Use instructions array
+
+                    let txSignature = try await retryUtil.executeWithRetry(
+                        instructions: instructions,
                         signers: [keyPair],
-                        feePayer: keyPair.publicKey
+                        options: RetryOptions(minPriorityFee: 200_000)
                     )
-                    
-                    let _ = try await blockchainClient.sendTransaction(
-                        preparedTransaction: preparedTransaction
-                    )
+                    debug("payInvoice.txID", ["\(txSigTo32Bytes(txSignature))"])
                     
                     self.info("payInvoice", party)
                     fulfill(())
@@ -635,14 +630,14 @@ final class Solana: BaseClass, NativeChain {
                         programId: programId,
                         data: Array(data)
                     )
-                    
-                    let prepared = try await blockchainClient.prepareTransaction(
+
+                    let txSignature = try await retryUtil.executeWithRetry(
                         instructions: [instruction],
                         signers: [keyPair],
-                        feePayer: keyPair.publicKey
+                        options: RetryOptions(minPriorityFee: 200_000)
                     )
                     
-                    _ = try await blockchainClient.sendTransaction(preparedTransaction: prepared)
+                    debug("settleInvoice.txID", ["\(txSigTo32Bytes(txSignature))"])
                     
                     self.info("settleInvoice", party)
                     fulfill(party)
