@@ -160,7 +160,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.state.rawValue, type: .uint8),
             SolidityWrappedValue(value: Data(hex: swap.secretHash), type: .bytes(length: 32)),
             SolidityWrappedValue(value: secretHolder, type: partyType),
-            SolidityWrappedValue(value: secretSeeker, type: partyType)
+            SolidityWrappedValue(value: secretSeeker, type: partyType),
+            SolidityWrappedValue(value: swap.holderTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.createdAt, type: .uint256),
+            SolidityWrappedValue(value: swap.holderTimeoutBlock, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeoutBlock, type: .uint256)
         )
         
         let swapType = SolidityType.tuple([
@@ -168,7 +173,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             .uint8,
             .bytes(length: 32),
             partyType,
-            partyType
+            partyType,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256
         ])
         
         let inputs = [
@@ -209,7 +219,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.state.rawValue, type: .uint8),
             SolidityWrappedValue(value: Data(hex: swap.secretHash), type: .bytes(length: 32)),
             SolidityWrappedValue(value: secretHolder, type: partyType),
-            SolidityWrappedValue(value: secretSeeker, type: partyType)
+            SolidityWrappedValue(value: secretSeeker, type: partyType),
+            SolidityWrappedValue(value: swap.holderTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.createdAt, type: .uint256),
+            SolidityWrappedValue(value: swap.holderTimeoutBlock, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeoutBlock, type: .uint256)
         )
         
         let swapType = SolidityType.tuple([
@@ -217,7 +232,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             .uint8,
             .bytes(length: 32),
             partyType,
-            partyType
+            partyType,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256
         ])
         
         let inputs = [
@@ -258,7 +278,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.state.rawValue, type: .uint8),
             SolidityWrappedValue(value: Data(hex: swap.secretHash), type: .bytes(length: 32)),
             SolidityWrappedValue(value: secretHolder, type: partyType),
-            SolidityWrappedValue(value: secretSeeker, type: partyType)
+            SolidityWrappedValue(value: secretSeeker, type: partyType),
+            SolidityWrappedValue(value: swap.holderTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.createdAt, type: .uint256),
+            SolidityWrappedValue(value: swap.holderTimeoutBlock, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeoutBlock, type: .uint256)
         )
         
         let swapType = SolidityType.tuple([
@@ -266,7 +291,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             .uint8,
             .bytes(length: 32),
             partyType,
-            partyType
+            partyType,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256
         ])
         
         let inputs = [
