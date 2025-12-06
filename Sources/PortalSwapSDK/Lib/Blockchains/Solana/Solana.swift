@@ -4,6 +4,16 @@ import BigInt
 import Promises
 import SolanaSwift
 
+// Solana program constants
+let NATIVE_MINT = try! PublicKey(string: "So11111111111111111111111111111111111111112")
+let TOKEN_PROGRAM_ID = try! PublicKey(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+let TOKEN_2022_PROGRAM_ID = try! PublicKey(string: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+
+/// Helper function to determine the token program ID based on whether the token is SOL
+func tokenProgramId(isSOL: Bool) -> PublicKey {
+    isSOL ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID
+}
+
 struct DepositEvent {
     let token_mint: String
     let amount: Int64
@@ -43,11 +53,7 @@ final class Solana: BaseClass, NativeChain {
         case lock = "lock"
         case unlock = "unlock"
     }
-    
-    private let NATIVE_MINT = try! PublicKey(string: "So11111111111111111111111111111111111111112")
-    private let TOKEN_PROGRAM_ID = try! PublicKey(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
-    private let TOKEN_2022_PROGRAM_ID = try! PublicKey(string: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
-    
+
     private let keyPair: KeyPair
     private let apiClient: SolanaAPIClient
     private let blockchainClient: BlockchainClient
@@ -183,46 +189,19 @@ final class Solana: BaseClass, NativeChain {
                         isSOL: isSOL
                     )
                     
-                    // Check if ATA exists for SOL
                     var instructions: [TransactionInstruction] = []
                     
                     if isSOL {
-                        let accountInfoResult: BufferInfo<TokenAccountState>? = try await apiClient.getAccountInfo(account: makerTokenAccount.base58EncodedString)
-                        let accountExists = accountInfoResult != nil
-                        
-                        // If account doesn't exist, create it first
-                        if !accountExists {
-                            let createATAInstruction = try AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
-                                mint: try PublicKey(string: assetAddress),
-                                owner: keyPair.publicKey,
-                                payer: keyPair.publicKey,
-                                tokenProgramId: tokenProgramId(isSOL: isSOL)
-                            )
-                            instructions.append(createATAInstruction)
-                        }
-                        
-                        // Add SOL transfer and sync instructions
                         let amountLamports = UInt64(truncatingIfNeeded: liquidity.nativeAmount)
-                        
-                        let transferInstruction = SystemProgram.transferInstruction(
-                            from: keyPair.publicKey,
-                            to: makerTokenAccount,
-                            lamports: amountLamports
+                        let wrapInstructions = try await createWrapSolInstructions(
+                            apiClient: apiClient,
+                            keyPair: keyPair,
+                            tokenMint: try PublicKey(string: assetAddress),
+                            tokenAccount: makerTokenAccount,
+                            amount: amountLamports,
+                            isSOL: isSOL
                         )
-                        
-                        instructions.append(transferInstruction)
-                        
-                        // Add sync native instruction
-                        let syncNativeInstructionData: [UInt8] = [17]
-                        let syncNativeInstruction = TransactionInstruction(
-                            keys: [
-                                AccountMeta(publicKey: makerTokenAccount, isSigner: false, isWritable: true)
-                            ],
-                            programId: TOKEN_PROGRAM_ID,
-                            data: syncNativeInstructionData
-                        )
-                        
-                        instructions.append(syncNativeInstruction)
+                        instructions.append(contentsOf: wrapInstructions)
                     }
                     
                     let method = "global:deposit"
@@ -409,45 +388,19 @@ final class Solana: BaseClass, NativeChain {
                         isSOL: isSOL
                     )
                     
-                    // Start with empty instructions array
                     var instructions: [TransactionInstruction] = []
                     
-                    // Handle SOL wrapping if needed
                     if isSOL {
-                        let accountInfoResult: BufferInfo<TokenAccountState>? = try await apiClient.getAccountInfo(account: makerTokenAccount.base58EncodedString)
-                        let accountExists = accountInfoResult != nil
-                        
-                        // If account doesn't exist, create it first
-                        if !accountExists {
-                            let createATAInstruction = try AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
-                                mint: tokenMint,
-                                owner: keyPair.publicKey,
-                                payer: keyPair.publicKey,
-                                tokenProgramId: tokenProgramId(isSOL: isSOL)
-                            )
-                            instructions.append(createATAInstruction)
-                        }
-                        
-                        // Add SOL transfer and sync instructions
                         let amountLamports = UInt64(truncatingIfNeeded: party.amount)
-                        
-                        let transferInstruction = SystemProgram.transferInstruction(
-                            from: keyPair.publicKey,
-                            to: makerTokenAccount,
-                            lamports: amountLamports
+                        let wrapInstructions = try await createWrapSolInstructions(
+                            apiClient: apiClient,
+                            keyPair: keyPair,
+                            tokenMint: tokenMint,
+                            tokenAccount: makerTokenAccount,
+                            amount: amountLamports,
+                            isSOL: isSOL
                         )
-                        instructions.append(transferInstruction)
-                        
-                        // Add sync native instruction
-                        let syncNativeInstructionData: [UInt8] = [17]
-                        let syncNativeInstruction = TransactionInstruction(
-                            keys: [
-                                AccountMeta(publicKey: makerTokenAccount, isSigner: false, isWritable: true)
-                            ],
-                            programId: TOKEN_PROGRAM_ID,
-                            data: syncNativeInstructionData
-                        )
-                        instructions.append(syncNativeInstruction)
+                        instructions.append(contentsOf: wrapInstructions)
                     }
                     
                     let accounts = [
@@ -926,12 +879,8 @@ extension Solana {
             tokenMintAddress: tokenMint,
             tokenProgramId: tokenProgramId(isSOL: isSOL)
         )
-        
+
         return (htl, purse)
-    }
-    
-    private func tokenProgramId(isSOL: Bool) -> PublicKey {
-        isSOL ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID
     }
 }
 
