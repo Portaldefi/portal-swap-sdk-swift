@@ -885,41 +885,12 @@ extension Solana {
 }
 
 extension Solana: TxLockable {
+    /// Returns immediately without waiting for confirmation
+    /// Transaction confirmation is handled by the event listener (HtlcLogListener)
+    /// which processes block-by-block events with proper finality
     internal func waitForReceipt(txid: String) -> Promise<Void> {
-        retryWithBackoff { self.waitForConfirmation(txid: txid) }
-    }
-    
-    private func waitForConfirmation(txid: String) -> Promise<Void> {
-        Promise { fulfill, reject in
-            Task {
-                do {
-                    let status = try await self.apiClient.getSignatureStatus(signature: txid, configs: nil)
-                    
-                    // Check if transaction is confirmed
-                    if let confirmationStatus = status.confirmationStatus {
-                        if confirmationStatus == "processed" {
-                            // Wait a bit more for finality
-                            try await Task.sleep(nanoseconds: 3_000_000_000) // 3 second
-                            fulfill(())
-                            return
-                        } else if confirmationStatus == "confirmed" || confirmationStatus == "finalized" {
-                            fulfill(())
-                            return
-                        }
-                    }
-                    
-                    // Check for errors
-                    if let err = status.err {
-                        reject(NativeChainError(message: "Transaction failed: \(err)", code: "ETransactionFailed"))
-                        return
-                    }
-                    
-                    // Transaction is still pending
-                    reject(NativeChainError(message: "Transaction pending", code: "ETransactionPending"))
-                } catch {
-                    reject(error)
-                }
-            }
+        Promise { fulfill, _ in
+            fulfill(())
         }
     }
 }
