@@ -254,6 +254,13 @@ final class Ethereum: BaseClass, NativeChain {
             let quantity = (party.contractAddress == NATIVE_ADDRESS) ? party.amount : 0
             let txValue: EthereumQuantity = EthereumQuantity(quantity: quantity)
 
+            let timeouts = calculateSwapTimeoutBlocks(
+                secretHolderChain: swap.secretHolder.chain,
+                secretSeekerChain: swap.secretSeeker.chain
+            )
+            swap.holderTimeoutBlock = BigUInt(timeouts.secretHolderTimeoutBlocks)
+            swap.seekerTimeoutBlock = BigUInt(timeouts.secretSeekerTimeoutBlocks)
+
             let invocation = invoiceManager.payInvoice(swap: swap)
 
             let txId = try awaitPromise(
