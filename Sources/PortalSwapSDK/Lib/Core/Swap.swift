@@ -104,6 +104,12 @@ public final class Swap {
     var secretHolder: Party
     var secretSeeker: Party
 
+    var holderTimeout: BigUInt
+    var seekerTimeout: BigUInt
+    var createdAt: BigUInt
+    var holderTimeoutBlock: BigUInt
+    var seekerTimeoutBlock: BigUInt
+
     enum CodingKeys: String, CodingKey {
         case id, state, secretHash, secretHolder, secretSeeker
     }
@@ -163,7 +169,13 @@ public final class Swap {
             invoice: seekerInvoice,
             receipt: seekerReceipt
         )
-        
+
+        self.holderTimeout = 0
+        self.seekerTimeout = 0
+        self.createdAt = 0
+        self.holderTimeoutBlock = 0
+        self.seekerTimeoutBlock = 0
+
         self.secretHolder.swap = self
         self.secretSeeker.swap = self
     }
@@ -228,7 +240,13 @@ public final class Swap {
             invoice: secretSeeker.invoice,
             receipt: secretSeeker.receipt
         )
-        
+
+        self.holderTimeout = 0
+        self.seekerTimeout = 0
+        self.createdAt = 0
+        self.holderTimeoutBlock = 0
+        self.seekerTimeoutBlock = 0
+
         self.secretHolder.swap = self
         self.secretSeeker.swap = self
     }

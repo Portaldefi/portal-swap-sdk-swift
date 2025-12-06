@@ -501,8 +501,14 @@ final class Solana: BaseClass, NativeChain {
                     let amountValue = UInt64(truncatingIfNeeded: party.amount)
                     var amountBytes = amountValue.littleEndian
                     data.append(Data(bytes: &amountBytes, count: MemoryLayout<UInt64>.size))
-                    
-                    let durationValue = UInt64(1000000)
+
+                    let timeouts = calculateSwapTimeoutBlocks(
+                        secretHolderChain: party.swap!.secretHolder.chain,
+                        secretSeekerChain: party.swap!.secretSeeker.chain
+                    )
+                    let durationValue = UInt64(isHolderOnSolana
+                        ? timeouts.secretHolderTimeoutBlocks
+                        : timeouts.secretSeekerTimeoutBlocks)
                     var durationBytes = durationValue.littleEndian
                     data.append(Data(bytes: &durationBytes, count: MemoryLayout<UInt64>.size))
                     
