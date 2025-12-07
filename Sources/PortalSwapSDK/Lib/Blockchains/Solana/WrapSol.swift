@@ -28,7 +28,7 @@ func createWrapSolInstructions(apiClient: SolanaAPIClient, keyPair: KeyPair, tok
             mint: tokenMint,
             owner: keyPair.publicKey,
             payer: keyPair.publicKey,
-            tokenProgramId: tokenProgramId(isSOL: isSOL)
+            tokenProgramId: Solana.tokenProgramId(isSOL: isSOL)
         )
         instructions.append(createATAInstruction)
     }
@@ -47,7 +47,7 @@ func createWrapSolInstructions(apiClient: SolanaAPIClient, keyPair: KeyPair, tok
         keys: [
             AccountMeta(publicKey: tokenAccount, isSigner: false, isWritable: true)
         ],
-        programId: TOKEN_PROGRAM_ID,
+        programId: Solana.TOKEN_PROGRAM_ID,
         data: syncNativeInstructionData
     )
     instructions.append(syncNativeInstruction)
