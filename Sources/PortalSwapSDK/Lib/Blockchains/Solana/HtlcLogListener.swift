@@ -8,6 +8,7 @@ class HtlcLogListener: BaseClass {
     private var pollingTask: Task<Void, Never>?
     private var callback: ((Log) -> Void)?
     private var isProcessing = false
+    private let commitment: String
 
     private let pollingInterval: TimeInterval = 3.0
     private let slotsBehind: UInt64 = 30
@@ -68,10 +69,11 @@ class HtlcLogListener: BaseClass {
         let id: String
     }
 
-    init(apiClient: SolanaAPIClient, programId: PublicKey, initialSlot: UInt64 = 0) {
+    init(apiClient: SolanaAPIClient, programId: PublicKey, initialSlot: UInt64 = 0, commitment: String = "finalized") {
         self.apiClient = apiClient
         self.programId = programId
         self.lastFinalizedSlot = initialSlot
+        self.commitment = commitment
 
         super.init(id: "solana-event-listener")
     }
@@ -134,7 +136,7 @@ class HtlcLogListener: BaseClass {
 
                 if let transactionInfo = try await apiClient.getTransaction(
                     signature: signatureInfo.signature,
-                    commitment: "confirmed"
+                    commitment: commitment
                 ) {
                     processTransaction(
                         signature: signatureInfo.signature,
