@@ -43,9 +43,12 @@ final class Ethereum: BaseClass, NativeChain {
 
     private static func getConfsForNetwork(_ chainId: Int) -> Int {
         switch chainId {
-        case 1: return 30
-        case 11155111: return 5
-        default: return 10
+        case 1337, 31337:
+            return 1  // Local - minimal confirmations
+        case 5, 11155111, 17000:
+            return 4  // Testnet - balance of speed/reliability
+        default:
+            return 6  // Mainnet - matches updated safetyDepth
         }
     }
     
