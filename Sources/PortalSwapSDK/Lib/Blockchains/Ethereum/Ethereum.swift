@@ -43,9 +43,12 @@ final class Ethereum: BaseClass, NativeChain {
 
     private static func getConfsForNetwork(_ chainId: Int) -> Int {
         switch chainId {
-        case 1: return 30
-        case 11155111: return 5
-        default: return 10
+        case 1337, 31337:
+            return 1  // Local - minimal confirmations
+        case 5, 11155111, 17000:
+            return 4  // Testnet - balance of speed/reliability
+        default:
+            return 6  // Mainnet - matches updated safetyDepth
         }
     }
     
@@ -440,6 +443,28 @@ final class Ethereum: BaseClass, NativeChain {
         }
     }
 
+    private func parseLiquidityEvent(_ log: ProcessedLog) throws -> Liquidity {
+        guard
+            let chain = log.args["chain"] as? String,
+            let symbol = log.args["symbol"] as? String,
+            let contractAddress = log.args["contractAddress"] as? EthereumAddress,
+            let nativeAmount = log.args["nativeAmount"] as? BigUInt,
+            let nativeAddress = log.args["nativeAddress"] as? EthereumAddress,
+            let portalAddress = log.args["portalAddress"] as? EthereumAddress
+        else {
+            throw NativeChainError(message: "Liquidity event parsing error", code: "404")
+        }
+
+        return try Liquidity(
+            chain: chain,
+            symbol: symbol,
+            contractAddress: contractAddress.hex(eip55: false),
+            nativeAmount: BigInt(nativeAmount),
+            nativeAddress: nativeAddress.hex(eip55: false),
+            portalAddress: portalAddress.hex(eip55: false)
+        )
+    }
+
     private func onAccountingLog(_ log: ProcessedLog) {
         do {
             let txHash = log.transactionHash
@@ -447,41 +472,11 @@ final class Ethereum: BaseClass, NativeChain {
 
             switch log.eventName {
             case "Deposit":
-                let chain = log.args["chain"] as! String
-                let symbol = log.args["symbol"] as! String
-                let contractAddress = log.args["contractAddress"] as! EthereumAddress
-                let nativeAmount = log.args["nativeAmount"] as! BigUInt
-                let nativeAddress = log.args["nativeAddress"] as! EthereumAddress
-                let portalAddress = log.args["portalAddress"] as! EthereumAddress
-
-                let liquidity = try Liquidity(
-                    chain: chain,
-                    symbol: symbol,
-                    contractAddress: contractAddress.hex(eip55: false),
-                    nativeAmount: BigInt(nativeAmount),
-                    nativeAddress: nativeAddress.hex(eip55: false),
-                    portalAddress: portalAddress.hex(eip55: false)
-                )
-
+                let liquidity = try parseLiquidityEvent(log)
                 emitOnFinality(txHash, event: "deposit", args: [liquidity])
 
             case "Withdraw":
-                let chain = log.args["chain"] as! String
-                let symbol = log.args["symbol"] as! String
-                let contractAddress = log.args["contractAddress"] as! EthereumAddress
-                let nativeAmount = log.args["nativeAmount"] as! BigInt
-                let nativeAddress = log.args["nativeAddress"] as! EthereumAddress
-                let portalAddress = log.args["portalAddress"] as! EthereumAddress
-
-                let liquidity = try Liquidity(
-                    chain: chain,
-                    symbol: symbol,
-                    contractAddress: contractAddress.hex(eip55: false),
-                    nativeAmount: BigInt(nativeAmount),
-                    nativeAddress: nativeAddress.hex(eip55: false),
-                    portalAddress: portalAddress.hex(eip55: false)
-                )
-
+                let liquidity = try parseLiquidityEvent(log)
                 emitOnFinality(txHash, event: "withdraw", args: [liquidity])
 
             case "SwapHolderPaid":
