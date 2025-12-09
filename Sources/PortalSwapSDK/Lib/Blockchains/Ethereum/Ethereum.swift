@@ -441,12 +441,16 @@ final class Ethereum: BaseClass, NativeChain {
     }
 
     private func parseLiquidityEvent(_ log: ProcessedLog) throws -> Liquidity {
-        let chain = log.args["chain"] as! String
-        let symbol = log.args["symbol"] as! String
-        let contractAddress = log.args["contractAddress"] as! EthereumAddress
-        let nativeAmount = log.args["nativeAmount"] as! BigUInt
-        let nativeAddress = log.args["nativeAddress"] as! EthereumAddress
-        let portalAddress = log.args["portalAddress"] as! EthereumAddress
+        guard
+            let chain = log.args["chain"] as? String,
+            let symbol = log.args["symbol"] as? String,
+            let contractAddress = log.args["contractAddress"] as? EthereumAddress,
+            let nativeAmount = log.args["nativeAmount"] as? BigUInt,
+            let nativeAddress = log.args["nativeAddress"] as? EthereumAddress,
+            let portalAddress = log.args["portalAddress"] as? EthereumAddress
+        else {
+            throw NativeChainError(message: "Liquidity event parsing error", code: "404")
+        }
 
         return try Liquidity(
             chain: chain,
