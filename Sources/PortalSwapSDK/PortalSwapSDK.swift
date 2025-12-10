@@ -225,11 +225,12 @@ public final class PortalSwapSDK: BaseClass {
             self.swapStatus = .withdrawing
             
             do {
+                let buyAmountValue = swap.secretSeeker.amount
                 _ = try awaitPromise(
                     self.sdk.withdraw(
-                        chain: sellAsset.blockchainName,
-                        symbol: sellAsset.symbol,
-                        amount: BigInt(stringLiteral: sellAmount)
+                        chain: buyAsset.blockchainName,
+                        symbol: buyAsset.symbol,
+                        amount: BigInt(buyAmountValue)
                     )
                 )
                 
