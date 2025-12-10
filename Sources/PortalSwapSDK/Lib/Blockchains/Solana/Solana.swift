@@ -628,7 +628,7 @@ final class Solana: BaseClass, NativeChain {
         }
     }
 
-    func getHTLCTimeout(invoiceId: String) -> Promise<UInt64> {
+    func fetchInvoiceTimeout(invoiceIdentifier: String) -> Promise<Int> {
         Promise { fulfill, reject in
             Task { [weak self] in
                 guard let self else {
@@ -636,7 +636,7 @@ final class Solana: BaseClass, NativeChain {
                 }
 
                 do {
-                    let invoicePubkey = try PublicKey(string: invoiceId)
+                    let invoicePubkey = try PublicKey(string: invoiceIdentifier)
 
                     let invoice = try await apiClient.fetchInvoice(at: invoicePubkey)
                     let maker = invoice.payerPubkey
@@ -648,10 +648,10 @@ final class Solana: BaseClass, NativeChain {
                     )
 
                     let htl = try await apiClient.fetchHTLC(at: htlPDA)
-                    fulfill(htl.timeout)
+                    fulfill(Int(htl.timeout))
                 } catch {
                     let err = NativeChainError(message: "Failed to get HTLC timeout", code: "404")
-                    self.error("getHTLCTimeout", err)
+                    self.error("fetchInvoiceTimeout", err)
                     reject(err)
                 }
             }

@@ -438,12 +438,12 @@ final class Sdk: BaseClass {
 
             var holderAbsoluteTimeout: UInt64
             if swap.secretHolder.chain == "ethereum" {
-                holderAbsoluteTimeout = try awaitPromise((holderChain as! Ethereum).getSwapTimeout(swapId: swap.id))
+                holderAbsoluteTimeout = UInt64(try awaitPromise(holderChain.fetchInvoiceTimeout(invoiceIdentifier: swap.id)))
             } else if swap.secretHolder.chain == "solana" {
                 guard let holderInvoice = swap.secretHolder.invoice else {
                     throw SwapSDKError.msg("Holder invoice is missing")
                 }
-                holderAbsoluteTimeout = try awaitPromise((holderChain as! Solana).getHTLCTimeout(invoiceId: holderInvoice))
+                holderAbsoluteTimeout = UInt64(try awaitPromise(holderChain.fetchInvoiceTimeout(invoiceIdentifier: holderInvoice)))
             } else {
                 holderAbsoluteTimeout = holderCurrentHeight + 1000
             }
