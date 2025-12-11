@@ -436,6 +436,38 @@ final class Ethereum: BaseClass, NativeChain {
         }
     }
 
+    func recoverLockedFunds(swap: Swap) -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            guard let swapOwner = try? EthereumAddress(hex: props.traderAddress, eip55: false) else {
+                throw NativeChainError(message: "Failed to parse swap owner address", code: "404")
+            }
+
+            let invocation = invoiceManager.recoverLockedFunds(swap: swap)
+
+            let txId = try awaitPromise(
+                withTxLock {
+                    self.web3.eth.publishTransaction(
+                        invocation: invocation,
+                        privateKey: self.props.privKey,
+                        chainId: self.props.chainId,
+                        from: swapOwner
+                    )
+                }
+            )
+
+            print("recoverLockedFunds tx id: \(txId)")
+
+            let txIdData = try EthereumData(ethereumValue: txId)
+            let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
+
+            print("RecoverLockedFunds receipt status: \(String(describing: receipt.status))")
+
+            info("recoverLockedFunds", ["swap": swap.toJSON(), "txId": txId])
+        }
+    }
+
     private func parseLiquidityEvent(_ log: ProcessedLog) throws -> Liquidity {
         guard
             let chain = log.args["chain"] as? String,
