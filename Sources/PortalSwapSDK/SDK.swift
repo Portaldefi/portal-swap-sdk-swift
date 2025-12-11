@@ -676,7 +676,23 @@ final class Sdk: BaseClass {
             debug("withdraw.waiting", try? burnedLiquidity.toJSON())
         }
     }
-    
+
+    func recoverSwapFunds(swapId: String, chain: String) -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+            guard let nativeChain = nativeChains[chain] else {
+                throw SdkError.invalidChain(chain: chain)
+            }
+
+            debug("recoverSwapFunds.starting", ["swapId": swapId, "chain": chain])
+
+            let swap = try store.get(swapId: swapId)
+            try awaitPromise(nativeChain.recoverLockedFunds(swap: swap))
+
+            info("recoverSwapFunds", ["swapId": swapId, "chain": chain])
+        }
+    }
+
     // Market operations
     
     func getOrderLimits(assetId: String) -> Promise<(min: BigUInt, max: BigUInt)> {
