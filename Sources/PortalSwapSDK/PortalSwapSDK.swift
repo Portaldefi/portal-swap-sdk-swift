@@ -75,7 +75,7 @@ public final class PortalSwapSDK: BaseClass {
     public func getOrderLimits(assetId: String) -> Promise<(min: BigUInt, max: BigUInt)> {
         sdk.getOrderLimits(assetId: assetId)
     }
-    
+    public func recoverSwapFunds(swapId: String, chain: String) -> Promise<Void> {
     public func swap(sellAsset: Pool.Asset, buyAsset: Pool.Asset, sellAmount: String, buyAmount: String) -> Promise<SwapTransaction> {
         Promise { [weak self] resolve, reject in
             guard let self else { return reject(SdkError.instanceUnavailable()) }
