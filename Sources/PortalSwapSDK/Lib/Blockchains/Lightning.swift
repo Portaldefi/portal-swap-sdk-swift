@@ -310,6 +310,18 @@ final class Lightning: BaseClass, NativeChain {
         //FIXME: implement proper block height fetching
         Promise { UInt64(0) }
     }
+
+    func fetchInvoiceTimeout(invoiceIdentifier: String) -> Promise<Int> {
+        Promise { reject in
+            reject(NativeChainError(message: "fetchInvoiceTimeout not implemented for Lightning", code: "ENotImplemented"))
+        }
+    }
+
+    func recoverLockedFunds(swap: Swap) -> Promise<Void> {
+        Promise { reject in
+            reject(NativeChainError(message: "recoverLockedFunds not implemented for Lightning", code: "ENotImplemented"))
+        }
+    }
 }
 
 extension Lightning: TxLockable {

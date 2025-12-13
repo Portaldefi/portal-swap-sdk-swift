@@ -88,6 +88,8 @@ protocol NativeChain: BaseClass, TxLockable {
     func payInvoice(_ party: Party) -> Promise<Void>
     func settleInvoice(for party: Party, with secret: Data) -> Promise<Party>
     func getBlockHeight() -> Promise<UInt64>
+    func fetchInvoiceTimeout(invoiceIdentifier: String) -> Promise<Int>
+    func recoverLockedFunds(swap: Swap) -> Promise<Void>
 }
 
 extension NativeChain {

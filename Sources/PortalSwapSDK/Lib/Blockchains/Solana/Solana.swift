@@ -628,7 +628,7 @@ final class Solana: BaseClass, NativeChain {
         }
     }
 
-    func getHTLCTimeout(invoiceId: String) -> Promise<UInt64> {
+    func fetchInvoiceTimeout(invoiceIdentifier: String) -> Promise<Int> {
         Promise { fulfill, reject in
             Task { [weak self] in
                 guard let self else {
@@ -636,7 +636,7 @@ final class Solana: BaseClass, NativeChain {
                 }
 
                 do {
-                    let invoicePubkey = try PublicKey(string: invoiceId)
+                    let invoicePubkey = try PublicKey(string: invoiceIdentifier)
 
                     let invoice = try await apiClient.fetchInvoice(at: invoicePubkey)
                     let maker = invoice.payerPubkey
@@ -648,11 +648,101 @@ final class Solana: BaseClass, NativeChain {
                     )
 
                     let htl = try await apiClient.fetchHTLC(at: htlPDA)
-                    fulfill(htl.timeout)
+                    fulfill(Int(htl.timeout))
                 } catch {
                     let err = NativeChainError(message: "Failed to get HTLC timeout", code: "404")
-                    self.error("getHTLCTimeout", err)
+                    self.error("fetchInvoiceTimeout", err)
                     reject(err)
+                }
+            }
+        }
+    }
+
+    func recoverLockedFunds(swap: Swap) -> Promise<Void> {
+        Promise { [weak self] fulfill, reject in
+            guard let self else {
+                return reject(SdkError.instanceUnavailable())
+            }
+
+            do {
+                let isHolderOnSolana = swap.secretHolder.chain == "solana"
+                let party = isHolderOnSolana ? swap.secretHolder : swap.secretSeeker
+                try awaitPromise(self.expire(party: party))
+                fulfill(())
+            } catch {
+                reject(error)
+            }
+        }
+    }
+
+    func expire(party: Party) -> Promise<Void> {
+        Promise { fulfill, reject in
+            Task { [weak self] in
+                guard let self else {
+                    return reject(SdkError.instanceUnavailable())
+                }
+
+                do {
+                    guard let swap = party.swap else {
+                        throw NativeChainError(message: "Party missing swap", code: "404")
+                    }
+
+                    let isSOL = party.symbol == "SOL"
+                    let hash = try party.secretHashBytes()
+                    let tokenMint = try PublicKey(string: party.contractAddress)
+
+                    let (htl, purse) = try getHtlAndPurse(
+                        hash: hash,
+                        assetAddress: party.contractAddress,
+                        nativeAddress: keyPair.publicKey,
+                        isSOL: isSOL
+                    )
+                    let makerTokenAccount = try getMyAssociatedTokenAddress(
+                        assetAddress: party.contractAddress,
+                        isSOL: isSOL
+                    )
+
+                    debug("expire.starting", [
+                        "contract": ["name": "hashtimelock", "address": party.contractAddress],
+                        "htl": htl.base58EncodedString,
+                        "purse": purse.base58EncodedString,
+                        "swap": swap.id
+                    ])
+
+                    let discriminator = anchorDiscriminator(method: "expire")
+
+                    let accounts = [
+                        AccountMeta(publicKey: keyPair.publicKey, isSigner: true, isWritable: true),
+                        AccountMeta(publicKey: tokenMint, isSigner: false, isWritable: false),
+                        AccountMeta(publicKey: makerTokenAccount, isSigner: false, isWritable: true),
+                        AccountMeta(publicKey: htl, isSigner: false, isWritable: true),
+                        AccountMeta(publicKey: purse, isSigner: false, isWritable: true),
+                        AccountMeta(publicKey: Solana.tokenProgramId(isSOL: isSOL), isSigner: false, isWritable: false)
+                    ]
+
+                    let instruction = TransactionInstruction(
+                        keys: accounts,
+                        programId: programId,
+                        data: Array(discriminator)
+                    )
+
+                    debug("expire executeWithRetry now")
+
+                    let txSignature = try await retryUtil.executeWithRetry(
+                        instructions: [instruction],
+                        signers: [keyPair],
+                        options: RetryOptions(minPriorityFee: 200_000)
+                    )
+
+                    info("expire successful", [
+                        "swap": swap.id,
+                        "signature": txSignature
+                    ])
+
+                    fulfill(())
+                } catch {
+                    self.error("expire failed", error)
+                    reject(error)
                 }
             }
         }

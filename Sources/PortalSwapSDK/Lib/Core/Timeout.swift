@@ -36,7 +36,7 @@ let CHAIN_PARAMS: [String: ChainParams] = [
     ),
     "ethereum": ChainParams(
         avgBlockTime: 12, // ~12 seconds
-        safetyDepth: 30 // Conservative reorg protection
+        safetyDepth: 6 // Conservative reorg protection
     ),
     "solana": ChainParams(
         avgBlockTime: 0.4, // ~400ms
@@ -44,10 +44,16 @@ let CHAIN_PARAMS: [String: ChainParams] = [
     )
 ]
 
-// Accounts for delay between HTLC creation and counterparty payment.
-let PROPAGATION_BUFFER: Double = 150 // seconds
+// Buffer for swap setup: order matching, tx creation, submission
+let PROPAGATION_BUFFER: Double = 600 // 10 minutes
 
 /// Secret holder calculates BOTH timeouts upfront based on chain safety requirements
+///
+/// Timeline:
+/// 1. Holder locks funds first (confirmed in holderSafetyDepth)
+/// 2. Seeker sees it, locks funds (confirmed in seekerSafetyDepth)
+/// 3. Holder reveals secret on seeker's chain (confirmed in seekerSafetyDepth)
+/// 4. Seeker sees secret, claims on holder's chain (needs: seekerSafetyDepth + holderSafetyDepth)
 func calculateSwapTimeoutBlocks(
     secretHolderChain: String,
     secretSeekerChain: String
@@ -61,14 +67,21 @@ func calculateSwapTimeoutBlocks(
         fatalError("Unknown chain: \(secretSeekerChain)")
     }
 
-    let secretSeekerTimeout = seekerParams.avgBlockTime * Double(seekerParams.safetyDepth)
-    let secretHolderTimeout = secretSeekerTimeout +
-        holderParams.avgBlockTime * Double(holderParams.safetyDepth) +
-        PROPAGATION_BUFFER
+    let holderChainSafetyTime = holderParams.avgBlockTime * Double(holderParams.safetyDepth)
+    let seekerChainSafetyTime = seekerParams.avgBlockTime * Double(seekerParams.safetyDepth)
+
+    // Seeker timeout: time for holder to reveal after seeker locks
+    let secretSeekerTimeout = PROPAGATION_BUFFER + seekerChainSafetyTime
+
+    // Gap must include PROPAGATION_BUFFER to account for delay between locks
+    let requiredGap = PROPAGATION_BUFFER + seekerChainSafetyTime + holderChainSafetyTime
+
+    // Holder timeout: seeker timeout + gap
+    let secretHolderTimeout = secretSeekerTimeout + requiredGap
 
     return (
         secretHolderTimeoutBlocks: Int(ceil(secretHolderTimeout / holderParams.avgBlockTime)),
-        secretSeekerTimeoutBlocks: seekerParams.safetyDepth
+        secretSeekerTimeoutBlocks: Int(ceil(secretSeekerTimeout / seekerParams.avgBlockTime))
     )
 }
 
