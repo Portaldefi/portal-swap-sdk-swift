@@ -415,31 +415,56 @@ final class Ethereum: BaseClass, NativeChain {
         }
     }
 
-    func getSwapTimeout(swapId: String) -> Promise<UInt64> {
+    func fetchInvoiceTimeout(invoiceIdentifier: String) -> Promise<Int> {
         Promise { [weak self] resolve, reject in
             guard let self else {
                 return reject(SdkError.instanceUnavailable())
             }
 
-            invoiceManager.getSwapTimeout(swap: swapId).call { response, error in
+            invoiceManager.getSwapTimeout(swap: invoiceIdentifier).call { response, error in
                 if let timeout = response?[""] as? BigUInt {
-                    do {
-                        let timeoutUInt64 = try UInt64(timeout)
-                        resolve(timeoutUInt64)
-                    } catch {
-                        let err = NativeChainError(message: "Failed to convert timeout to UInt64", code: "404")
-                        self.error("getSwapTimeout", err)
-                        reject(err)
-                    }
+                    resolve(Int(timeout))
                 } else if let error {
-                    self.error("getSwapTimeout", error)
+                    self.error("fetchInvoiceTimeout", error)
                     reject(error)
                 } else {
                     let err = NativeChainError(message: "Failed to decode timeout", code: "404")
-                    self.error("getSwapTimeout", err)
+                    self.error("fetchInvoiceTimeout", err)
                     reject(err)
                 }
             }
+        }
+    }
+
+    func recoverLockedFunds(swap: Swap) -> Promise<Void> {
+        Promise { [weak self] in
+            guard let self else { throw SdkError.instanceUnavailable() }
+
+            guard let swapOwner = try? EthereumAddress(hex: props.traderAddress, eip55: false) else {
+                throw NativeChainError(message: "Failed to parse swap owner address", code: "404")
+            }
+
+            let invocation = invoiceManager.recoverLockedFunds(swap: swap)
+
+            let txId = try awaitPromise(
+                withTxLock {
+                    self.web3.eth.publishTransaction(
+                        invocation: invocation,
+                        privateKey: self.props.privKey,
+                        chainId: self.props.chainId,
+                        from: swapOwner
+                    )
+                }
+            )
+
+            print("recoverLockedFunds tx id: \(txId)")
+
+            let txIdData = try EthereumData(ethereumValue: txId)
+            let receipt = try awaitPromise(waitForReceipt(hash: txIdData))
+
+            print("RecoverLockedFunds receipt status: \(String(describing: receipt.status))")
+
+            info("recoverLockedFunds", ["swap": swap.toJSON(), "txId": txId])
         }
     }
 

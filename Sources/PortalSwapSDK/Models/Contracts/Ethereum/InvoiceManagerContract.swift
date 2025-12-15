@@ -16,6 +16,7 @@ protocol IInvoiceManagerContract: EthereumContract, IRPCLogsPoller {
     func payInvoice(swap: Swap) -> SolidityInvocation
     func settleInvoice(swap: Swap, secret: Data) -> SolidityInvocation
     func getSwapTimeout(swap swapId: String) -> SolidityInvocation
+    func recoverLockedFunds(swap: Swap) -> SolidityInvocation
 }
 
 class InvoiceManagerContract: StaticContract {
@@ -138,7 +139,8 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretHolder.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
         
         let secretSeeker = SolidityTuple(
@@ -148,11 +150,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretSeeker.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
         
         let partyType = SolidityType.tuple([
-            .address, .uint256, .string, .string, .string, .string, .string
+            .address, .uint256, .string, .string, .string, .string, .string, .bool
         ])
         
         let swapTuple = SolidityTuple(
@@ -197,7 +200,8 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretHolder.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
         
         let secretSeeker = SolidityTuple(
@@ -207,11 +211,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretSeeker.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
         
         let partyType = SolidityType.tuple([
-            .address, .uint256, .string, .string, .string, .string, .string
+            .address, .uint256, .string, .string, .string, .string, .string, .bool
         ])
         
         let swapTuple = SolidityTuple(
@@ -256,7 +261,8 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretHolder.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
         
         let secretSeeker = SolidityTuple(
@@ -266,11 +272,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretSeeker.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
         
         let partyType = SolidityType.tuple([
-            .address, .uint256, .string, .string, .string, .string, .string
+            .address, .uint256, .string, .string, .string, .string, .string, .bool
         ])
         
         let swapTuple = SolidityTuple(
@@ -306,6 +313,65 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
         
         let method = SolidityNonPayableFunction(name: "settleInvoice", inputs: inputs, handler: self)
         return method.invoke(swapTuple, secret)
+    }
+
+    func recoverLockedFunds(swap: Swap) -> SolidityInvocation {
+        let secretHolder = SolidityTuple(
+            SolidityWrappedValue(value: swap.secretHolder.portalAddress, type: .address),
+            SolidityWrappedValue(value: swap.secretHolder.amount, type: .uint256),
+            SolidityWrappedValue(value: swap.secretHolder.chain, type: .string),
+            SolidityWrappedValue(value: swap.secretHolder.symbol, type: .string),
+            SolidityWrappedValue(value: swap.secretHolder.contractAddress, type: .string),
+            SolidityWrappedValue(value: swap.secretHolder.invoice ?? String(), type: .string),
+            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string)
+        )
+
+        let secretSeeker = SolidityTuple(
+            SolidityWrappedValue(value: swap.secretSeeker.portalAddress, type: .address),
+            SolidityWrappedValue(value: swap.secretSeeker.amount, type: .uint256),
+            SolidityWrappedValue(value: swap.secretSeeker.chain, type: .string),
+            SolidityWrappedValue(value: swap.secretSeeker.symbol, type: .string),
+            SolidityWrappedValue(value: swap.secretSeeker.contractAddress, type: .string),
+            SolidityWrappedValue(value: swap.secretSeeker.invoice ?? String(), type: .string),
+            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string)
+        )
+
+        let partyType = SolidityType.tuple([
+            .address, .uint256, .string, .string, .string, .string, .string
+        ])
+
+        let swapTuple = SolidityTuple(
+            SolidityWrappedValue(value: Data(hex: swap.id), type: .bytes(length: 32)),
+            SolidityWrappedValue(value: swap.state.rawValue, type: .uint8),
+            SolidityWrappedValue(value: Data(hex: swap.secretHash), type: .bytes(length: 32)),
+            SolidityWrappedValue(value: secretHolder, type: partyType),
+            SolidityWrappedValue(value: secretSeeker, type: partyType),
+            SolidityWrappedValue(value: swap.holderTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeout, type: .uint256),
+            SolidityWrappedValue(value: swap.createdAt, type: .uint256),
+            SolidityWrappedValue(value: swap.holderTimeoutBlock, type: .uint256),
+            SolidityWrappedValue(value: swap.seekerTimeoutBlock, type: .uint256)
+        )
+
+        let swapType = SolidityType.tuple([
+            .bytes(length: 32),
+            .uint8,
+            .bytes(length: 32),
+            partyType,
+            partyType,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256,
+            .uint256
+        ])
+
+        let inputs = [
+            SolidityFunctionParameter(name: "swap", type: swapType)
+        ]
+
+        let method = SolidityNonPayableFunction(name: "recoverLockedFunds", inputs: inputs, handler: self)
+        return method.invoke(swapTuple)
     }
 
     func getSwapTimeout(swap swapId: String) -> SolidityInvocation {
