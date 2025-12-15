@@ -76,6 +76,9 @@ public final class PortalSwapSDK: BaseClass {
         sdk.getOrderLimits(assetId: assetId)
     }
     public func recoverSwapFunds(swapId: String, chain: String) -> Promise<Void> {
+        sdk.recoverSwapFunds(swapId: swapId, chain: chain)
+    }
+
     public func swap(sellAsset: Pool.Asset, buyAsset: Pool.Asset, sellAmount: String, buyAmount: String) -> Promise<SwapTransaction> {
         Promise { [weak self] resolve, reject in
             guard let self else { return reject(SdkError.instanceUnavailable()) }
@@ -150,6 +153,18 @@ public final class PortalSwapSDK: BaseClass {
                 swapStatus = .failed("\(error)")
                 swapTransaction?.status = .failed
                 swapTransaction?.error = error.localizedDescription
+
+                // Auto-recovery: attempt to recover locked funds
+                if let swapId = swapTransaction?.swapId,
+                   let sellChain = swapTransaction?.sellAsset.blockchainName {
+                    do {
+                        try awaitPromise(sdk.recoverSwapFunds(swapId: swapId, chain: sellChain))
+                        print("Auto-recovery successful for swap: \(swapId)")
+                    } catch let recoveryError {
+                        print("recoverSwapFunds (sell) failed: \(recoveryError)")
+                    }
+                }
+
                 reject(error)
             }
         }
