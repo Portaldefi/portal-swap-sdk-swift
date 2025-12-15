@@ -8,7 +8,6 @@ protocol TxLockable: BaseClass {
     func waitForReceipt(txid: String) -> Promise<Void>
     func emitOnFinality(_ txid: String, event: String, args: [Any])
     func withTxLock<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T>
-    func retryWithBackoff<T>(_ fn: @escaping () -> Promise<T>) -> Promise<T>
 }
 
 extension TxLockable {
@@ -22,57 +21,6 @@ extension TxLockable {
     
     func withTxLock<T>(_ asyncFn: @escaping () -> Promise<T>) -> Promise<T> {
         queue.run(asyncFn)
-    }
-    
-    func retryWithBackoff<T>(_ fn: @escaping () -> Promise<T>) -> Promise<T> {
-        Promise<T> { resolve, reject in
-            let stages = [
-                [1, 0], // 1 attempt immediately
-                [10, 1000], // 10 attempts every 1 second
-                // [10, 2000], // 10 attempts every 2 seconds
-                // [10, 3000], // 10 attempts every 3 seconds
-            ]
-            
-            func tryNextStage(stageIndex: Int) {
-                guard stageIndex < stages.count else {
-                    // All retries exhausted, try one final time to get the actual error
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        reject(error)
-                    }
-                    return
-                }
-                
-                let stage = stages[stageIndex]
-                let attempts = stage[0]
-                let delay = stage[1]
-                
-                func tryAttempt(attemptIndex: Int) {
-                    fn().then { result in
-                        resolve(result)
-                    }.catch { error in
-                        if attemptIndex == attempts - 1 {
-                            // Last attempt of this stage, continue to next stage
-                            tryNextStage(stageIndex: stageIndex + 1)
-                        } else {
-                            // More attempts in this stage
-                            if delay > 0 {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delay)) {
-                                    tryAttempt(attemptIndex: attemptIndex + 1)
-                                }
-                            } else {
-                                tryAttempt(attemptIndex: attemptIndex + 1)
-                            }
-                        }
-                    }
-                }
-                
-                tryAttempt(attemptIndex: 0)
-            }
-            
-            tryNextStage(stageIndex: 0)
-        }
     }
 }
 

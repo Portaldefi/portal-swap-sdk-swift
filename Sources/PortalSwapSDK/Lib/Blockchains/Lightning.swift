@@ -312,14 +312,14 @@ final class Lightning: BaseClass, NativeChain {
     }
 
     func fetchInvoiceTimeout(invoiceIdentifier: String) -> Promise<Int> {
-        Promise { reject in
-            reject(NativeChainError(message: "fetchInvoiceTimeout not implemented for Lightning", code: "ENotImplemented"))
+        Promise {
+            throw NativeChainError(message: "fetchInvoiceTimeout not implemented for Lightning", code: "ENotImplemented")
         }
     }
 
     func recoverLockedFunds(swap: Swap) -> Promise<Void> {
-        Promise { reject in
-            reject(NativeChainError(message: "recoverLockedFunds not implemented for Lightning", code: "ENotImplemented"))
+        Promise {
+            throw NativeChainError(message: "recoverLockedFunds not implemented for Lightning", code: "ENotImplemented")
         }
     }
 }
