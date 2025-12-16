@@ -264,7 +264,8 @@ final class Portal: BaseClass {
                         sellAmount: order.sellAmount,
                         buyAsset: order.buyAsset,
                         buyAmount: order.buyAmount,
-                        orderType: order.orderType
+                        orderType: order.orderType,
+                        metadata: order.metadata
                     ).createTransaction(
                         nonce: nonce,
                         gasPrice: nil,

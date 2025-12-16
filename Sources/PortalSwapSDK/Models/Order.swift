@@ -14,8 +14,9 @@ public class Order {
     public let buyAsset: String
     public let buyAmount: BigInt
     public let orderType: OrderType
-    
-    public init(id: String? = nil, ts: Int? = nil, trader: String, sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: OrderType) throws {
+    public let metadata: String?
+
+    public init(id: String? = nil, ts: Int? = nil, trader: String, sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: OrderType, metadata: String? = nil) throws {
         if sellAsset == buyAsset {
             throw SdkError(message: "Sell and buy assets cannot be the same", code: "Order")
         }
@@ -36,10 +37,11 @@ public class Order {
         self.buyAsset = buyAsset
         self.buyAmount = buyAmount
         self.orderType = orderType
+        self.metadata = metadata
     }
     
     public func toJSON() -> [String: Any] {
-        return [
+        var json: [String: Any] = [
             "id": id,
             "ts": ts,
             "trader": trader,
@@ -49,5 +51,9 @@ public class Order {
             "buyAmount": buyAmount.description,
             "orderType": orderType.rawValue
         ]
+        if let metadata = metadata {
+            json["metadata"] = metadata
+        }
+        return json
     }    
 }

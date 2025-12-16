@@ -13,6 +13,7 @@ final class Party {
     weak var swap: Swap?
     var invoice: Invoice?
     var receipt: Receipt?
+    var metadata: String?
     
     func isSecretSeeker() throws -> Bool {
         guard let swap else {
@@ -37,7 +38,7 @@ final class Party {
         return Data(hex: swap.secretHash)
     }
     
-    init(swap: Swap? = nil, portalAddress: EthereumAddress, amount: BigUInt, chain: String, symbol: String, contractAddress: String, invoice: Invoice? = nil, receipt: Receipt? = nil) {
+    init(swap: Swap? = nil, portalAddress: EthereumAddress, amount: BigUInt, chain: String, symbol: String, contractAddress: String, invoice: Invoice? = nil, receipt: Receipt? = nil, metadata: String? = nil) {
         self.swap = swap
         self.portalAddress = portalAddress
         self.amount = amount
@@ -46,6 +47,7 @@ final class Party {
         self.contractAddress = contractAddress
         self.invoice = invoice
         self.receipt = receipt
+        self.metadata = metadata
     }
 }
 
