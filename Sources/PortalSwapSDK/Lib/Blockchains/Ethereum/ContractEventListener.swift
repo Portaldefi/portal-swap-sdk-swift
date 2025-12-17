@@ -25,6 +25,7 @@ class ContractEventListener: BaseClass {
     private var timer: DispatchSourceTimer?
     private var isProcessing: Bool = false
     private let pollingInterval: TimeInterval = 3.0
+    private var processedLogs = Set<String>()
 
     private let queue = DispatchQueue(label: "ethereum.event.listener", qos: .utility)
 
@@ -40,6 +41,22 @@ class ContractEventListener: BaseClass {
         self.confirmations = confirmations
 
         super.init(id: "ethereum-event-listener")
+    }
+
+    private func getLogKey(_ log: EthereumLogObject) -> String {
+        guard
+            let txHash = log.transactionHash?.hex(),
+            let logIndex = log.logIndex?.quantity
+        else {
+            return UUID().uuidString
+        }
+        return "\(txHash)-\(logIndex)"
+    }
+
+    private func cleanupProcessedLogs() {
+        if processedLogs.count > 10000 {
+            processedLogs.removeAll()
+        }
     }
 
     func startPolling(callback: @escaping (ProcessedLog) -> Void) {
@@ -66,23 +83,33 @@ class ContractEventListener: BaseClass {
         isProcessing = true
         defer { isProcessing = false }
 
+        let currentBlock: BigUInt
         do {
-            let currentBlock = try await getCurrentBlockNumber()
-            let confirmedBlock = currentBlock - BigUInt(confirmations)
+            currentBlock = try await getCurrentBlockNumber()
+        } catch {
+            self.error("Failed to get block number, will retry next poll:", error)
+            return
+        }
 
-            guard confirmedBlock > lastProcessedBlock else {
-                return
-            }
+        let confirmedBlock = currentBlock - BigUInt(confirmations)
 
-            info("Processing blocks \(lastProcessedBlock + 1) to \(confirmedBlock) (confirmations: \(confirmations))")
+        guard confirmedBlock > lastProcessedBlock else {
+            return
+        }
 
-            for block in stride(from: lastProcessedBlock + 1, through: confirmedBlock, by: 1) {
+        info("Processing blocks \(lastProcessedBlock + 1) to \(confirmedBlock) (confirmations: \(confirmations))")
+
+        for block in stride(from: lastProcessedBlock + 1, through: confirmedBlock, by: 1) {
+            do {
                 try await processBlockAtHeight(block, callback: callback)
                 lastProcessedBlock = block
+            } catch {
+                self.error("Failed to process block \(block), will retry:", error)
+                break
             }
-        } catch {
-            self.error("Error processing blocks:", error)
         }
+
+        cleanupProcessedLogs()
     }
 
     private func processBlockAtHeight(_ blockNumber: BigUInt, callback: @escaping (ProcessedLog) -> Void) async throws {
@@ -94,7 +121,17 @@ class ContractEventListener: BaseClass {
         let logs = try await getLogsAsync(addresses: addresses, fromBlock: fromTag, toBlock: toTag)
 
         for log in logs {
+            let logKey = getLogKey(log)
+
+            // Skip already processed logs (in case of retry after partial failure)
+            if processedLogs.contains(logKey) {
+                continue
+            }
+
             await processLog(log, callback: callback)
+
+            // Mark as processed only after successful processing
+            processedLogs.insert(logKey)
         }
     }
 
