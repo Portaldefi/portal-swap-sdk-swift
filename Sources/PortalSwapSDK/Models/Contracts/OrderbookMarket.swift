@@ -7,7 +7,7 @@ protocol IOrderbookMarketContract: EthereumContract, IRPCLogsPoller {
     static var OrderCreated: SolidityEvent { get }
 
     func getOrderLimits(assetId: String) -> SolidityInvocation
-    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation
+    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType, metadata: String?) -> SolidityInvocation
 }
 
 open class OrderbookMarketContract: StaticContract {
@@ -64,26 +64,28 @@ extension OrderbookMarketContract: IOrderbookMarketContract {
         return method.invoke(assetIdBigUInt)
     }
     
-    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType) -> SolidityInvocation {
+    func openOrder(sellAsset: String, sellAmount: BigInt, buyAsset: String, buyAmount: BigInt, orderType: Order.OrderType, metadata: String?) -> SolidityInvocation {
         let inputs = [
             SolidityFunctionParameter(name: "sellAsset", type: .uint256),
             SolidityFunctionParameter(name: "sellAmount", type: .uint256),
             SolidityFunctionParameter(name: "buyAsset", type: .uint256),
             SolidityFunctionParameter(name: "buyAmount", type: .uint256),
-            SolidityFunctionParameter(name: "orderType", type: .uint8)
+            SolidityFunctionParameter(name: "orderType", type: .uint8),
+            SolidityFunctionParameter(name: "metadata", type: .string)
         ]
-        
+
         let sellAssetBigInt = hexStringToBigInt(sellAsset)
         let buyAssetBigInt = hexStringToBigInt(buyAsset)
-        
+
         let method = SolidityNonPayableFunction(name: "openOrder", inputs: inputs, handler: self)
-        
+
         return method.invoke(
             sellAssetBigInt,
             sellAmount,
             buyAssetBigInt,
             buyAmount,
-            orderType.rawValue
+            orderType.rawValue,
+            metadata ?? ""
         )
     }
     

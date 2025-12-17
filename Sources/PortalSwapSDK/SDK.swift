@@ -699,7 +699,7 @@ final class Sdk: BaseClass {
         portalChain.getOrderLimits(assetId: assetId)
     }
     
-    func openOrder(sellChain: String, sellSymbol: String, sellAmount: BigInt, buyChain: String, buySymbol: String, buyAmount: BigInt, orderType: Order.OrderType) -> Promise<Order> {
+    func openOrder(sellChain: String, sellSymbol: String, sellAmount: BigInt, buyChain: String, buySymbol: String, buyAmount: BigInt, orderType: Order.OrderType, metadata: String? = nil) -> Promise<Order> {
         Promise { [weak self]  in
             guard let self else { throw SdkError.instanceUnavailable() }
             
@@ -739,7 +739,8 @@ final class Sdk: BaseClass {
                 sellAmount: sellAmount,
                 buyAsset: buyAssetId,
                 buyAmount: buyAmount,
-                orderType: orderType
+                orderType: orderType,
+                metadata: metadata
             )
             
             do {
