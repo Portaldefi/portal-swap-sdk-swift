@@ -4,14 +4,14 @@ import Web3ContractABI
 
 protocol ISwapManagerContract: EthereumContract, IRPCLogsPoller {
     func createSwap(
-        partyNativeAddress: String,
-        partyPortalAddress: EthereumAddress,
+        partyAddress: EthereumAddress,
         partyAsset: Data,
         partyAmount: BigUInt,
-        counterpartyNativeAddress: String,
-        counterpartyPortalAddress: EthereumAddress,
+        isPartyTrader: Bool,
+        counterpartyAddress: EthereumAddress,
         counterpartyAsset: Data,
-        counterpartyAmount: BigUInt
+        counterpartyAmount: BigUInt,
+        isCounterpartyTrader: Bool
     ) -> SolidityInvocation
 
     func registerInvoice(_ swap: Swap) -> SolidityInvocation
@@ -115,35 +115,35 @@ open class SwapManagerContract: StaticContract {
 
 extension SwapManagerContract: ISwapManagerContract {
     func createSwap(
-        partyNativeAddress: String,
-        partyPortalAddress: EthereumAddress,
+        partyAddress: EthereumAddress,
         partyAsset: Data,
         partyAmount: BigUInt,
-        counterpartyNativeAddress: String,
-        counterpartyPortalAddress: EthereumAddress,
+        isPartyTrader: Bool,
+        counterpartyAddress: EthereumAddress,
         counterpartyAsset: Data,
-        counterpartyAmount: BigUInt
+        counterpartyAmount: BigUInt,
+        isCounterpartyTrader: Bool
     ) -> SolidityInvocation {
         let inputs = [
-            SolidityFunctionParameter(name: "_partyNativeAddress", type: .string),
-            SolidityFunctionParameter(name: "_partyPortalAddress", type: .address),
+            SolidityFunctionParameter(name: "_partyAddress", type: .address),
             SolidityFunctionParameter(name: "_partyAsset", type: .bytes(length: 32)),
             SolidityFunctionParameter(name: "_partyAmount", type: .uint256),
-            SolidityFunctionParameter(name: "_counterpartyNativeAddress", type: .string),
-            SolidityFunctionParameter(name: "_counterpartyPortalAddress", type: .address),
+            SolidityFunctionParameter(name: "_isPartyTrader", type: .bool),
+            SolidityFunctionParameter(name: "_counterpartyAddress", type: .address),
             SolidityFunctionParameter(name: "_counterpartyAsset", type: .bytes(length: 32)),
-            SolidityFunctionParameter(name: "_counterpartyAmount", type: .uint256)
+            SolidityFunctionParameter(name: "_counterpartyAmount", type: .uint256),
+            SolidityFunctionParameter(name: "_isCounterpartyTrader", type: .bool)
         ]
         let method = SolidityNonPayableFunction(name: "createSwap", inputs: inputs, handler: self)
         return method.invoke(
-            partyNativeAddress,
-            partyPortalAddress,
+            partyAddress,
             partyAsset,
             partyAmount,
-            counterpartyNativeAddress,
-            counterpartyPortalAddress,
+            isPartyTrader,
+            counterpartyAddress,
             counterpartyAsset,
-            counterpartyAmount
+            counterpartyAmount,
+            isCounterpartyTrader
         )
     }
 
@@ -155,9 +155,10 @@ extension SwapManagerContract: ISwapManagerContract {
             SolidityWrappedValue(value: swap.secretHolder.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
-        
+
         let secretSeeker = SolidityTuple(
             SolidityWrappedValue(value: swap.secretSeeker.portalAddress, type: .address),
             SolidityWrappedValue(value: swap.secretSeeker.amount, type: .uint256),
@@ -165,11 +166,12 @@ extension SwapManagerContract: ISwapManagerContract {
             SolidityWrappedValue(value: swap.secretSeeker.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
-        
+
         let partyType = SolidityType.tuple([
-            .address, .uint256, .string, .string, .string, .string, .string
+            .address, .uint256, .string, .string, .string, .string, .string, .bool
         ])
         
         let swapTuple = SolidityTuple(

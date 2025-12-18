@@ -323,7 +323,8 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretHolder.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretHolder.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretHolder.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
 
         let secretSeeker = SolidityTuple(
@@ -333,11 +334,12 @@ extension InvoiceManagerContract: IInvoiceManagerContract {
             SolidityWrappedValue(value: swap.secretSeeker.symbol, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.contractAddress, type: .string),
             SolidityWrappedValue(value: swap.secretSeeker.invoice ?? String(), type: .string),
-            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string)
+            SolidityWrappedValue(value: swap.secretSeeker.receipt ?? String(), type: .string),
+            SolidityWrappedValue(value: false, type: .bool)
         )
 
         let partyType = SolidityType.tuple([
-            .address, .uint256, .string, .string, .string, .string, .string
+            .address, .uint256, .string, .string, .string, .string, .string, .bool
         ])
 
         let swapTuple = SolidityTuple(
