@@ -485,18 +485,40 @@ extension Portal: TxLockable {
     }
     
     private func waitForReceipt(hash: EthereumData) -> Promise<EthereumTransactionReceiptObject> {
-        retry(attempts: 10, delay: 3) {
-            Promise {
-                let confirmations: BigUInt = 1
-                let receipt = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.fetchReceipt(txHash: hash) })
-                let head = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.blockNumber() })
-                
-                guard head.quantity >= receipt.blockNumber.quantity + confirmations else {
-                    throw SdkError(message: "Not confirmed yet", code: String())
+        Promise {
+            // First check if the transaction is already confirmed with sufficient depth
+            // to avoid race conditions when same events are redelivered by event listeners
+            do {
+                let existingReceipt = try awaitPromise(self.web3.eth.fetchReceipt(txHash: hash))
+                // Verify we have sufficient confirmations for finality
+                let currentBlock = try awaitPromise(self.web3.eth.blockNumber())
+                let receiptBlock = existingReceipt.blockNumber.quantity
+                let confirmations = currentBlock.quantity - receiptBlock + 1
+
+                if confirmations >= 1 {
+                    return existingReceipt
                 }
-                
-                return receipt
+                // Not enough confirmations yet, fall through to retry logic
+            } catch {
+                // Transaction not yet mined, continue to retry logic
             }
+
+            // Original retry logic for pending transactions or insufficient confirmations
+            return try awaitPromise(
+                retry(attempts: 10, delay: 3) {
+                    Promise {
+                        let confirmations: BigUInt = 1
+                        let receipt = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.fetchReceipt(txHash: hash) })
+                        let head = try awaitPromise(retry(attempts: 10, delay: 3) { self.web3.eth.blockNumber() })
+
+                        guard head.quantity >= receipt.blockNumber.quantity + confirmations else {
+                            throw SdkError(message: "Not confirmed yet", code: String())
+                        }
+
+                        return receipt
+                    }
+                }
+            )
         }
     }
 }
